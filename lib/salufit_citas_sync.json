@@ -1,0 +1,169 @@
+{
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        250,
+        150
+      ],
+      "id": "trigger",
+      "name": "1. Trigger Manual"
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "sheetId": "YOUR_SHEET_ID_HERE",
+        "sheetName": "BBDD",
+        "operation": "read",
+        "readParameters": {
+          "returnAll": true
+        }
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        450,
+        250
+      ],
+      "id": "readBbdd",
+      "name": "2. Leer BBDD (Lookup)",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_SHEET_CREDENTIALS_ID",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "sheetId": "YOUR_SHEET_ID_HERE",
+        "sheetName": "CITAS",
+        "operation": "read",
+        "readParameters": {
+          "returnAll": true
+        }
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        450,
+        50
+      ],
+      "id": "readCitas",
+      "name": "3. Leer CITAS (Source)",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_SHEET_CREDENTIALS_ID",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "function": "// El Code node se ejecuta una vez y procesa todos los inputs en paralelo.\n\n// Acceso a los datos: Input 0 = CITAS, Input 1 = BBDD\nconst inputs = $input.item.json.n8nData;\n\n// Mapeamos los datos de las dos hojas\nconst citasData = inputs[0].map(item => item.json); \nconst bbddData = inputs[1].map(item => item.json); \n\n// 1. Mapear BBDD: NombreCompleto -> Número de historia (userId)\nconst userMap = {};\nfor (const row of bbddData) {\n    const nombreCompleto = row['NombreApellidos'];\n    const numeroHistoria = String(row['Número de historia']).padStart(6, '0'); // Asegurar formato 00XXXX\n    if (nombreCompleto && numeroHistoria) {\n        userMap[nombreCompleto] = numeroHistoria;\n    }\n}\n\n// 2. Procesar los datos de CITAS\nconst output = [];\n\nfor (const cita of citasData) {\n    const pacienteNombre = cita['Paciente'];\n    const userId = userMap[pacienteNombre];\n    \n    // Omitir si no encontramos el paciente\n    if (!userId || userId === '0') {\n        continue; \n    }\n\n    const fechaStr = cita['Fecha']; // Ej: 19/11/2025\n    const horaInicioStr = cita['Inicio cita'];\n    const horaFinStr = cita['Fin cita'];\n\n    // Convertir a formato YYYY-MM-DD para Date.parse() y manejar DD/MM/YYYY\n    const [day, month, year] = fechaStr.split('/');\n    \n    // Crear objetos Date para los Timestamps\n    const fechaInicio = new Date(`${year}-${month}-${day} ${horaInicioStr}`);\n    const fechaFin = new Date(`${year}-${month}-${day} ${horaFinStr}`);\n\n    if (isNaN(fechaInicio.getTime())) {\n        continue; // Saltar si la fecha es inválida\n    }\n\n    // Generar ID único del documento (userId + milisegundos de la cita)\n    const citaId = `${userId}_${fechaInicio.getTime()}`;\n\n    output.push({\n        json: {\n            id: citaId, \n            userId: userId, \n            fechaHoraInicio: fechaInicio.toISOString(), // ISO String -> Firebase Timestamp\n            fechaHoraFin: fechaFin.toISOString(),      \n\n            // Datos de la cita\n            profesionalId: cita['Atendida por'] || 'Sin Asignar',\n            proceso: cita['Proceso'] || 'Consulta',\n            especialidad: cita['Especialidad'] || 'Sin Especialidad',\n            estado: cita['Estado'] || 'Pendiente',\n            \n            pacienteNombreCompleto: pacienteNombre,\n            \n        }\n    });\n}\n\nreturn output;"
+      },
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1.2,
+      "position": [
+        680,
+        150
+      ],
+      "id": "codeTransform",
+      "name": "4. Código: Unir y Formatear",
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "projectId": "salufitnewapp",
+        "collection": "appointments",
+        "documentId": "={{ $json.id }}",
+        "attributes": [
+          {
+            "name": "userId",
+            "value": "={{ $json.userId }}"
+          },
+          {
+            "name": "fechaHoraInicio",
+            "value": "={{ $json.fechaHoraInicio }}"
+          },
+          {
+            "name": "fechaHoraFin",
+            "value": "={{ $json.fechaHoraFin }}"
+          },
+          {
+            "name": "profesionalId",
+            "value": "={{ $json.profesionalId }}"
+          },
+          {
+            "name": "proceso",
+            "value": "={{ $json.proceso }}"
+          },
+          {
+            "name": "especialidad",
+            "value": "={{ $json.especialidad }}"
+          },
+          {
+            "name": "estado",
+            "value": "={{ $json.estado }}"
+          },
+          {
+            "name": "pacienteNombreCompleto",
+            "value": "={{ $json.pacienteNombreCompleto }}"
+          }
+        ]
+      },
+      "type": "n8n-nodes-base.googleFirebaseCloudFirestore",
+      "typeVersion": 1.1,
+      "position": [
+        900,
+        150
+      ],
+      "id": "firestoreCreate",
+      "name": "5. Sincronizar Citas"
+    }
+  ],
+  "connections": {
+    "trigger": [
+      {
+        "node": "readBbdd",
+        "type": "main",
+        "index": 0
+      },
+      {
+        "node": "readCitas",
+        "type": "main",
+        "index": 0
+      }
+    ],
+    "readBbdd": [
+      {
+        "node": "codeTransform",
+        "type": "main",
+        "index": 1
+      }
+    ],
+    "readCitas": [
+      {
+        "node": "codeTransform",
+        "type": "main",
+        "index": 0
+      }
+    ],
+    "codeTransform": [
+      {
+        "node": "firestoreCreate",
+        "type": "main",
+        "index": 0
+      }
+    ]
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "b1b7a2e2-c7f4-4b8c-a3f2-1715e714f34d"
+}

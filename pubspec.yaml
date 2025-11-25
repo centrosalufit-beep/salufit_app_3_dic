@@ -1,0 +1,86 @@
+name: salufit_app
+description: Aplicación de gestión integral para Salufit.
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  
+  # --- IDIOMA Y FORMATOS ---
+  flutter_localizations:
+    sdk: flutter
+  intl: ^0.20.0
+
+  # --- FIREBASE ---
+  firebase_core: ^3.0.0
+  firebase_auth: ^5.0.0
+  cloud_firestore: ^5.0.0
+  firebase_storage: ^12.0.0
+
+  # --- CONEXIÓN INTERNET ---
+  http: ^1.2.0
+  url_launcher: ^6.2.0
+
+  # --- SEGURIDAD Y BIOMETRÍA ---
+  local_auth: ^2.3.0
+  flutter_secure_storage: ^9.0.0
+
+  # --- HARDWARE Y SENSORES ---
+  permission_handler: ^11.3.0
+  network_info_plus: ^6.1.0
+  device_info_plus: ^11.0.0
+  
+  # --- CÓDIGOS QR ---
+  qr_flutter: ^4.1.0
+  mobile_scanner: ^5.1.0
+
+  # --- ARCHIVOS Y PDF ---
+  file_picker: ^8.0.0
+  pdf: ^3.10.0
+  printing: ^5.13.0
+  path_provider: ^2.1.2
+
+  # --- MULTIMEDIA ---
+  video_player: ^2.8.0
+  chewie: ^1.8.0
+
+  # --- UI ---
+  cupertino_icons: ^1.0.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+  
+  # Generador de Iconos
+  flutter_launcher_icons: "^0.13.1"
+
+# Configuración del Icono de la App (El que se ve en el menú del móvil)
+flutter_launcher_icons:
+  android: "launcher_icon"
+  ios: true
+  image_path: "assets/icon.png"
+  min_sdk_android: 21
+  windows:
+    generate: true
+    icon_size: 48
+
+flutter:
+  uses-material-design: true
+  
+  # --- AQUÍ REGISTRAMOS LA IMAGEN DEL LOGO INTERNO ---
+  assets:
+    - assets/logo_salufit.png
+    
+flutter:
+  uses-material-design: true
+
+  # Para añadir recursos a tu aplicación, añade una sección de assets, así:
+  assets:
+    - assets/logo_salufit.png  # <--- AÑADE ESTA LÍNEA (Usa el nombre exacto de tu archivo)
+    # - assets/icon.png (Si quieres usar el icono también dentro)
