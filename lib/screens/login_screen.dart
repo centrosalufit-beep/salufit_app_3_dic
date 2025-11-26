@@ -1,4 +1,4 @@
-vimport 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:local_auth/local_auth.dart';
@@ -124,7 +124,10 @@ class _LoginScreenState extends State<LoginScreen> {
 
       final userDoc = query.docs.first;
       final String userId = userDoc.id; // ID tipo "000500"
-      final String rol = userDoc.data()['rol'] ?? 'cliente';
+      
+      // Corrección: Casting seguro del mapa de datos
+      final data = userDoc.data();
+      final String rol = data['rol'] ?? 'cliente';
 
       // C. Ofrecer guardar huella si es la primera vez y el móvil lo soporta
       if (!isBiometric && _canCheckBiometrics && !_hasStoredCredentials) {
@@ -306,7 +309,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 const Text('Entrar con Huella / FaceID', style: TextStyle(color: Colors.grey, fontSize: 12)),
                               ],
                             ),
-                          )
+                          ),
                         ],
                       ],
                     ),
