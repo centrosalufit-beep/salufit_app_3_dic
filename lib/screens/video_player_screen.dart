@@ -39,6 +39,12 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
       _videoPlayerController = VideoPlayerController.networkUrl(Uri.parse(widget.videoUrl));
       await _videoPlayerController.initialize();
       
+      // --- CORRECCIÓN DE SEGURIDAD APLICADA ---
+      // Si el usuario sale de la pantalla antes de que el vídeo cargue, 
+      // paramos aquí para evitar llamar a setState() en un widget destruido.
+      if (!mounted) return; 
+      // ----------------------------------------
+      
       setState(() {
         _chewieController = ChewieController(
           videoPlayerController: _videoPlayerController,
@@ -52,7 +58,8 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
       });
     } catch (e) {
       print("Error video: $e");
-      setState(() { _isError = true; });
+      // También comprobamos mounted aquí por seguridad
+      if (mounted) setState(() { _isError = true; });
     }
   }
 
