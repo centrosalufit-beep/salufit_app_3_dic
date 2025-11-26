@@ -14,8 +14,9 @@ import 'qr_scanner_screen.dart';
 import 'admin_create_patient_screen.dart'; 
 import 'admin_time_report_screen.dart'; 
 import 'alerts_list_screen.dart'; 
-import 'admin_renewal_screen.dart';      // Recuperado
-import 'admin_upload_excel_screen.dart'; // Nuevo
+import 'admin_renewal_screen.dart';      
+import 'admin_upload_excel_screen.dart'; 
+import 'admin_edit_time_records_screen.dart'; // <--- NUEVO IMPORT
 
 class ProfessionalPanelWidget extends StatefulWidget {
   final String userId;
@@ -275,7 +276,7 @@ class _ProfessionalPanelWidgetState extends State<ProfessionalPanelWidget> {
                     ),
                     const SizedBox(height: 10),
 
-                    // RENOVACIÓN MASIVA (RECUPERADO)
+                    // RENOVACIÓN MASIVA
                     _AdminButton(
                       icon: Icons.autorenew, 
                       text: 'Renovación Mensual Bonos', 
@@ -283,11 +284,19 @@ class _ProfessionalPanelWidgetState extends State<ProfessionalPanelWidget> {
                     ),
                     const SizedBox(height: 10),
 
-                    // IMPORTAR EXCEL (NUEVO)
+                    // IMPORTAR EXCEL
                     _AdminButton(
                       icon: Icons.upload_file, 
                       text: 'Importar Citas (Excel)', 
                       onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const AdminUploadExcelScreen()))
+                    ),
+                    const SizedBox(height: 10),
+
+                    // GESTIÓN DE FICHAJES (CORRECCIONES) - NUEVO
+                    _AdminButton(
+                      icon: Icons.edit_calendar, 
+                      text: 'Corregir/Editar Fichajes', 
+                      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const AdminEditTimeRecordsScreen()))
                     ),
                     const SizedBox(height: 10),
 

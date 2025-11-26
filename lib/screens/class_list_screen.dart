@@ -174,16 +174,14 @@ class _ClassListScreenState extends State<ClassListScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text("Reservar Clase", style: TextStyle(color: Colors.grey, fontSize: 14)),
-                // --- CORRECCIÓN AQUÍ: STREAMBUILDER PARA LEER EL NOMBRE ---
                 StreamBuilder<DocumentSnapshot>(
                   stream: FirebaseFirestore.instance.collection('users').doc(idConCeros).snapshots(),
                   builder: (context, snapshot) {
                     String nombre = "Usuario ${widget.userId}";
                     if (snapshot.hasData && snapshot.data!.exists) {
                        var data = snapshot.data!.data() as Map<String, dynamic>;
-                       // Prioridad: nombreCompleto -> nombre -> ID
                        String completo = data['nombreCompleto'] ?? data['nombre'] ?? "";
-                       if (completo.isNotEmpty) nombre = completo.split(' ')[0]; // Solo el nombre de pila
+                       if (completo.isNotEmpty) nombre = completo.split(' ')[0]; 
                     }
                     return Text("Hola, $nombre", style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold));
                   },
@@ -332,24 +330,35 @@ class _ClassListScreenState extends State<ClassListScreen> {
                                     ],
                                   ),
                                 ),
+                                
+                                // --- CAMBIO: BOTÓN DE BORRAR + BOTÓN DE RESERVAR (JUNTOS) ---
+                                
+                                // 1. Si es Admin, mostramos el icono de papelera
                                 if (isAdmin)
                                   IconButton(
                                     icon: const Icon(Icons.delete, color: Colors.red),
                                     onPressed: () => _borrarClaseAdmin(classId),
-                                  )
-                                else
-                                  _isLoadingAction
-                                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                                    : yaReservada
-                                        ? IconButton(
-                                            icon: const Icon(Icons.cancel_outlined, color: Colors.red, size: 30), 
-                                            onPressed: () => _cancelarReserva(bookingId!, fechaClase)
-                                          )
-                                        : ElevatedButton(
-                                            onPressed: estaLlena ? null : () => _reservarClase(classId, nombre),
-                                            style: ElevatedButton.styleFrom(backgroundColor: estaLlena ? Colors.grey.shade300 : color, foregroundColor: Colors.white, elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12)),
-                                            child: Text(estaLlena ? "LLENA" : "Reservar", style: const TextStyle(fontSize: 12)),
+                                  ),
+
+                                // 2. Y TAMBIÉN mostramos siempre la opción de Reservar/Cancelar
+                                _isLoadingAction
+                                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                                  : yaReservada
+                                      ? IconButton(
+                                          icon: const Icon(Icons.cancel_outlined, color: Colors.red, size: 30), 
+                                          onPressed: () => _cancelarReserva(bookingId!, fechaClase)
+                                        )
+                                      : ElevatedButton(
+                                          onPressed: estaLlena ? null : () => _reservarClase(classId, nombre),
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor: estaLlena ? Colors.grey.shade300 : color, 
+                                            foregroundColor: Colors.white, 
+                                            elevation: 0, 
+                                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), 
+                                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12)
                                           ),
+                                          child: Text(estaLlena ? "LLENA" : "Reservar", style: const TextStyle(fontSize: 12)),
+                                        ),
                               ],
                             ),
                           ),
@@ -367,7 +376,7 @@ class _ClassListScreenState extends State<ClassListScreen> {
   }
 }
 
-// --- MODAL CREAR CLASE ---
+// --- MODAL CREAR CLASE (CON MULTI-HORA) ---
 class _CreateClassModal extends StatefulWidget {
   const _CreateClassModal();
   @override
@@ -376,61 +385,113 @@ class _CreateClassModal extends StatefulWidget {
 
 class _CreateClassModalState extends State<_CreateClassModal> {
   final String _apiUrl = 'https://us-central1-salufitnewapp.cloudfunctions.net/generarClasesMensuales';
-  final TextEditingController _nameController = TextEditingController();
   final TextEditingController _profesionalController = TextEditingController();
+  
   bool _isLoading = false;
-  TimeOfDay _selectedTime = const TimeOfDay(hour: 10, minute: 0);
+  String _loadingStatus = "Generar Calendario";
+  
+  // Lista de horas seleccionadas
+  final List<TimeOfDay> _selectedTimes = [];
+  
   final Set<int> _selectedDays = {}; 
   int _selectedMonthOffset = 0; 
+  String? _selectedClassType; // Para el dropdown
+
+  // CONFIGURACIÓN DE TIPOS Y PROFESIONALES
+  final Map<String, String> _tiposYProfesionales = {
+    'Ejercicio Terapéutico': 'Álvaro, David e Ibtissam',
+    'Entrenamiento Grupal': 'Silvio Marin',
+    'Meditación Grupal': 'Ignacio Clavero',
+    'Tribu Activa >70': 'Silvio Marin',
+  };
 
   Future<void> _selectTime() async {
     final TimeOfDay? picked = await showTimePicker(
       context: context, 
-      initialTime: _selectedTime,
+      initialTime: const TimeOfDay(hour: 17, minute: 30),
       builder: (BuildContext context, Widget? child) {
         return MediaQuery(data: MediaQuery.of(context).copyWith(alwaysUse24HourFormat: true), child: child!);
       },
     );
-    if (picked != null) setState(() => _selectedTime = picked);
+    
+    if (picked != null) {
+      // Evitar duplicados
+      bool existe = _selectedTimes.any((t) => t.hour == picked.hour && t.minute == picked.minute);
+      if (!existe) {
+        setState(() {
+          _selectedTimes.add(picked);
+          // Ordenamos las horas cronológicamente
+          _selectedTimes.sort((a, b) => (a.hour * 60 + a.minute).compareTo(b.hour * 60 + b.minute));
+        });
+      }
+    }
+  }
+
+  void _removeTime(TimeOfDay time) {
+    setState(() {
+      _selectedTimes.remove(time);
+    });
   }
 
   Future<void> _generar() async {
-    if (_nameController.text.isEmpty || _selectedDays.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Rellena nombre y días")));
+    if (_selectedClassType == null || _selectedDays.isEmpty || _selectedTimes.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Falta tipo, días u horas")));
       return;
     }
+
     setState(() { _isLoading = true; });
+    
     DateTime now = DateTime.now();
     DateTime targetDate = DateTime(now.year, now.month + _selectedMonthOffset, 1);
-    try {
-      final response = await http.post(
-        Uri.parse(_apiUrl),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'nombre': _nameController.text.trim(),
-          'profesional': _profesionalController.text.trim().isEmpty ? "Staff" : _profesionalController.text.trim(),
-          'diasSemana': _selectedDays.toList(),
-          'hora': _selectedTime.hour,
-          'minutos': _selectedTime.minute,
-          'mes': targetDate.month - 1, 
-          'anio': targetDate.year,
-          'aforoMax': 12
-        }),
-      );
-      final data = jsonDecode(response.body);
-      if (mounted) {
-        Navigator.pop(context); 
+    int totalCreated = 0;
+    int errors = 0;
+
+    // BUCLE PARA GENERAR CLASES PARA CADA HORA SELECCIONADA
+    for (int i = 0; i < _selectedTimes.length; i++) {
+      TimeOfDay time = _selectedTimes[i];
+      
+      setState(() {
+        _loadingStatus = "Creando horario ${time.hour}:${time.minute.toString().padLeft(2,'0')}...";
+      });
+
+      try {
+        final response = await http.post(
+          Uri.parse(_apiUrl),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({
+            'nombre': _selectedClassType,
+            'profesional': _profesionalController.text.trim(),
+            'diasSemana': _selectedDays.toList(),
+            'hora': time.hour,
+            'minutos': time.minute,
+            'mes': targetDate.month - 1, // Cloud Function espera 0-11
+            'anio': targetDate.year,
+            'aforoMax': 12
+          }),
+        );
+
         if (response.statusCode == 200) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(data['message']), backgroundColor: Colors.green));
+          totalCreated++;
         } else {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(data['error']), backgroundColor: Colors.red));
+          print("Error creando hora $time: ${response.body}");
+          errors++;
         }
+      } catch (e) {
+        print("Excepción creando hora $time: $e");
+        errors++;
       }
-    } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red));
-    } finally {
-      if (mounted) setState(() { _isLoading = false; });
     }
+
+    if (mounted) {
+      Navigator.pop(context); 
+      if (errors == 0) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("¡Éxito! Creadas clases para $totalCreated horarios."), backgroundColor: Colors.green));
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Proceso terminado con $errors errores."), backgroundColor: Colors.orange));
+      }
+    }
+    
+    setState(() { _isLoading = false; });
   }
 
   @override
@@ -441,28 +502,102 @@ class _CreateClassModalState extends State<_CreateClassModal> {
 
     return Container(
       padding: const EdgeInsets.all(20),
-      height: 600,
+      height: 700, // Aumentado un poco para que quepa todo
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text("Generar Clases Mensuales", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.teal)),
           const SizedBox(height: 20),
-          TextField(controller: _nameController, decoration: const InputDecoration(labelText: "Nombre Actividad", border: OutlineInputBorder())),
+          
+          // 1. DROPDOWN TIPO DE CLASE
+          DropdownButtonFormField<String>(
+            decoration: const InputDecoration(labelText: "Tipo de Actividad", border: OutlineInputBorder()),
+            value: _selectedClassType,
+            items: _tiposYProfesionales.keys.map((tipo) {
+              return DropdownMenuItem(value: tipo, child: Text(tipo, style: const TextStyle(fontSize: 14)));
+            }).toList(),
+            onChanged: (val) {
+              setState(() {
+                _selectedClassType = val;
+                // AUTO-RELLENADO DE PROFESIONAL
+                if (val != null) {
+                  _profesionalController.text = _tiposYProfesionales[val]!;
+                }
+              });
+            },
+          ),
           const SizedBox(height: 10),
-          TextField(controller: _profesionalController, decoration: const InputDecoration(labelText: "Monitor (Opcional)", border: OutlineInputBorder())),
+          
+          // 2. PROFESIONAL (Auto-rellenable pero editable)
+          TextField(
+            controller: _profesionalController, 
+            decoration: const InputDecoration(labelText: "Monitor/es", border: OutlineInputBorder())
+          ),
           const SizedBox(height: 20),
-          const Text("Días:", style: TextStyle(fontWeight: FontWeight.bold)),
+          
+          // 3. DÍAS DE LA SEMANA
+          const Text("Días de la semana:", style: TextStyle(fontWeight: FontWeight.bold)),
           const SizedBox(height: 10),
           Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [_dayBtn("L", 1), _dayBtn("M", 2), _dayBtn("X", 3), _dayBtn("J", 4), _dayBtn("V", 5), _dayBtn("S", 6), _dayBtn("D", 0)]),
           const SizedBox(height: 20),
-          Row(children: [
-              Expanded(child: InkWell(onTap: _selectTime, child: InputDecorator(decoration: const InputDecoration(labelText: "Hora", border: OutlineInputBorder()), child: Text('${_selectedTime.hour.toString().padLeft(2, '0')}:${_selectedTime.minute.toString().padLeft(2, '0')}', style: const TextStyle(fontWeight: FontWeight.bold))))),
-              const SizedBox(width: 15),
-              Expanded(child: InputDecorator(decoration: const InputDecoration(labelText: "Mes", border: OutlineInputBorder()), child: DropdownButton<int>(value: _selectedMonthOffset, isExpanded: true, underline: const SizedBox(), items: [DropdownMenuItem(value: 0, child: Text(mesActual)), DropdownMenuItem(value: 1, child: Text(mesSiguiente))], onChanged: (val) => setState(() => _selectedMonthOffset = val!)))),
+          
+          // 4. MULTI-HORAS
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text("Horarios de inicio:", style: TextStyle(fontWeight: FontWeight.bold)),
+              TextButton.icon(
+                onPressed: _selectTime, 
+                icon: const Icon(Icons.access_time, size: 18), 
+                label: const Text("AÑADIR HORA")
+              ),
             ],
           ),
-          const SizedBox(height: 30),
-          SizedBox(width: double.infinity, height: 50, child: ElevatedButton(onPressed: _isLoading ? null : _generar, style: ElevatedButton.styleFrom(backgroundColor: Colors.teal, foregroundColor: Colors.white), child: _isLoading ? const CircularProgressIndicator(color: Colors.white) : const Text("GENERAR CALENDARIO"))),
+          
+          // Lista de chips con las horas seleccionadas
+          if (_selectedTimes.isEmpty)
+            const Text("Ninguna hora seleccionada", style: TextStyle(color: Colors.grey, fontSize: 12))
+          else
+            Wrap(
+              spacing: 8.0,
+              children: _selectedTimes.map((time) {
+                return Chip(
+                  label: Text('${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}'),
+                  deleteIcon: const Icon(Icons.close, size: 18),
+                  onDeleted: () => _removeTime(time),
+                  backgroundColor: Colors.teal.shade50,
+                  labelStyle: TextStyle(color: Colors.teal.shade900, fontWeight: FontWeight.bold),
+                );
+              }).toList(),
+            ),
+
+          const SizedBox(height: 20),
+          
+          // 5. MES Y BOTÓN
+          InputDecorator(
+            decoration: const InputDecoration(labelText: "Mes a generar", border: OutlineInputBorder()), 
+            child: DropdownButton<int>(
+              value: _selectedMonthOffset, 
+              isExpanded: true, 
+              underline: const SizedBox(), 
+              items: [DropdownMenuItem(value: 0, child: Text(mesActual)), DropdownMenuItem(value: 1, child: Text(mesSiguiente))], 
+              onChanged: (val) => setState(() => _selectedMonthOffset = val!)
+            )
+          ),
+          
+          const Spacer(),
+          
+          SizedBox(
+            width: double.infinity, 
+            height: 50, 
+            child: ElevatedButton(
+              onPressed: _isLoading ? null : _generar, 
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.teal, foregroundColor: Colors.white), 
+              child: _isLoading 
+                ? Row(mainAxisAlignment: MainAxisAlignment.center, children: [const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)), const SizedBox(width: 15), Text(_loadingStatus)]) 
+                : const Text("GENERAR CALENDARIO")
+            )
+          ),
         ],
       ),
     );

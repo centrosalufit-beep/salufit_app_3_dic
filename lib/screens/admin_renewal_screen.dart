@@ -25,6 +25,16 @@ class _AdminRenewalScreenState extends State<AdminRenewalScreen> {
   bool _selectAll = false;
   bool _soloPendientes = true; 
 
+  // --- FUNCIÓN: QUITAR ACENTOS ---
+  String removeDiacritics(String str) {
+    var withDia = 'ÀÁÂÃÄÅàáâãäåÒÓÔÕÕÖØòóôõöøÈÉÊËèéêëðÇçÐÌÍÎÏìíîïÙÚÛÜùúûüÑñŠšŸÿýŽž';
+    var withoutDia = 'AAAAAAaaaaaaOOOOOOOooooooEEEEeeeeeCcDIIIIiiiiUUUUuuuuNnSsYyyZz';
+    for (int i = 0; i < withDia.length; i++) {
+      str = str.replaceAll(withDia[i], withoutDia[i]);
+    }
+    return str;
+  }
+
   Future<void> _ejecutarRenovacion() async {
     if (_selectedUserIds.isEmpty) return;
 
@@ -79,21 +89,19 @@ class _AdminRenewalScreenState extends State<AdminRenewalScreen> {
   Stream<QuerySnapshot> _getUsersStream() {
     CollectionReference usersRef = FirebaseFirestore.instance.collection('users');
     
-    // Limpiamos la búsqueda
-    String queryLimpia = _searchQuery.toLowerCase().trim();
-    List<String> terminos = queryLimpia.split(RegExp(r'\s+')).where((s) => s.isNotEmpty).toList();
-
-    // 1. Si no hay búsqueda -> Listado general ordenado por nombre
-    if (terminos.isEmpty) {
+    if (_searchQuery.isEmpty) {
       return usersRef.orderBy('nombreCompleto').limit(100).snapshots();
     }
 
-    // 2. Si hay búsqueda -> Usamos LA PRIMERA PALABRA para filtrar en base de datos
-    // (Firebase no soporta buscar "contiene todas estas palabras", así que buscamos la primera
-    // y filtramos el resto en la memoria del móvil).
-    // NOTA: Quitamos orderBy aquí para evitar errores de índice complejos.
+    // Buscamos en Firebase por la primera palabra (asumiendo keywords reparadas)
+    // Usamos una RegExp para dividir por espacios y coger la primera palabra válida
+    List<String> palabras = _searchQuery.split(RegExp(r'\s+')).where((s) => s.isNotEmpty).toList();
+    String primeraPalabra = palabras.isNotEmpty ? palabras[0] : "";
+
+    if (primeraPalabra.isEmpty) return usersRef.limit(100).snapshots();
+
     return usersRef
-        .where('keywords', arrayContains: terminos[0]) 
+        .where('keywords', arrayContains: primeraPalabra) 
         .limit(100) 
         .snapshots();
   }
@@ -156,16 +164,21 @@ class _AdminRenewalScreenState extends State<AdminRenewalScreen> {
                 
                 TextField(
                   decoration: InputDecoration(
-                    hintText: "Buscar (Ej: David Baydal, Munera...)",
+                    hintText: "Buscar (Ej: Jose Baydal...)",
                     prefixIcon: const Icon(Icons.search),
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                     contentPadding: const EdgeInsets.symmetric(horizontal: 10)
                   ),
-                  onChanged: (val) => setState(() => _searchQuery = val),
+                  onChanged: (val) {
+                    setState(() => _searchQuery = removeDiacritics(val.trim().toLowerCase()));
+                  },
                 ),
                 
                 SwitchListTile(
                   title: const Text("Ocultar los que ya tienen bono", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+                  subtitle: _searchQuery.isNotEmpty 
+                      ? const Text("(Desactivado temporalmente por búsqueda)", style: TextStyle(color: Colors.orange, fontSize: 12))
+                      : null,
                   value: _soloPendientes,
                   activeColor: Colors.teal,
                   dense: true,
@@ -197,23 +210,31 @@ class _AdminRenewalScreenState extends State<AdminRenewalScreen> {
 
                     Set<String> usuariosConBono = {};
                     for (var doc in snapshotPasses.data!.docs) {
-                      usuariosConBono.add(doc['userId'].toString());
+                      // Normalizamos ID para el Set
+                      String uid = doc['userId'].toString();
+                      usuariosConBono.add(uid); 
+                      usuariosConBono.add(uid.replaceFirst(RegExp(r'^0+'), ''));
                     }
 
-                    // Preparar términos para filtro secundario
-                    List<String> terminos = _searchQuery.toLowerCase().trim().split(RegExp(r'\s+')).where((s) => s.isNotEmpty).toList();
+                    List<String> terminos = _searchQuery.split(RegExp(r'\s+')).where((s) => s.isNotEmpty).toList();
 
                     var usuariosFiltrados = snapshotUsers.data!.docs.where((doc) {
                       var data = doc.data() as Map<String, dynamic>;
-                      String nombre = (data['nombreCompleto'] ?? "").toString().toLowerCase();
-                      String id = doc.id;
                       
-                      // 1. FILTRO DE BÚSQUEDA AVANZADO (Cliente)
-                      // Verificamos que TODAS las palabras escritas estén en el nombre o ID
+                      // --- CORRECCIÓN CRÍTICA AQUÍ ---
+                      String nombreRaw = (data['nombreCompleto'] ?? data['nombre'] ?? "").toString();
+                      // LIMPIAMOS ACENTOS DEL NOMBRE DE LA BASE DE DATOS ANTES DE COMPARAR
+                      String nombreLimpio = removeDiacritics(nombreRaw.toLowerCase());
+                      
+                      String id = doc.id.toLowerCase();
+                      String idSinCeros = doc.id.replaceFirst(RegExp(r'^0+'), '');
+                      
+                      // 1. FILTRO DE BÚSQUEDA
                       bool coincide = true;
                       if (terminos.isNotEmpty) {
                         for (var termino in terminos) {
-                          if (!nombre.contains(termino) && !id.contains(termino)) {
+                          // Comparamos termino (sin tilde) con nombreLimpio (sin tilde)
+                          if (!nombreLimpio.contains(termino) && !id.contains(termino)) {
                             coincide = false;
                             break;
                           }
@@ -221,10 +242,15 @@ class _AdminRenewalScreenState extends State<AdminRenewalScreen> {
                       }
                       if (!coincide) return false;
 
-                      // 2. FILTRO DE PAGO
-                      bool yaTieneBono = usuariosConBono.contains(id) || usuariosConBono.contains(id.replaceFirst(RegExp(r'^0+'), '')); 
+                      // 2. FILTRO DE PAGO (INTELIGENTE)
+                      bool yaTieneBono = usuariosConBono.contains(doc.id) || usuariosConBono.contains(idSinCeros); 
+                      
+                      if (_searchQuery.isNotEmpty) {
+                        return true; // Mostrar siempre si coincide con búsqueda
+                      }
+
                       if (_soloPendientes && yaTieneBono) {
-                        return false; 
+                        return false; // Ocultar si pagado y no buscando
                       }
                       
                       return true;
@@ -251,19 +277,20 @@ class _AdminRenewalScreenState extends State<AdminRenewalScreen> {
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               Text("${usuariosFiltrados.length} Coincidencias", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.grey)),
-                              TextButton(
-                                onPressed: () {
-                                  setState(() {
-                                    _selectAll = !_selectAll;
-                                    if (_selectAll) {
-                                      _selectedUserIds = usuariosFiltrados.map((u) => u.id).toSet();
-                                    } else {
-                                      _selectedUserIds.clear();
-                                    }
-                                  });
-                                },
-                                child: Text(_selectAll ? "Deseleccionar todo" : "Seleccionar todo"),
-                              )
+                              if (_searchQuery.isEmpty) // Solo permitir seleccionar todo si no es búsqueda específica
+                                TextButton(
+                                  onPressed: () {
+                                    setState(() {
+                                      _selectAll = !_selectAll;
+                                      if (_selectAll) {
+                                        _selectedUserIds = usuariosFiltrados.map((u) => u.id).toSet();
+                                      } else {
+                                        _selectedUserIds.clear();
+                                      }
+                                    });
+                                  },
+                                  child: Text(_selectAll ? "Deseleccionar todo" : "Seleccionar todo"),
+                                )
                             ],
                           ),
                         ),
@@ -273,20 +300,33 @@ class _AdminRenewalScreenState extends State<AdminRenewalScreen> {
                             itemBuilder: (context, index) {
                               var user = usuariosFiltrados[index];
                               var data = user.data() as Map<String, dynamic>;
-                              String nombre = data['nombreCompleto'] ?? "Usuario";
+                              String nombre = data['nombreCompleto'] ?? data['nombre'] ?? "Usuario";
                               String rol = data['rol'] ?? "cliente";
                               bool isSelected = _selectedUserIds.contains(user.id);
                               
-                              bool yaPagado = usuariosConBono.contains(user.id) || usuariosConBono.contains(user.id.replaceFirst(RegExp(r'^0+'), ''));
+                              String idSinCeros = user.id.replaceFirst(RegExp(r'^0+'), '');
+                              bool yaPagado = usuariosConBono.contains(user.id) || usuariosConBono.contains(idSinCeros);
 
                               return CheckboxListTile(
                                 value: isSelected,
                                 activeColor: Colors.teal,
                                 title: Text(nombre, style: const TextStyle(fontWeight: FontWeight.bold)),
-                                subtitle: Text("ID: ${user.id} • ${rol.toUpperCase()}"),
+                                subtitle: Row(
+                                  children: [
+                                    Text("ID: ${user.id}"),
+                                    if (yaPagado) ...[
+                                      const SizedBox(width: 10),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                        decoration: BoxDecoration(color: Colors.green.shade100, borderRadius: BorderRadius.circular(4)),
+                                        child: const Text("PAGADO", style: TextStyle(fontSize: 10, color: Colors.green, fontWeight: FontWeight.bold)),
+                                      )
+                                    ]
+                                  ],
+                                ),
                                 secondary: CircleAvatar(
                                   backgroundColor: yaPagado ? Colors.green.shade100 : Colors.teal.shade100,
-                                  child: Icon(yaPagado ? Icons.check : Icons.person),
+                                  child: Icon(yaPagado ? Icons.check : Icons.person, color: yaPagado ? Colors.green : Colors.teal),
                                 ),
                                 onChanged: (bool? value) {
                                   setState(() {

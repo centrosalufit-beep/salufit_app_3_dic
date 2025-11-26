@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart'; // <--- NUEVO: Necesario para kIsWeb
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:excel/excel.dart';
@@ -22,6 +23,7 @@ class _AdminUploadExcelScreenState extends State<AdminUploadExcelScreen> {
       FilePickerResult? result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
         allowedExtensions: ['xlsx'],
+        withData: true, // <--- IMPORTANTE: Fuerza la carga de bytes en memoria
       );
 
       if (result == null) return;
@@ -32,8 +34,32 @@ class _AdminUploadExcelScreenState extends State<AdminUploadExcelScreen> {
         _progress = 0.1;
       });
 
-      File file = File(result.files.single.path!);
-      var bytes = file.readAsBytesSync();
+      // --- CORRECCIÓN PARA WEB vs MÓVIL ---
+      List<int> bytes;
+      
+      if (kIsWeb) {
+        // EN WEB: Leemos directamente de la memoria (bytes)
+        if (result.files.single.bytes != null) {
+          bytes = result.files.single.bytes!;
+        } else {
+          throw 'No se pudieron leer los datos del archivo (Web)';
+        }
+      } else {
+        // EN MÓVIL/DESKTOP: Leemos de la ruta del archivo (path)
+        if (result.files.single.path != null) {
+          File file = File(result.files.single.path!);
+          bytes = file.readAsBytesSync();
+        } else {
+          // Fallback por si en móvil también viene en bytes
+          if (result.files.single.bytes != null) {
+             bytes = result.files.single.bytes!;
+          } else {
+             throw 'No se encontró la ruta del archivo';
+          }
+        }
+      }
+      // -------------------------------------
+
       var excel = Excel.decodeBytes(bytes);
 
       _status = 'Descargando lista de pacientes...';
@@ -62,25 +88,34 @@ class _AdminUploadExcelScreenState extends State<AdminUploadExcelScreen> {
       var batch = FirebaseFirestore.instance.batch();
       int batchCount = 0;
 
+      // Empezamos en 1 para saltar cabeceras
       for (int i = 1; i < totalRows; i++) {
         var row = table.rows[i];
         if (row.isEmpty) continue;
 
         try {
-          var pacienteNombre = _getCellValue(row[2]); 
-          var fechaStr = _getCellValue(row[3]);       
-          var horaInicioStr = _getCellValue(row[4]);  
-          var especialidad = _getCellValue(row[10]);  
-          var profesional = _getCellValue(row[1]);    
+          // Usamos índices seguros
+          var pacienteNombre = _getCellValue(row.length > 2 ? row[2] : null); 
+          var fechaStr = _getCellValue(row.length > 3 ? row[3] : null);       
+          var horaInicioStr = _getCellValue(row.length > 4 ? row[4] : null);  
+          var especialidad = _getCellValue(row.length > 10 ? row[10] : null);  
+          var profesional = _getCellValue(row.length > 1 ? row[1] : null);    
 
           if (pacienteNombre.isEmpty || fechaStr.isEmpty) continue;
 
           String? userId = userMap[pacienteNombre.toLowerCase().trim()];
           
           if (userId != null) {
-            DateTime fechaBase = DateFormat('dd/MM/yyyy').parse(fechaStr);
+            // Parseo de fecha robusto
+            DateTime fechaBase;
+            try {
+               fechaBase = DateFormat('dd/MM/yyyy').parse(fechaStr);
+            } catch (e) {
+               // Intento alternativo por si Excel manda formato inglés
+               fechaBase = DateTime.parse(fechaStr);
+            }
+
             TimeOfDay hora = _parseTime(horaInicioStr);
-            
             DateTime fechaFinal = DateTime(fechaBase.year, fechaBase.month, fechaBase.day, hora.hour, hora.minute);
 
             var docRef = FirebaseFirestore.instance.collection('appointments').doc(); 
@@ -139,8 +174,10 @@ class _AdminUploadExcelScreenState extends State<AdminUploadExcelScreen> {
     }
   }
 
-  String _getCellValue(Data? cell) {
-    if (cell == null || cell.value == null) return '';
+  // CORRECCIÓN CLAVE: Usamos 'dynamic' en lugar de 'Data?' para evitar conflictos de versión
+  String _getCellValue(dynamic cell) {
+    if (cell == null) return '';
+    if (cell.value == null) return '';
     return cell.value.toString().trim();
   }
 

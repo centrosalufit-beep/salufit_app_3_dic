@@ -16,6 +16,16 @@ class _AdminPatientListScreenState extends State<AdminPatientListScreen> {
   String _searchQuery = "";
   final TextEditingController _searchController = TextEditingController();
 
+  // Función de limpieza
+  String removeDiacritics(String str) {
+    var withDia = 'ÀÁÂÃÄÅàáâãäåÒÓÔÕÕÖØòóôõöøÈÉÊËèéêëðÇçÐÌÍÎÏìíîïÙÚÛÜùúûüÑñŠšŸÿýŽž';
+    var withoutDia = 'AAAAAAaaaaaaOOOOOOOooooooEEEEeeeeeCcDIIIIiiiiUUUUuuuuNnSsYyyZz';
+    for (int i = 0; i < withDia.length; i++) {
+      str = str.replaceAll(withDia[i], withoutDia[i]);
+    }
+    return str;
+  }
+
   @override
   Widget build(BuildContext context) {
     bool isAdmin = widget.viewerRole == 'admin';
@@ -23,11 +33,10 @@ class _AdminPatientListScreenState extends State<AdminPatientListScreen> {
     return Scaffold(
       backgroundColor: Colors.teal.shade50,
       appBar: AppBar(
-        title: const Text("Pacientes y Staff"), // Cambio de título
+        title: const Text("Pacientes y Staff"),
         backgroundColor: Colors.teal,
         foregroundColor: Colors.white,
       ),
-      
       floatingActionButton: isAdmin 
         ? FloatingActionButton(
             backgroundColor: Colors.teal,
@@ -40,7 +49,6 @@ class _AdminPatientListScreenState extends State<AdminPatientListScreen> {
             },
           )
         : null,
-
       body: Column(
         children: [
           Container(
@@ -49,13 +57,17 @@ class _AdminPatientListScreenState extends State<AdminPatientListScreen> {
             child: TextField(
               controller: _searchController,
               decoration: InputDecoration(
-                hintText: "Buscar por Nombre o ID...",
+                hintText: "Buscar (Ej: Jose Baydal...)",
                 prefixIcon: const Icon(Icons.search),
                 filled: true, fillColor: Colors.white,
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
-                suffixIcon: _searchQuery.isNotEmpty ? IconButton(icon: const Icon(Icons.clear), onPressed: () { _searchController.clear(); setState(() => _searchQuery = ""); }) : null
+                suffixIcon: _searchQuery.isNotEmpty 
+                  ? IconButton(icon: const Icon(Icons.clear), onPressed: () { _searchController.clear(); setState(() => _searchQuery = ""); }) 
+                  : null
               ),
-              onChanged: (value) { setState(() { _searchQuery = value.trim().toLowerCase(); }); },
+              onChanged: (value) { 
+                setState(() { _searchQuery = removeDiacritics(value.trim().toLowerCase()); }); 
+              },
             ),
           ),
           Expanded(
@@ -64,8 +76,28 @@ class _AdminPatientListScreenState extends State<AdminPatientListScreen> {
               builder: (context, snapshot) {
                 if (snapshot.hasError) return Center(child: Text("Error: ${snapshot.error}"));
                 if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
+                
                 var docs = snapshot.data!.docs;
-                if (docs.isEmpty) return const Center(child: Text("No se encontraron usuarios"));
+                
+                if (_searchQuery.isNotEmpty) {
+                  List<String> terminosBusqueda = _searchQuery.split(' '); 
+                  docs = docs.where((doc) {
+                    var data = doc.data() as Map<String, dynamic>;
+                    String nombreOriginal = (data['nombreCompleto'] ?? data['nombre'] ?? "").toString();
+                    String nombreLimpio = removeDiacritics(nombreOriginal.toLowerCase());
+                    String id = doc.id.toLowerCase();
+                    bool coincideTodo = true;
+                    for (var termino in terminosBusqueda) {
+                      if (termino.isEmpty) continue;
+                      bool estaEnNombre = nombreLimpio.contains(termino);
+                      bool estaEnId = id.contains(termino);
+                      if (!estaEnNombre && !estaEnId) { coincideTodo = false; break; }
+                    }
+                    return coincideTodo;
+                  }).toList();
+                }
+
+                if (docs.isEmpty) return const Center(child: Text("No se encontraron coincidencias"));
 
                 return ListView.separated(
                   itemCount: docs.length,
@@ -81,7 +113,6 @@ class _AdminPatientListScreenState extends State<AdminPatientListScreen> {
                     return ListTile(
                       tileColor: Colors.white,
                       leading: CircleAvatar(
-                        // Color diferente para profesional/admin
                         backgroundColor: rol == 'profesional' || rol == 'admin' ? Colors.orange.shade400 : Colors.blue.shade400,
                         child: Text(nombre.isNotEmpty ? nombre[0].toUpperCase() : "?", style: const TextStyle(color: Colors.white)),
                       ),
@@ -89,16 +120,7 @@ class _AdminPatientListScreenState extends State<AdminPatientListScreen> {
                       subtitle: Text("ID: $id • ${rol.toUpperCase()} ${showPhone && telefono.isNotEmpty ? '• $telefono' : ''}"),
                       trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
                       onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => AdminPatientDetailScreen(
-                              userId: id, 
-                              userName: nombre,
-                              viewerRole: widget.viewerRole,
-                            ),
-                          ),
-                        );
+                        Navigator.push(context, MaterialPageRoute(builder: (context) => AdminPatientDetailScreen(userId: id, userName: nombre, viewerRole: widget.viewerRole)));
                       },
                     );
                   },
@@ -113,16 +135,8 @@ class _AdminPatientListScreenState extends State<AdminPatientListScreen> {
 
   Stream<QuerySnapshot> _getUsersStream() {
     CollectionReference users = FirebaseFirestore.instance.collection('users');
-
-    // 1. Sin búsqueda: Mostrar todos (ya no filtramos por rol)
-    if (_searchQuery.isEmpty) {
-      return users.orderBy(FieldPath.documentId).limit(50).snapshots();
-    }
-
-    // 2. Búsqueda por keywords (ya busca en todos porque el campo keywords existe en todos)
-    return users
-        .where('keywords', arrayContains: _searchQuery)
-        .limit(50)
-        .snapshots();
+    if (_searchQuery.isEmpty) return users.orderBy('nombreCompleto').limit(50).snapshots();
+    String primeraPalabra = _searchQuery.split(' ')[0]; 
+    return users.where('keywords', arrayContains: primeraPalabra).limit(50).snapshots();
   }
 }

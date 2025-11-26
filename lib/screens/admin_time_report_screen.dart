@@ -18,13 +18,11 @@ class _AdminTimeReportScreenState extends State<AdminTimeReportScreen> {
   bool _isLoading = false;
 
   Future<void> _selectDate(BuildContext context, bool isStart) async {
-    // CORRECCIÓN: Quitamos 'locale' para evitar el error si no hay localizaciones configuradas
     final DateTime? picked = await showDatePicker(
       context: context,
       initialDate: isStart ? _startDate : _endDate,
       firstDate: DateTime(2024),
       lastDate: DateTime(2030),
-      // locale: const Locale('es', 'ES'), // <--- LÍNEA BORRADA PARA EVITAR EL CRASH
     );
     
     if (picked != null) {
@@ -38,6 +36,13 @@ class _AdminTimeReportScreenState extends State<AdminTimeReportScreen> {
     }
   }
 
+  // Función auxiliar para formatear duración (ej: 4h 30m)
+  String _formatDuration(Duration d) {
+    String twoDigits(int n) => n.toString().padLeft(2, "0");
+    String twoDigitMinutes = twoDigits(d.inMinutes.remainder(60));
+    return "${twoDigits(d.inHours)}:$twoDigitMinutes h";
+  }
+
   Future<void> _generarPDF() async {
     setState(() { _isLoading = true; });
 
@@ -46,12 +51,12 @@ class _AdminTimeReportScreenState extends State<AdminTimeReportScreen> {
       DateTime start = DateTime(_startDate.year, _startDate.month, _startDate.day, 0, 0, 0);
       DateTime end = DateTime(_endDate.year, _endDate.month, _endDate.day, 23, 59, 59);
 
-      // 2. CONSULTA A FIREBASE (Usamos DateTime directo, Flutter lo convierte a Timestamp solo)
+      // 2. CONSULTA A FIREBASE
       var querySnapshot = await FirebaseFirestore.instance
           .collection('timeClockRecords')
-          .where('timestamp', isGreaterThanOrEqualTo: start) // <--- CAMBIO: Pasamos DateTime directo
-          .where('timestamp', isLessThanOrEqualTo: end)      // <--- CAMBIO: Pasamos DateTime directo
-          .orderBy('timestamp', descending: true)
+          .where('timestamp', isGreaterThanOrEqualTo: start)
+          .where('timestamp', isLessThanOrEqualTo: end)
+          .orderBy('timestamp', descending: false) // Importante: Ascendente para emparejar IN -> OUT
           .get();
 
       if (querySnapshot.docs.isEmpty) {
@@ -76,27 +81,107 @@ class _AdminTimeReportScreenState extends State<AdminTimeReportScreen> {
         }
       }
 
-      // 4. CONSTRUIR PDF
+      // 4. PROCESAR DATOS: AGRUPAR ENTRADAS Y SALIDAS (LA LÓGICA CLAVE)
+      Map<String, List<QueryDocumentSnapshot>> recordsByUser = {};
+      for (var doc in querySnapshot.docs) {
+        String uid = doc['userId'];
+        if (!recordsByUser.containsKey(uid)) recordsByUser[uid] = [];
+        recordsByUser[uid]!.add(doc);
+      }
+
+      List<List<String>> tableData = [];
+
+      // Recorremos usuario por usuario para armar sus jornadas
+      recordsByUser.forEach((uid, records) {
+        String nombreEmpleado = userNames[uid] ?? "ID: $uid";
+        
+        // Variables temporales para buscar parejas IN -> OUT
+        DateTime? entryTime;
+        bool isManualEntry = false;
+
+        for (var record in records) {
+          Map<String, dynamic> data = record.data() as Map<String, dynamic>;
+          DateTime time = (data['timestamp'] as Timestamp).toDate();
+          String type = data['type']; // 'IN' o 'OUT'
+          bool manual = data['isManualEntry'] ?? false;
+
+          if (type == 'IN') {
+            // Si ya teníamos una entrada abierta sin cerrar, la cerramos como error
+            if (entryTime != null) {
+              tableData.add([
+                DateFormat('dd/MM/yyyy').format(entryTime),
+                nombreEmpleado,
+                DateFormat('HH:mm').format(entryTime),
+                "SIN SALIDA",
+                "---",
+                "Error: Fichaje abierto"
+              ]);
+            }
+            // Abrimos nueva sesión
+            entryTime = time;
+            isManualEntry = manual;
+          } else if (type == 'OUT') {
+            if (entryTime != null) {
+              // ¡Tenemos pareja! Cerrar sesión
+              Duration duration = time.difference(entryTime);
+              bool manualExit = manual;
+              
+              // Verificamos si la salida es el mismo día o día siguiente
+              String fechaStr = DateFormat('dd/MM/yyyy').format(entryTime);
+              
+              tableData.add([
+                fechaStr,
+                nombreEmpleado,
+                DateFormat('HH:mm').format(entryTime),
+                DateFormat('HH:mm').format(time),
+                _formatDuration(duration),
+                (isManualEntry || manualExit) ? "CORRECCIÓN MANUAL" : ""
+              ]);
+
+              entryTime = null; // Reset para siguiente ciclo
+              isManualEntry = false;
+            } else {
+              // Salida huérfana (sin entrada)
+              tableData.add([
+                DateFormat('dd/MM/yyyy').format(time),
+                nombreEmpleado,
+                "---",
+                DateFormat('HH:mm').format(time),
+                "---",
+                "Error: Falta entrada"
+              ]);
+            }
+          }
+        }
+
+        // Si al acabar el bucle queda una entrada abierta
+        if (entryTime != null) {
+          tableData.add([
+            DateFormat('dd/MM/yyyy').format(entryTime),
+            nombreEmpleado,
+            DateFormat('HH:mm').format(entryTime),
+            "EN CURSO",
+            "---",
+            "Jornada activa"
+          ]);
+        }
+      });
+
+      // Ordenamos la tabla final por fecha
+      tableData.sort((a, b) {
+        // Formato dd/MM/yyyy -> convertir para ordenar
+        try {
+          DateTime dateA = DateFormat('dd/MM/yyyy').parse(a[0]);
+          DateTime dateB = DateFormat('dd/MM/yyyy').parse(b[0]);
+          return dateA.compareTo(dateB);
+        } catch (e) {
+          return 0;
+        }
+      });
+
+      // 5. GENERAR PDF
       final pdf = pw.Document();
-      final headers = ['Fecha', 'Hora', 'Tipo', 'Empleado', 'ID', 'Incidencia'];
-      
-      final data = querySnapshot.docs.map((doc) {
-        Map<String, dynamic> map = doc.data();
-        DateTime dt = (map['timestamp'] as Timestamp).toDate();
-        
-        String tipo = map['type'] == 'IN' ? 'ENTRADA' : 'SALIDA';
-        String nombre = userNames[map['userId']] ?? "ID: ${map['userId']}";
-        bool manual = map['isManualEntry'] ?? false;
-        
-        return [
-          DateFormat('dd/MM/yyyy').format(dt),
-          DateFormat('HH:mm').format(dt),
-          tipo,
-          nombre,
-          map['userId'],
-          manual ? "MANUAL" : ""
-        ];
-      }).toList();
+      final headers = ['Fecha', 'Empleado', 'Entrada', 'Salida', 'Duración', 'Notas'];
 
       pdf.addPage(
         pw.MultiPage(
@@ -110,7 +195,7 @@ class _AdminTimeReportScreenState extends State<AdminTimeReportScreen> {
                   mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                   children: [
                     pw.Text('Registro de Jornada - SALUFIT', style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold)),
-                    pw.Text('Generado: ${DateFormat('dd/MM/yyyy').format(DateTime.now())}', style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey)),
+                    pw.Text('Generado: ${DateFormat('dd/MM/yyyy HH:mm').format(DateTime.now())}', style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey)),
                   ]
                 )
               ),
@@ -120,27 +205,36 @@ class _AdminTimeReportScreenState extends State<AdminTimeReportScreen> {
               
               pw.TableHelper.fromTextArray(
                 headers: headers,
-                data: data,
+                data: tableData,
                 headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: PdfColors.white, fontSize: 10),
                 headerDecoration: const pw.BoxDecoration(color: PdfColors.teal),
                 cellStyle: const pw.TextStyle(fontSize: 9),
                 rowDecoration: const pw.BoxDecoration(border: pw.Border(bottom: pw.BorderSide(color: PdfColors.grey300))),
                 cellAlignment: pw.Alignment.centerLeft,
                 cellAlignments: {
-                  0: pw.Alignment.center,
-                  1: pw.Alignment.center,
+                  0: pw.Alignment.center, // Fecha
+                  2: pw.Alignment.center, // Entrada
+                  3: pw.Alignment.center, // Salida
+                  4: pw.Alignment.centerRight, // Duración
                 }
               ),
+              pw.Padding(
+                padding: const pw.EdgeInsets.only(top: 20),
+                child: pw.Text(
+                  "* El cálculo de duración se realiza automáticamente entre fichaje de entrada y salida. Las filas marcadas como 'MANUAL' indican que la hora fue corregida por el empleado o sistema.",
+                  style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey700)
+                )
+              )
             ];
           },
         ),
       );
 
-      await Printing.sharePdf(bytes: await pdf.save(), filename: 'registro_jornada.pdf');
+      await Printing.sharePdf(bytes: await pdf.save(), filename: 'informe_jornada_detallado.pdf');
 
     } catch (e) {
       print("ERROR PDF: $e");
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red));
     } finally {
       if (mounted) setState(() { _isLoading = false; });
     }
@@ -185,7 +279,7 @@ class _AdminTimeReportScreenState extends State<AdminTimeReportScreen> {
               child: ElevatedButton.icon(
                 onPressed: _isLoading ? null : _generarPDF,
                 icon: _isLoading ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) : const Icon(Icons.picture_as_pdf),
-                label: const Text("DESCARGAR INFORME PDF"),
+                label: const Text("DESCARGAR INFORME DETALLADO"),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.blue,
                   foregroundColor: Colors.white,
@@ -196,7 +290,7 @@ class _AdminTimeReportScreenState extends State<AdminTimeReportScreen> {
             
             const SizedBox(height: 20),
             const Text(
-              "Este informe cumple con la normativa de registro horario (Art 34.9 ET). Incluye hora, tipo de fichaje y correcciones manuales.",
+              "El informe agrupa automáticamente las entradas y salidas para calcular las horas trabajadas por sesión.",
               style: TextStyle(color: Colors.grey, fontSize: 12),
               textAlign: TextAlign.center,
             ),
