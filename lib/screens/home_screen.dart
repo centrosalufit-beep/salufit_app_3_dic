@@ -1,11 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:intl/intl.dart'; 
+import '../widgets/salufit_scaffold.dart'; // <--- IMPORT NUEVO
+
+// Imports de tus pantallas
 import 'material_screen.dart';
 import 'class_list_screen.dart';
 import 'profile_screen.dart'; 
-import 'placeholder_screens.dart'; // Contiene DashboardScreen por defecto
+import 'placeholder_screens.dart'; 
 import 'documents_screen.dart';
 import 'professional_panel_widget.dart'; 
 import 'professional_resources_screen.dart';
+import 'login_screen.dart'; // Necesario si usas Navigator para salir
 
 class HomeScreen extends StatefulWidget {
   final String userId;
@@ -26,36 +33,26 @@ class _HomeScreenState extends State<HomeScreen> {
   late List<Widget> _pages;
   late List<BottomNavigationBarItem> _navItems;
   
-  // Variable para saber si detectamos el rol correctamente
   bool _esProfesional = false;
 
   @override
   void initState() {
     super.initState();
     _configurarMenu();
+    // NOTA: NotificationService se inicializa aquí o en main, según tu preferencia
   }
 
   void _configurarMenu() {
-    // 1. Normalización del rol para evitar errores de mayúsculas/espacios
     final String rol = widget.userRole.toLowerCase().trim();
     
-    // Debug: Veremos en consola qué está llegando
     print('🔍 SALUFIT DEBUG: HomeScreen cargada.');
     print('   -> ID Usuario: ${widget.userId}');
     print('   -> Rol recibido: "${widget.userRole}" (Procesado: "$rol")');
 
-    // 2. Lógica de detección ampliada
     _esProfesional = (rol == "profesional" || rol == "admin" || rol == "administrador");
 
     if (_esProfesional) {
       print('✅ Modo PROFESIONAL/ADMIN activado');
-      
-      // --- MENÚ PROFESIONAL (5 Pestañas) ---
-      // 1. Panel de Gestión
-      // 2. Inicio (Dashboard)
-      // 3. Perfil
-      // 4. Clases (Vista gestión)
-      // 5. Recursos (Gestión de material)
       
       _pages = [
         ProfessionalPanelWidget(userId: widget.userId, userRole: widget.userRole), // 0
@@ -75,9 +72,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
     } else {
       print('👤 Modo CLIENTE activado');
-
-      // --- MENÚ CLIENTE (5 Pestañas Estándar) ---
-      // Inicio - Perfil - Clases - Material - Docs
       
       _pages = [
         DashboardScreen(userId: widget.userId),        
@@ -105,7 +99,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    // USAMOS EL WIDGET PERSONALIZADO CON FONDO
+    return SalufitScaffold( 
       // El cuerpo cambia según la pestaña seleccionada
       body: IndexedStack(
         index: _selectedIndex,
@@ -115,7 +110,6 @@ class _HomeScreenState extends State<HomeScreen> {
       bottomNavigationBar: BottomNavigationBar(
         type: BottomNavigationBarType.fixed,
         backgroundColor: Colors.white,
-        // COLOR CORPORATIVO (Teal) en lugar de Azul
         selectedItemColor: Colors.teal, 
         unselectedItemColor: Colors.grey,
         currentIndex: _selectedIndex,

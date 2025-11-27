@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:file_picker/file_picker.dart'; 
 import 'package:firebase_storage/firebase_storage.dart'; 
+import 'package:firebase_auth/firebase_auth.dart'; // <--- NUEVO: Para saber QUIÉN está mirando
 
 class AdminPatientDetailScreen extends StatefulWidget {
   final String userId;
@@ -34,6 +35,42 @@ class _AdminPatientDetailScreenState extends State<AdminPatientDetailScreen> {
 
   final String _instruccionesDefecto = '2 series de 1 minuto y en cada serie todas las repeticiones que puedas dejando un minuto de descanso entre ellas.';
 
+  @override
+  void initState() {
+    super.initState();
+    // --- EL GRAN HERMANO: REGISTRAR ACCESO ---
+    _registrarAcceso();
+  }
+
+  // Función silenciosa que guarda el log en Firebase
+  Future<void> _registrarAcceso() async {
+    try {
+      final currentUser = FirebaseAuth.instance.currentUser;
+      
+      // Solo registramos si hay usuario logueado
+      if (currentUser != null) {
+        // Opcional: No registrar si el usuario se mira a sí mismo (aunque aquí es panel admin)
+        if (currentUser.uid == widget.userId) return;
+
+        await FirebaseFirestore.instance.collection('audit_logs').add({
+          'tipo': 'ACCESO_FICHA',
+          'pacienteId': widget.userId,
+          'pacienteNombre': widget.userName,
+          'profesionalId': currentUser.uid,
+          'profesionalEmail': currentUser.email, // Importante para saber quién fue
+          'fecha': FieldValue.serverTimestamp(),
+          'detalles': 'Apertura de ficha clínica desde Panel Profesional'
+        });
+        
+        print("🔒 Auditoría: Acceso registrado correctamente en audit_logs.");
+      }
+    } catch (e) {
+      print("⚠️ Error registrando auditoría: $e");
+      // No mostramos error al usuario para no interrumpir la experiencia,
+      // pero el fallo queda en consola por si acaso.
+    }
+  }
+
   // --- FUNCIÓN: BORRAR EJERCICIO (Simple) ---
   Future<void> _borrarEjercicio(String assignmentId) async {
     bool? confirm = await showDialog(
@@ -58,9 +95,8 @@ class _AdminPatientDetailScreenState extends State<AdminPatientDetailScreen> {
     }
   }
 
-  // --- FUNCIÓN: BORRAR DOCUMENTO (SEGURIDAD DOBLE LLAVE) ---
+  // --- FUNCIÓN: BORRAR DOCUMENTO (SEGURIDAD DOBLE LLAVE + AUDITORÍA CRÍTICA) ---
   Future<void> _borrarDocumentoSeguro(String docId, String urlPdf) async {
-    // Controladores para las dos claves
     TextEditingController clave1 = TextEditingController();
     TextEditingController clave2 = TextEditingController();
 
@@ -100,7 +136,6 @@ class _AdminPatientDetailScreenState extends State<AdminPatientDetailScreen> {
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
             onPressed: () {
-              // VALIDACIÓN DE CLAVES (Puedes cambiarlas por las que tú quieras)
               if (clave1.text == "Clave.2020" && clave2.text == "MarciCanela2023*") {
                 Navigator.pop(context, true);
               } else {
@@ -115,19 +150,29 @@ class _AdminPatientDetailScreenState extends State<AdminPatientDetailScreen> {
 
     if (autorizado != true) return;
 
-    setState(() => _isUploading = true); // Reusamos variable de carga
+    setState(() => _isUploading = true);
 
     try {
-      // 1. Borrar el archivo físico de Storage (si existe URL)
+      // REGISTRO DE AUDITORÍA DE ALTA GRAVEDAD
+      final currentUser = FirebaseAuth.instance.currentUser;
+      await FirebaseFirestore.instance.collection('audit_logs').add({
+          'tipo': 'BORRADO_DOCUMENTO',
+          'pacienteId': widget.userId,
+          'documentoId': docId,
+          'autorEmail': currentUser?.email ?? 'Desconocido',
+          'fecha': FieldValue.serverTimestamp(),
+          'gravedad': 'CRÍTICA',
+          'motivo': 'Borrado autorizado por doble clave'
+      });
+
       if (urlPdf.isNotEmpty) {
         try {
           await FirebaseStorage.instance.refFromURL(urlPdf).delete();
         } catch (e) {
-          print("Aviso: No se pudo borrar el archivo de Storage (quizás ya no existía): $e");
+          print("Aviso: No se pudo borrar el archivo de Storage: $e");
         }
       }
 
-      // 2. Borrar el registro de la base de datos
       await FirebaseFirestore.instance.collection('documents').doc(docId).delete();
 
       if (mounted) {
@@ -156,12 +201,10 @@ class _AdminPatientDetailScreenState extends State<AdminPatientDetailScreen> {
         String fileName = file.name;
         String filePath = file.path!;
 
-        // 1. Subir a Storage
         final storageRef = FirebaseStorage.instance.ref().child('documentos_pacientes/${widget.userId}/$fileName');
         await storageRef.putFile(File(filePath));
         String downloadUrl = await storageRef.getDownloadURL();
 
-        // 2. Guardar en Firestore
         String docId = '${widget.userId}_${DateTime.now().millisecondsSinceEpoch}';
         
         await FirebaseFirestore.instance.collection('documents').doc(docId).set({
@@ -220,6 +263,18 @@ class _AdminPatientDetailScreenState extends State<AdminPatientDetailScreen> {
     if (newTotal < 0) newTotal = 0; 
     try {
       await passRef.update({'tokensRestantes': newTotal});
+      
+      // AUDITORÍA DE TOKENS
+      final currentUser = FirebaseAuth.instance.currentUser;
+      await FirebaseFirestore.instance.collection('audit_logs').add({
+          'tipo': 'MODIFICACION_TOKENS',
+          'pacienteId': widget.userId,
+          'autorEmail': currentUser?.email,
+          'cambio': change,
+          'nuevoSaldo': newTotal,
+          'fecha': FieldValue.serverTimestamp(),
+      });
+
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Tokens: $newTotal'), duration: const Duration(milliseconds: 500)));
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red));
@@ -278,7 +333,6 @@ class _AdminPatientDetailScreenState extends State<AdminPatientDetailScreen> {
     List<dynamic> posiblesIds = [idConCeros, idSinCeros];
     if (int.tryParse(idSinCeros) != null) posiblesIds.add(int.parse(idSinCeros));
 
-    // CONTROL DE PRIVACIDAD: Solo Admin ve datos sensibles
     bool isAdmin = widget.viewerRole == 'admin';
 
     return Scaffold(
@@ -427,11 +481,11 @@ class _AdminPatientDetailScreenState extends State<AdminPatientDetailScreen> {
                         leading: Icon(firmado ? Icons.check_circle : Icons.pending, color: firmado ? Colors.green : Colors.orange),
                         title: Text(data['titulo'] ?? 'Doc'),
                         subtitle: Text(firmado ? 'Firmado' : 'Pendiente'),
-                        // BOTÓN DE BORRAR SOLO PARA ADMINS (Doble Seguridad)
+                        // BOTÓN DE BORRAR SOLO PARA ADMINS
                         trailing: isAdmin 
                           ? IconButton(
                               icon: const Icon(Icons.delete, color: Colors.red),
-                              onPressed: () => _borrarDocumentoSeguro(docId, urlPdf), // <--- LLAMADA A LA FUNCIÓN NUEVA
+                              onPressed: () => _borrarDocumentoSeguro(docId, urlPdf), 
                             )
                           : null,
                       ),

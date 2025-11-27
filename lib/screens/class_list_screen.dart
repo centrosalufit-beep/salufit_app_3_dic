@@ -3,7 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../models/group_class.dart';
+import '../widgets/salufit_scaffold.dart'; // <--- CAMBIO
 
 class ClassListScreen extends StatefulWidget {
   final String userId;
@@ -27,11 +29,36 @@ class _ClassListScreenState extends State<ClassListScreen> {
     return a.year == b.year && a.month == b.month && a.day == b.day;
   }
 
-  MaterialColor _getColorPorClase(String nombreClase) {
-    String nombre = nombreClase.toLowerCase(); 
-    if (nombre.contains('entrenamiento')) return Colors.red; 
-    if (nombre.contains('meditación') || nombre.contains('meditacion')) return Colors.blueGrey; 
-    return Colors.blue; 
+  // --- LÓGICA VISUAL (Iconos Actualizados) ---
+  Map<String, dynamic> _getClassVisuals(String nombreClase) {
+    String nombre = nombreClase.toLowerCase();
+    
+    if (nombre.contains('entrenamiento')) {
+      return {
+        'colors': [const Color(0xFFD32F2F), const Color(0xFFE57373)], 
+        'icon': Icons.fitness_center, 
+        'textColor': Colors.red.shade900
+      };
+    } 
+    if (nombre.contains('meditación') || nombre.contains('meditacion')) {
+      return {
+        'colors': [const Color(0xFF7B1FA2), const Color(0xFFBA68C8)], 
+        'icon': Icons.self_improvement, 
+        'textColor': Colors.purple.shade900
+      };
+    }
+    if (nombre.contains('tribu')) {
+      return {
+        'colors': [const Color(0xFFF57C00), const Color(0xFFFFB74D)], 
+        'icon': Icons.directions_walk, 
+        'textColor': Colors.orange.shade900
+      };
+    }
+    return {
+      'colors': [const Color(0xFF1976D2), const Color(0xFF64B5F6)], 
+      'icon': Icons.sports_gymnastics, 
+      'textColor': Colors.blue.shade900
+    };
   }
 
   Future<void> _borrarClaseAdmin(String classId) async {
@@ -143,16 +170,17 @@ class _ClassListScreenState extends State<ClassListScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Normalización de ID para buscar el nombre
     String idConCeros = widget.userId.padLeft(6, '0');
     String idSinCeros = widget.userId.replaceFirst(RegExp(r'^0+'), '');
     List<dynamic> posiblesIds = [idConCeros, idSinCeros];
     if (int.tryParse(idSinCeros) != null) posiblesIds.add(int.parse(idSinCeros));
+    
+    // OBTENEMOS EMAIL PARA LA CONSULTA SEGURA
+    final String? userEmail = FirebaseAuth.instance.currentUser?.email;
 
     bool isAdmin = _adminIds.contains(idConCeros);
 
-    return Scaffold(
-      backgroundColor: const Color(0xFFF5F7FA),
+    return SalufitScaffold( // <--- CAMBIO A WIDGET CON FONDO
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -189,8 +217,11 @@ class _ClassListScreenState extends State<ClassListScreen> {
               ],
             ),
       ),
+      // CAMBIAMOS A CONSULTA POR EMAIL SI ES POSIBLE
       body: StreamBuilder<QuerySnapshot>(
-        stream: FirebaseFirestore.instance.collection('bookings').where('userId', whereIn: posiblesIds).snapshots(),
+        stream: FirebaseFirestore.instance.collection('bookings')
+            .where('userEmail', isEqualTo: userEmail) // Búsqueda por email (segura)
+            .snapshots(),
         builder: (context, bookingSnapshot) {
           Map<String, String> misReservas = {};
           if (bookingSnapshot.hasData) {
@@ -202,6 +233,7 @@ class _ClassListScreenState extends State<ClassListScreen> {
 
           return Column(
             children: [
+              // CALENDARIO HORIZONTAL
               Container(
                 height: 90,
                 padding: const EdgeInsets.symmetric(vertical: 10),
@@ -221,7 +253,7 @@ class _ClassListScreenState extends State<ClassListScreen> {
                         width: 60,
                         margin: const EdgeInsets.only(right: 10),
                         decoration: BoxDecoration(
-                          color: isSelected ? Colors.blue : Colors.white,
+                          color: isSelected ? Colors.teal : Colors.white,
                           borderRadius: BorderRadius.circular(15),
                           boxShadow: [if (!isSelected) BoxShadow(color: Colors.grey.withOpacity(0.1), blurRadius: 5)],
                         ),
@@ -291,76 +323,128 @@ class _ClassListScreenState extends State<ClassListScreen> {
                         String horario = "${DateFormat('HH:mm').format(fechaClase)} - ${DateFormat('HH:mm').format(fechaClase.add(const Duration(hours: 1)))}";
                         
                         final bool estaLlena = aforoActual >= aforoMax;
-                        final MaterialColor color = _getColorPorClase(nombre);
                         final bool yaReservada = misReservas.containsKey(classId);
-                        final String? bookingId = misReservas[classId];
+                        // Necesitamos el bookingId, pero si usamos la query por email, lo tenemos en el mapa
+                        String? bookingId;
+                        if(yaReservada) bookingId = misReservas[classId];
+
+                        // ESTILOS VISUALES
+                        Map<String, dynamic> visual = _getClassVisuals(nombre);
+                        List<Color> gradientColors = visual['colors'];
+                        IconData iconData = visual['icon'];
+                        Color textBtnColor = visual['textColor'];
 
                         return Container(
+                          height: 120, 
                           decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(20),
-                            boxShadow: [BoxShadow(color: Colors.grey.shade200, blurRadius: 10, offset: const Offset(0, 5))],
-                            border: Border(left: BorderSide(color: color, width: 5)),
-                          ),
-                          child: Padding(
-                            padding: const EdgeInsets.all(15.0),
-                            child: Row(
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                                  decoration: BoxDecoration(color: color.shade50, borderRadius: BorderRadius.circular(12)),
-                                  child: Column(
-                                    children: [
-                                      Text(horario.split('-')[0].trim(), style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: color.shade800)),
-                                      Text(horario.contains('-') ? horario.split('-')[1].trim() : "", style: TextStyle(fontSize: 14, color: color.shade800)),
-                                    ],
-                                  ),
-                                ),
-                                const SizedBox(width: 15),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(nombre, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis),
-                                      Text(monitor, style: const TextStyle(fontSize: 12, color: Colors.grey)),
-                                      const SizedBox(height: 8),
-                                      yaReservada 
-                                        ? Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2), decoration: BoxDecoration(color: Colors.green.shade100, borderRadius: BorderRadius.circular(4)), child: const Text("RESERVADA", style: TextStyle(fontSize: 10, color: Colors.green, fontWeight: FontWeight.bold)))
-                                        : Row(children: [Icon(Icons.people, size: 14, color: estaLlena ? Colors.red : color), const SizedBox(width: 4), Text("${aforoActual}/${aforoMax} plazas", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: estaLlena ? Colors.red : color))])
-                                    ],
-                                  ),
-                                ),
-                                
-                                // --- CAMBIO: BOTÓN DE BORRAR + BOTÓN DE RESERVAR (JUNTOS) ---
-                                
-                                // 1. Si es Admin, mostramos el icono de papelera
-                                if (isAdmin)
-                                  IconButton(
-                                    icon: const Icon(Icons.delete, color: Colors.red),
-                                    onPressed: () => _borrarClaseAdmin(classId),
-                                  ),
-
-                                // 2. Y TAMBIÉN mostramos siempre la opción de Reservar/Cancelar
-                                _isLoadingAction
-                                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                                  : yaReservada
-                                      ? IconButton(
-                                          icon: const Icon(Icons.cancel_outlined, color: Colors.red, size: 30), 
-                                          onPressed: () => _cancelarReserva(bookingId!, fechaClase)
-                                        )
-                                      : ElevatedButton(
-                                          onPressed: estaLlena ? null : () => _reservarClase(classId, nombre),
-                                          style: ElevatedButton.styleFrom(
-                                            backgroundColor: estaLlena ? Colors.grey.shade300 : color, 
-                                            foregroundColor: Colors.white, 
-                                            elevation: 0, 
-                                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), 
-                                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12)
-                                          ),
-                                          child: Text(estaLlena ? "LLENA" : "Reservar", style: const TextStyle(fontSize: 12)),
-                                        ),
-                              ],
+                            gradient: LinearGradient(
+                              colors: gradientColors,
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
                             ),
+                            borderRadius: BorderRadius.circular(20),
+                            boxShadow: [BoxShadow(color: gradientColors[0].withOpacity(0.4), blurRadius: 8, offset: const Offset(0, 4))],
+                          ),
+                          child: Stack(
+                            children: [
+                              // ICONO DE FONDO DECORATIVO
+                              Positioned(
+                                right: -15,
+                                bottom: -15,
+                                child: Icon(iconData, size: 130, color: Colors.white.withOpacity(0.15)),
+                              ),
+                              
+                              // CONTENIDO
+                              Padding(
+                                padding: const EdgeInsets.all(15.0),
+                                child: Row(
+                                  children: [
+                                    // COLUMNA HORA
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                      decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(12)),
+                                      child: Column(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                          Text(horario.split('-')[0].trim(), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white)),
+                                          Text(horario.contains('-') ? horario.split('-')[1].trim() : "", style: const TextStyle(fontSize: 14, color: Colors.white70)),
+                                        ],
+                                      ),
+                                    ),
+                                    const SizedBox(width: 15),
+                                    
+                                    // INFO CENTRAL
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                          Text(nombre, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white), maxLines: 2, overflow: TextOverflow.ellipsis),
+                                          const SizedBox(height: 4),
+                                          Text("Monitor: $monitor", style: const TextStyle(fontSize: 12, color: Colors.white70)),
+                                          const SizedBox(height: 8),
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                            decoration: BoxDecoration(color: Colors.black12, borderRadius: BorderRadius.circular(4)),
+                                            child: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Icon(Icons.group, size: 12, color: Colors.white.withOpacity(0.8)),
+                                                const SizedBox(width: 4),
+                                                Text("${aforoActual}/${aforoMax}", style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white)),
+                                              ],
+                                            ),
+                                          )
+                                        ],
+                                      ),
+                                    ),
+                                    
+                                    // ZONA DERECHA: BOTÓN
+                                    Column(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      crossAxisAlignment: CrossAxisAlignment.end, 
+                                      children: [
+                                        
+                                        // BOTÓN DE ACCIÓN
+                                        if (yaReservada)
+                                          ElevatedButton(
+                                            onPressed: () => _cancelarReserva(bookingId!, fechaClase),
+                                            style: ElevatedButton.styleFrom(
+                                              backgroundColor: Colors.white, 
+                                              foregroundColor: Colors.red, 
+                                              padding: const EdgeInsets.symmetric(horizontal: 10),
+                                              minimumSize: const Size(80, 30)
+                                            ),
+                                            child: const Text("CANCELAR", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
+                                          )
+                                        else
+                                          ElevatedButton(
+                                            onPressed: estaLlena ? null : () => _reservarClase(classId, nombre),
+                                            style: ElevatedButton.styleFrom(
+                                              backgroundColor: Colors.white, 
+                                              foregroundColor: textBtnColor, 
+                                              disabledBackgroundColor: Colors.white24,
+                                              padding: const EdgeInsets.symmetric(horizontal: 10),
+                                              minimumSize: const Size(80, 30)
+                                            ),
+                                            child: Text(estaLlena ? "LLENA" : "RESERVAR", style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
+                                          ),
+
+                                        // ADMIN DELETE
+                                        if (isAdmin)
+                                          InkWell(
+                                            onTap: () => _borrarClaseAdmin(classId),
+                                            child: Padding(
+                                              padding: const EdgeInsets.all(4.0),
+                                              child: Icon(Icons.delete, color: Colors.white.withOpacity(0.7), size: 18),
+                                            ),
+                                          )
+                                      ],
+                                    )
+                                  ],
+                                ),
+                              ),
+                            ],
                           ),
                         );
                       },
@@ -376,7 +460,7 @@ class _ClassListScreenState extends State<ClassListScreen> {
   }
 }
 
-// --- MODAL CREAR CLASE (CON MULTI-HORA) ---
+// --- MODAL CREAR CLASE (SIN CAMBIOS) ---
 class _CreateClassModal extends StatefulWidget {
   const _CreateClassModal();
   @override
@@ -389,15 +473,11 @@ class _CreateClassModalState extends State<_CreateClassModal> {
   
   bool _isLoading = false;
   String _loadingStatus = "Generar Calendario";
-  
-  // Lista de horas seleccionadas
   final List<TimeOfDay> _selectedTimes = [];
-  
   final Set<int> _selectedDays = {}; 
   int _selectedMonthOffset = 0; 
-  String? _selectedClassType; // Para el dropdown
+  String? _selectedClassType; 
 
-  // CONFIGURACIÓN DE TIPOS Y PROFESIONALES
   final Map<String, String> _tiposYProfesionales = {
     'Ejercicio Terapéutico': 'Álvaro, David e Ibtissam',
     'Entrenamiento Grupal': 'Silvio Marin',
@@ -413,47 +493,33 @@ class _CreateClassModalState extends State<_CreateClassModal> {
         return MediaQuery(data: MediaQuery.of(context).copyWith(alwaysUse24HourFormat: true), child: child!);
       },
     );
-    
     if (picked != null) {
-      // Evitar duplicados
       bool existe = _selectedTimes.any((t) => t.hour == picked.hour && t.minute == picked.minute);
       if (!existe) {
         setState(() {
           _selectedTimes.add(picked);
-          // Ordenamos las horas cronológicamente
           _selectedTimes.sort((a, b) => (a.hour * 60 + a.minute).compareTo(b.hour * 60 + b.minute));
         });
       }
     }
   }
 
-  void _removeTime(TimeOfDay time) {
-    setState(() {
-      _selectedTimes.remove(time);
-    });
-  }
+  void _removeTime(TimeOfDay time) { setState(() => _selectedTimes.remove(time)); }
 
   Future<void> _generar() async {
     if (_selectedClassType == null || _selectedDays.isEmpty || _selectedTimes.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Falta tipo, días u horas")));
       return;
     }
-
     setState(() { _isLoading = true; });
-    
     DateTime now = DateTime.now();
     DateTime targetDate = DateTime(now.year, now.month + _selectedMonthOffset, 1);
     int totalCreated = 0;
     int errors = 0;
 
-    // BUCLE PARA GENERAR CLASES PARA CADA HORA SELECCIONADA
     for (int i = 0; i < _selectedTimes.length; i++) {
       TimeOfDay time = _selectedTimes[i];
-      
-      setState(() {
-        _loadingStatus = "Creando horario ${time.hour}:${time.minute.toString().padLeft(2,'0')}...";
-      });
-
+      setState(() => _loadingStatus = "Creando horario ${time.hour}:${time.minute.toString().padLeft(2,'0')}...");
       try {
         final response = await http.post(
           Uri.parse(_apiUrl),
@@ -464,33 +530,20 @@ class _CreateClassModalState extends State<_CreateClassModal> {
             'diasSemana': _selectedDays.toList(),
             'hora': time.hour,
             'minutos': time.minute,
-            'mes': targetDate.month - 1, // Cloud Function espera 0-11
+            'mes': targetDate.month - 1, 
             'anio': targetDate.year,
             'aforoMax': 12
           }),
         );
-
-        if (response.statusCode == 200) {
-          totalCreated++;
-        } else {
-          print("Error creando hora $time: ${response.body}");
-          errors++;
-        }
-      } catch (e) {
-        print("Excepción creando hora $time: $e");
-        errors++;
-      }
+        if (response.statusCode == 200) totalCreated++; else errors++;
+      } catch (e) { errors++; }
     }
 
     if (mounted) {
       Navigator.pop(context); 
-      if (errors == 0) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("¡Éxito! Creadas clases para $totalCreated horarios."), backgroundColor: Colors.green));
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Proceso terminado con $errors errores."), backgroundColor: Colors.orange));
-      }
+      if (errors == 0) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("¡Éxito! Creadas clases para $totalCreated horarios."), backgroundColor: Colors.green));
+      else ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Proceso terminado con $errors errores."), backgroundColor: Colors.orange));
     }
-    
     setState(() { _isLoading = false; });
   }
 
@@ -502,102 +555,36 @@ class _CreateClassModalState extends State<_CreateClassModal> {
 
     return Container(
       padding: const EdgeInsets.all(20),
-      height: 700, // Aumentado un poco para que quepa todo
+      height: 700, 
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text("Generar Clases Mensuales", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.teal)),
           const SizedBox(height: 20),
-          
-          // 1. DROPDOWN TIPO DE CLASE
           DropdownButtonFormField<String>(
             decoration: const InputDecoration(labelText: "Tipo de Actividad", border: OutlineInputBorder()),
             value: _selectedClassType,
-            items: _tiposYProfesionales.keys.map((tipo) {
-              return DropdownMenuItem(value: tipo, child: Text(tipo, style: const TextStyle(fontSize: 14)));
-            }).toList(),
+            items: _tiposYProfesionales.keys.map((tipo) => DropdownMenuItem(value: tipo, child: Text(tipo, style: const TextStyle(fontSize: 14)))).toList(),
             onChanged: (val) {
               setState(() {
                 _selectedClassType = val;
-                // AUTO-RELLENADO DE PROFESIONAL
-                if (val != null) {
-                  _profesionalController.text = _tiposYProfesionales[val]!;
-                }
+                if (val != null) _profesionalController.text = _tiposYProfesionales[val]!;
               });
             },
           ),
           const SizedBox(height: 10),
-          
-          // 2. PROFESIONAL (Auto-rellenable pero editable)
-          TextField(
-            controller: _profesionalController, 
-            decoration: const InputDecoration(labelText: "Monitor/es", border: OutlineInputBorder())
-          ),
+          TextField(controller: _profesionalController, decoration: const InputDecoration(labelText: "Monitor/es", border: OutlineInputBorder())),
           const SizedBox(height: 20),
-          
-          // 3. DÍAS DE LA SEMANA
           const Text("Días de la semana:", style: TextStyle(fontWeight: FontWeight.bold)),
           const SizedBox(height: 10),
           Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [_dayBtn("L", 1), _dayBtn("M", 2), _dayBtn("X", 3), _dayBtn("J", 4), _dayBtn("V", 5), _dayBtn("S", 6), _dayBtn("D", 0)]),
           const SizedBox(height: 20),
-          
-          // 4. MULTI-HORAS
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text("Horarios de inicio:", style: TextStyle(fontWeight: FontWeight.bold)),
-              TextButton.icon(
-                onPressed: _selectTime, 
-                icon: const Icon(Icons.access_time, size: 18), 
-                label: const Text("AÑADIR HORA")
-              ),
-            ],
-          ),
-          
-          // Lista de chips con las horas seleccionadas
-          if (_selectedTimes.isEmpty)
-            const Text("Ninguna hora seleccionada", style: TextStyle(color: Colors.grey, fontSize: 12))
-          else
-            Wrap(
-              spacing: 8.0,
-              children: _selectedTimes.map((time) {
-                return Chip(
-                  label: Text('${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}'),
-                  deleteIcon: const Icon(Icons.close, size: 18),
-                  onDeleted: () => _removeTime(time),
-                  backgroundColor: Colors.teal.shade50,
-                  labelStyle: TextStyle(color: Colors.teal.shade900, fontWeight: FontWeight.bold),
-                );
-              }).toList(),
-            ),
-
+          Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text("Horarios de inicio:", style: TextStyle(fontWeight: FontWeight.bold)), TextButton.icon(onPressed: _selectTime, icon: const Icon(Icons.access_time, size: 18), label: const Text("AÑADIR HORA"))]),
+          if (_selectedTimes.isEmpty) const Text("Ninguna hora seleccionada", style: TextStyle(color: Colors.grey, fontSize: 12)) else Wrap(spacing: 8.0, children: _selectedTimes.map((time) => Chip(label: Text('${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}'), deleteIcon: const Icon(Icons.close, size: 18), onDeleted: () => _removeTime(time), backgroundColor: Colors.teal.shade50, labelStyle: TextStyle(color: Colors.teal.shade900, fontWeight: FontWeight.bold))).toList()),
           const SizedBox(height: 20),
-          
-          // 5. MES Y BOTÓN
-          InputDecorator(
-            decoration: const InputDecoration(labelText: "Mes a generar", border: OutlineInputBorder()), 
-            child: DropdownButton<int>(
-              value: _selectedMonthOffset, 
-              isExpanded: true, 
-              underline: const SizedBox(), 
-              items: [DropdownMenuItem(value: 0, child: Text(mesActual)), DropdownMenuItem(value: 1, child: Text(mesSiguiente))], 
-              onChanged: (val) => setState(() => _selectedMonthOffset = val!)
-            )
-          ),
-          
+          InputDecorator(decoration: const InputDecoration(labelText: "Mes a generar", border: OutlineInputBorder()), child: DropdownButton<int>(value: _selectedMonthOffset, isExpanded: true, underline: const SizedBox(), items: [DropdownMenuItem(value: 0, child: Text(mesActual)), DropdownMenuItem(value: 1, child: Text(mesSiguiente))], onChanged: (val) => setState(() => _selectedMonthOffset = val!))),
           const Spacer(),
-          
-          SizedBox(
-            width: double.infinity, 
-            height: 50, 
-            child: ElevatedButton(
-              onPressed: _isLoading ? null : _generar, 
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.teal, foregroundColor: Colors.white), 
-              child: _isLoading 
-                ? Row(mainAxisAlignment: MainAxisAlignment.center, children: [const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)), const SizedBox(width: 15), Text(_loadingStatus)]) 
-                : const Text("GENERAR CALENDARIO")
-            )
-          ),
+          SizedBox(width: double.infinity, height: 50, child: ElevatedButton(onPressed: _isLoading ? null : _generar, style: ElevatedButton.styleFrom(backgroundColor: Colors.teal, foregroundColor: Colors.white), child: _isLoading ? Row(mainAxisAlignment: MainAxisAlignment.center, children: [const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)), const SizedBox(width: 15), Text(_loadingStatus)]) : const Text("GENERAR CALENDARIO"))),
         ],
       ),
     );

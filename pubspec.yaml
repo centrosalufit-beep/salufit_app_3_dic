@@ -21,7 +21,8 @@ dependencies:
   firebase_auth: ^5.0.0
   cloud_firestore: ^5.0.0
   firebase_storage: ^12.0.0
-  # cloud_functions: ^5.0.0  <-- Comentado porque estamos restaurando versión de ayer
+  cloud_functions: ^5.0.0
+  firebase_messaging: ^15.0.0 
 
   # --- CONEXIÓN INTERNET ---
   http: ^1.2.0
@@ -30,12 +31,13 @@ dependencies:
   # --- SEGURIDAD Y BIOMETRÍA ---
   local_auth: ^2.3.0
   flutter_secure_storage: ^9.0.0
+  shared_preferences: ^2.3.0  # <--- ¡AÑADIDO! IMPORTANTE PARA GUARDAR PROGRESO
 
   # --- HARDWARE Y SENSORES ---
   permission_handler: ^11.3.0
   network_info_plus: ^6.1.0
   device_info_plus: ^11.0.0
-  # package_info_plus: ^8.0.0 <-- Comentado para restaurar versión de ayer
+  package_info_plus: ^8.0.0
   
   # --- CÓDIGOS QR ---
   qr_flutter: ^4.1.0
@@ -46,7 +48,7 @@ dependencies:
   pdf: ^3.10.0
   printing: ^5.13.0
   path_provider: ^2.1.2
-  # excel: ^4.0.6 <-- Comentado, si te da error luego lo descomentamos
+  excel: ^4.0.6
 
   # --- MULTIMEDIA ---
   video_player: ^2.8.0
@@ -54,7 +56,7 @@ dependencies:
 
   # --- UI ---
   cupertino_icons: ^1.0.2
-  excel: ^4.0.6
+  firebase_app_check: ^0.3.2+10
 
 dev_dependencies:
   flutter_test:
@@ -64,7 +66,6 @@ dev_dependencies:
   # Generador de Iconos
   flutter_launcher_icons: "^0.13.1"
 
-# Configuración del Icono de la App
 flutter_launcher_icons:
   android: "launcher_icon"
   ios: true
@@ -74,10 +75,10 @@ flutter_launcher_icons:
     generate: true
     icon_size: 48
 
-# --- BLOQUE FLUTTER UNIFICADO ---
 flutter:
   uses-material-design: true
-  
   assets:
     - assets/logo_salufit.png
-    # - assets/icon.png
+    - assets/login_bg.jpg 
+    - assets/login_logo.png
+    - assets/watermark_bg.jpg

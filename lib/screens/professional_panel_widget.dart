@@ -16,7 +16,10 @@ import 'admin_time_report_screen.dart';
 import 'alerts_list_screen.dart'; 
 import 'admin_renewal_screen.dart';      
 import 'admin_upload_excel_screen.dart'; 
-import 'admin_edit_time_records_screen.dart'; // <--- NUEVO IMPORT
+import 'admin_edit_time_records_screen.dart';
+import 'internal_management_screen.dart'; 
+import 'admin_class_manager_screen.dart'; 
+import 'admin_patient_resources_screens.dart';
 
 class ProfessionalPanelWidget extends StatefulWidget {
   final String userId;
@@ -193,20 +196,200 @@ class _ProfessionalPanelWidgetState extends State<ProfessionalPanelWidget> {
 
   @override
   Widget build(BuildContext context) {
+    bool isAdmin = widget.userRole == 'admin';
+
+    // Definimos los botones
+    List<Widget> menuItems = [
+      // --- PARA TODOS (Staff) ---
+      _MenuGridCard(
+        icon: Icons.qr_code_scanner,
+        label: 'Escanear Entrada',
+        color: Colors.blueGrey,
+        onTap: () async {
+          final res = await Navigator.push(context, MaterialPageRoute(builder: (context) => const QRScannerScreen()));
+          if (res != null && mounted) _procesarPase(res);
+        },
+      ),
+      _MenuGridCard(
+        icon: Icons.people_alt,
+        label: 'Listado Pacientes',
+        color: Colors.blue,
+        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => AdminPatientListScreen(viewerRole: widget.userRole))),
+      ),
+      
+      // --- GESTIÓN DE CLASES ---
+      _MenuGridCard(
+        icon: Icons.calendar_month,
+        label: 'Gestión Clases',
+        color: Colors.teal,
+        onTap: () => Navigator.push(
+          context, 
+          MaterialPageRoute(builder: (context) => AdminClassManagerScreen(currentUserId: widget.userId))
+        ),
+      ),
+
+      // --- GESTIÓN RÁPIDA MATERIAL ---
+      _MenuGridCard(
+        icon: Icons.video_library, 
+        label: 'Gestión Material',
+        color: Colors.indigo,
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => AdminPatientListScreen(
+                viewerRole: widget.userRole,
+                onUserSelected: (uid, name) {
+                  Navigator.push(
+                    context, 
+                    MaterialPageRoute(builder: (context) => AdminPatientMaterialScreen(userId: uid, userName: name))
+                  );
+                },
+              ),
+            ),
+          );
+        },
+      ),
+
+      // --- GESTIÓN RÁPIDA DOCUMENTOS ---
+      _MenuGridCard(
+        icon: Icons.folder_shared, 
+        label: 'Gestión Docs',
+        color: Colors.orange,
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => AdminPatientListScreen(
+                viewerRole: widget.userRole,
+                onUserSelected: (uid, name) {
+                  Navigator.push(
+                    context, 
+                    MaterialPageRoute(builder: (context) => AdminPatientDocumentsScreen(userId: uid, userName: name, viewerRole: widget.userRole))
+                  );
+                },
+              ),
+            ),
+          );
+        },
+      ),
+
+      // --- BOTÓN 1: CHATS / EQUIPO (Badge: Mensajes no leídos) ---
+      StreamBuilder<QuerySnapshot>(
+        stream: FirebaseFirestore.instance.collection('internal_chats')
+            .where('participants', arrayContains: widget.userId)
+            .snapshots(),
+        builder: (context, chatSnap) {
+          int chatsCount = 0;
+          if (chatSnap.hasData) {
+            for (var doc in chatSnap.data!.docs) {
+              var data = doc.data() as Map<String, dynamic>;
+              chatsCount += (data['unreadCount_${widget.userId}'] as num? ?? 0).toInt();
+            }
+          }
+          
+          return Badge(
+            isLabelVisible: chatsCount > 0,
+            label: Text("$chatsCount"),
+            backgroundColor: Colors.red,
+            child: _MenuGridCard(
+              icon: Icons.chat, 
+              label: 'Chats / Equipo',
+              color: Colors.cyan,
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => InternalManagementScreen(currentUserId: widget.userId, viewType: 'chat')),
+              ),
+            ),
+          );
+        }
+      ),
+
+      // --- BOTÓN 2: TAREAS (Badge: Tareas pendientes) ---
+      StreamBuilder<QuerySnapshot>(
+        stream: FirebaseFirestore.instance.collection('internal_tasks')
+            .where('assignedToId', isEqualTo: widget.userId)
+            .where('status', isEqualTo: 'pending')
+            .snapshots(),
+        builder: (context, taskSnap) {
+          int tasksCount = taskSnap.hasData ? taskSnap.data!.docs.length : 0;
+          
+          return Badge(
+            isLabelVisible: tasksCount > 0,
+            label: Text("$tasksCount"),
+            backgroundColor: Colors.red,
+            child: _MenuGridCard(
+              icon: Icons.check_circle_outline, 
+              label: 'Tareas',
+              color: Colors.deepPurple,
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => InternalManagementScreen(currentUserId: widget.userId, viewType: 'tasks')),
+              ),
+            ),
+          );
+        }
+      ),
+    ];
+
+    // --- SOLO ADMIN ---
+    if (isAdmin) {
+      menuItems.addAll([
+        _MenuGridCard(
+          icon: Icons.person_add_alt_1,
+          label: 'Nuevo Paciente',
+          color: Colors.green,
+          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const AdminCreatePatientScreen())),
+        ),
+        _MenuGridCard(
+          icon: Icons.autorenew,
+          label: 'Renovación Bonos',
+          color: Colors.orange,
+          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const AdminRenewalScreen())),
+        ),
+        _MenuGridCard(
+          icon: Icons.upload_file,
+          label: 'Importar Excel',
+          color: Colors.purple,
+          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const AdminUploadExcelScreen())),
+        ),
+        _MenuGridCard(
+          icon: Icons.edit_calendar,
+          label: 'Corregir Fichajes',
+          color: Colors.pink, 
+          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const AdminEditTimeRecordsScreen())),
+        ),
+        _MenuGridCard(
+          icon: Icons.picture_as_pdf,
+          label: 'Informes Fichajes',
+          color: Colors.brown,
+          onTap: _verificarPasswordInforme,
+        ),
+      ]);
+    }
+
     return Container(
-      color: Colors.teal.shade50,
+      // ELIMINADO: color: const Color(0xFFF5F7FA) -> TRANSPARENTE
       child: SafeArea(
         child: Column(
           children: [
-            const Padding(
-              padding: EdgeInsets.only(top: 20, bottom: 10),
-              child: Text(
-                'Panel Profesional',
-                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.teal),
+            // CABECERA
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 10),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.admin_panel_settings, color: Colors.teal, size: 28),
+                  const SizedBox(width: 10),
+                  const Text(
+                    'Panel Profesional',
+                    style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.teal),
+                  ),
+                ],
               ),
             ),
 
-            // 1. ALERTAS DE FEEDBACK
+            // 1. ALERTAS
             StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance.collection('exercise_assignments').where('feedback.alerta', isEqualTo: true).snapshots(),
               builder: (context, snapshot) {
@@ -221,9 +404,9 @@ class _ProfessionalPanelWidgetState extends State<ProfessionalPanelWidget> {
                     elevation: 4,
                     child: ListTile(
                       leading: const Icon(Icons.notification_important, color: Colors.white, size: 30),
-                      title: Text('$alertasCount PACIENTES CON PROBLEMAS', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                      subtitle: const Text('Revisa el feedback negativo', style: TextStyle(color: Colors.white70)),
-                      trailing: const Icon(Icons.arrow_forward_ios, color: Colors.white),
+                      title: Text('$alertasCount ALERTAS', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                      subtitle: const Text('Revisar feedback', style: TextStyle(color: Colors.white70, fontSize: 12)),
+                      trailing: const Icon(Icons.arrow_forward_ios, color: Colors.white, size: 16),
                       onTap: () {
                         Navigator.push(context, MaterialPageRoute(builder: (context) => AlertsListScreen(viewerRole: widget.userRole)));
                       },
@@ -234,80 +417,22 @@ class _ProfessionalPanelWidgetState extends State<ProfessionalPanelWidget> {
             ),
 
             // 2. FICHAJE
-            Padding(padding: const EdgeInsets.all(20.0), child: _buildFichajeCard()),
-            const Divider(thickness: 2, indent: 20, endIndent: 20),
+            Padding(padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10), child: _buildFichajeCard()),
             
-            // 3. MENÚ DE HERRAMIENTAS
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 20),
+              child: Divider(thickness: 1),
+            ),
+            
+            // 3. GRID COMPACTO (3 COLUMNAS)
             Expanded(
-              child: ListView(
-                padding: const EdgeInsets.all(20.0),
-                children: [
-                  const Text('HERRAMIENTAS DE GESTIÓN', style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 15),
-                  
-                  // --- BOTONES PARA TODOS (PRO Y ADMIN) ---
-                  _AdminButton(
-                    icon: Icons.qr_code_scanner, 
-                    text: 'Escanear Entrada', 
-                    onTap: () async {
-                       final res = await Navigator.push(context, MaterialPageRoute(builder: (context) => const QRScannerScreen()));
-                       if (res != null && mounted) _procesarPase(res);
-                    }
-                  ),
-                  const SizedBox(height: 15),
-                  
-                  _AdminButton(
-                    icon: Icons.people_alt, 
-                    text: 'Listado Pacientes', 
-                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => AdminPatientListScreen(viewerRole: widget.userRole)))
-                  ),
-
-                  // --- BOTONES SOLO PARA ADMIN ---
-                  if (widget.userRole == 'admin') ...[
-                    const SizedBox(height: 25),
-                    const Text('ADMINISTRACIÓN', style: TextStyle(color: Colors.teal, fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 10),
-
-                    // AÑADIR PACIENTE
-                    _AdminButton(
-                      icon: Icons.person_add, 
-                      text: 'Añadir Nuevo Paciente', 
-                      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const AdminCreatePatientScreen()))
-                    ),
-                    const SizedBox(height: 10),
-
-                    // RENOVACIÓN MASIVA
-                    _AdminButton(
-                      icon: Icons.autorenew, 
-                      text: 'Renovación Mensual Bonos', 
-                      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const AdminRenewalScreen()))
-                    ),
-                    const SizedBox(height: 10),
-
-                    // IMPORTAR EXCEL
-                    _AdminButton(
-                      icon: Icons.upload_file, 
-                      text: 'Importar Citas (Excel)', 
-                      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const AdminUploadExcelScreen()))
-                    ),
-                    const SizedBox(height: 10),
-
-                    // GESTIÓN DE FICHAJES (CORRECCIONES) - NUEVO
-                    _AdminButton(
-                      icon: Icons.edit_calendar, 
-                      text: 'Corregir/Editar Fichajes', 
-                      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const AdminEditTimeRecordsScreen()))
-                    ),
-                    const SizedBox(height: 10),
-
-                    // INFORMES
-                    _AdminButton(
-                      icon: Icons.description, 
-                      text: 'Informe Fichajes (PDF)', 
-                      onTap: _verificarPasswordInforme
-                    ),
-                  ],
-                ],
+              child: GridView.count(
+                padding: const EdgeInsets.all(20),
+                crossAxisCount: 3, 
+                crossAxisSpacing: 10, 
+                mainAxisSpacing: 10,
+                childAspectRatio: 0.85, 
+                children: menuItems,
               ),
             ),
           ],
@@ -326,25 +451,25 @@ class _ProfessionalPanelWidgetState extends State<ProfessionalPanelWidget> {
           if (data['type'] == 'IN') { isWorking = true; lastTime = (data['timestamp'] as Timestamp).toDate(); }
         }
         return Container(
-          padding: const EdgeInsets.all(20),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
           decoration: BoxDecoration(
             color: Colors.white, 
-            borderRadius: BorderRadius.circular(20), 
-            boxShadow: [BoxShadow(color: Colors.teal.withValues(alpha: 0.1), blurRadius: 15, offset: const Offset(0, 5))],
+            borderRadius: BorderRadius.circular(15), 
+            boxShadow: [BoxShadow(color: Colors.teal.withOpacity(0.1), blurRadius: 10, offset: const Offset(0, 3))],
             border: Border.all(color: isWorking ? Colors.green.shade200 : Colors.grey.shade300)
           ),
           child: Column(children: [
               Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
                   Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Text(isWorking ? 'JORNADA EN CURSO' : 'FUERA DE JORNADA', style: TextStyle(color: isWorking ? Colors.green : Colors.grey, fontWeight: FontWeight.bold, fontSize: 12)),
-                      const SizedBox(height: 5),
-                      Text(isWorking ? "Entrada: ${DateFormat('HH:mm').format(lastTime ?? DateTime.now())}" : 'Esperando fichaje', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                      Text(isWorking ? 'EN JORNADA' : 'FUERA DE JORNADA', style: TextStyle(color: isWorking ? Colors.green : Colors.grey, fontWeight: FontWeight.bold, fontSize: 11)),
+                      const SizedBox(height: 2),
+                      Text(isWorking ? "Entrada: ${DateFormat('HH:mm').format(lastTime ?? DateTime.now())}" : 'Sin fichar', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                     ]),
-                  Icon(Icons.access_time_filled, color: isWorking ? Colors.green : Colors.grey, size: 30)
+                  Icon(Icons.access_time_filled, color: isWorking ? Colors.green : Colors.grey, size: 24)
               ]),
-              const SizedBox(height: 20),
+              const SizedBox(height: 10),
               if (_statusMessage.isNotEmpty) Text(_statusMessage, style: const TextStyle(color: Colors.red, fontSize: 12)),
-              SizedBox(width: double.infinity, height: 55, child: _isLoading ? const Center(child: CircularProgressIndicator()) : ElevatedButton.icon(onPressed: () => _fichar(isWorking ? 'OUT' : 'IN'), icon: Icon(isWorking ? Icons.exit_to_app : Icons.login), label: Text(isWorking ? 'FICHAR SALIDA' : 'FICHAR ENTRADA'), style: ElevatedButton.styleFrom(backgroundColor: isWorking ? Colors.red.shade400 : Colors.green, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)))))
+              SizedBox(width: double.infinity, height: 40, child: _isLoading ? const Center(child: CircularProgressIndicator()) : ElevatedButton.icon(onPressed: () => _fichar(isWorking ? 'OUT' : 'IN'), icon: Icon(isWorking ? Icons.exit_to_app : Icons.login, size: 18), label: Text(isWorking ? 'SALIR' : 'ENTRAR', style: const TextStyle(fontSize: 13)), style: ElevatedButton.styleFrom(backgroundColor: isWorking ? Colors.red.shade400 : Colors.green, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)))))
             ]),
         );
       },
@@ -352,8 +477,68 @@ class _ProfessionalPanelWidgetState extends State<ProfessionalPanelWidget> {
   }
 }
 
-class _AdminButton extends StatelessWidget {
-  final IconData icon; final String text; final VoidCallback onTap;
-  const _AdminButton({required this.icon, required this.text, required this.onTap});
-  @override Widget build(BuildContext context) { return Card(elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: Colors.teal.shade100)), child: ListTile(leading: Icon(icon, color: Colors.teal), title: Text(text, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.teal)), trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.teal), onTap: onTap)); }
+// --- TARJETA DE MENÚ ---
+class _MenuGridCard extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _MenuGridCard({
+    required this.icon,
+    required this.label,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(15), 
+        boxShadow: [
+          BoxShadow(color: Colors.grey.shade200, blurRadius: 5, offset: const Offset(0, 2))
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(15),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.all(8.0), 
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: color.withOpacity(0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(icon, size: 24, color: color), 
+                ),
+                const SizedBox(height: 8),
+                Flexible( 
+                  child: Text(
+                    label,
+                    textAlign: TextAlign.center,
+                    maxLines: 3, 
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 11, 
+                      fontWeight: FontWeight.bold,
+                      color: Colors.grey.shade800,
+                      height: 1.2
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }

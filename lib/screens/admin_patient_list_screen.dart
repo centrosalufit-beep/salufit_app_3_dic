@@ -5,8 +5,14 @@ import 'admin_create_patient_screen.dart';
 
 class AdminPatientListScreen extends StatefulWidget {
   final String viewerRole; 
+  // Nueva función opcional para redirigir el clic
+  final Function(String userId, String userName)? onUserSelected;
 
-  const AdminPatientListScreen({super.key, required this.viewerRole});
+  const AdminPatientListScreen({
+    super.key, 
+    required this.viewerRole,
+    this.onUserSelected, // <--- Si es null, abre perfil normal. Si tiene valor, ejecuta la acción.
+  });
 
   @override
   State<AdminPatientListScreen> createState() => _AdminPatientListScreenState();
@@ -16,7 +22,6 @@ class _AdminPatientListScreenState extends State<AdminPatientListScreen> {
   String _searchQuery = "";
   final TextEditingController _searchController = TextEditingController();
 
-  // Función de limpieza
   String removeDiacritics(String str) {
     var withDia = 'ÀÁÂÃÄÅàáâãäåÒÓÔÕÕÖØòóôõöøÈÉÊËèéêëðÇçÐÌÍÎÏìíîïÙÚÛÜùúûüÑñŠšŸÿýŽž';
     var withoutDia = 'AAAAAAaaaaaaOOOOOOOooooooEEEEeeeeeCcDIIIIiiiiUUUUuuuuNnSsYyyZz';
@@ -29,15 +34,17 @@ class _AdminPatientListScreenState extends State<AdminPatientListScreen> {
   @override
   Widget build(BuildContext context) {
     bool isAdmin = widget.viewerRole == 'admin';
+    // Si estamos en modo selección, cambiamos el título y ocultamos el botón de crear
+    bool isSelectionMode = widget.onUserSelected != null;
 
     return Scaffold(
       backgroundColor: Colors.teal.shade50,
       appBar: AppBar(
-        title: const Text("Pacientes y Staff"),
+        title: Text(isSelectionMode ? "Seleccionar Paciente" : "Pacientes y Staff"),
         backgroundColor: Colors.teal,
         foregroundColor: Colors.white,
       ),
-      floatingActionButton: isAdmin 
+      floatingActionButton: (isAdmin && !isSelectionMode)
         ? FloatingActionButton(
             backgroundColor: Colors.teal,
             child: const Icon(Icons.person_add, color: Colors.white),
@@ -120,7 +127,13 @@ class _AdminPatientListScreenState extends State<AdminPatientListScreen> {
                       subtitle: Text("ID: $id • ${rol.toUpperCase()} ${showPhone && telefono.isNotEmpty ? '• $telefono' : ''}"),
                       trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
                       onTap: () {
-                        Navigator.push(context, MaterialPageRoute(builder: (context) => AdminPatientDetailScreen(userId: id, userName: nombre, viewerRole: widget.viewerRole)));
+                        if (widget.onUserSelected != null) {
+                          // MODO SELECCIÓN RÁPIDA
+                          widget.onUserSelected!(id, nombre);
+                        } else {
+                          // MODO NORMAL (Perfil completo)
+                          Navigator.push(context, MaterialPageRoute(builder: (context) => AdminPatientDetailScreen(userId: id, userName: nombre, viewerRole: widget.viewerRole)));
+                        }
                       },
                     );
                   },

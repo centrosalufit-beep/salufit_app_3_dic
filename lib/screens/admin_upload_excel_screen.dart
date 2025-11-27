@@ -1,5 +1,5 @@
 import 'dart:io';
-import 'package:flutter/foundation.dart'; // <--- NUEVO: Necesario para kIsWeb
+import 'package:flutter/foundation.dart'; 
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:excel/excel.dart';
@@ -23,7 +23,7 @@ class _AdminUploadExcelScreenState extends State<AdminUploadExcelScreen> {
       FilePickerResult? result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
         allowedExtensions: ['xlsx'],
-        withData: true, // <--- IMPORTANTE: Fuerza la carga de bytes en memoria
+        withData: true, 
       );
 
       if (result == null) return;
@@ -34,23 +34,18 @@ class _AdminUploadExcelScreenState extends State<AdminUploadExcelScreen> {
         _progress = 0.1;
       });
 
-      // --- CORRECCIÓN PARA WEB vs MÓVIL ---
       List<int> bytes;
-      
       if (kIsWeb) {
-        // EN WEB: Leemos directamente de la memoria (bytes)
         if (result.files.single.bytes != null) {
           bytes = result.files.single.bytes!;
         } else {
           throw 'No se pudieron leer los datos del archivo (Web)';
         }
       } else {
-        // EN MÓVIL/DESKTOP: Leemos de la ruta del archivo (path)
         if (result.files.single.path != null) {
           File file = File(result.files.single.path!);
           bytes = file.readAsBytesSync();
         } else {
-          // Fallback por si en móvil también viene en bytes
           if (result.files.single.bytes != null) {
              bytes = result.files.single.bytes!;
           } else {
@@ -58,7 +53,6 @@ class _AdminUploadExcelScreenState extends State<AdminUploadExcelScreen> {
           }
         }
       }
-      // -------------------------------------
 
       var excel = Excel.decodeBytes(bytes);
 
@@ -66,10 +60,16 @@ class _AdminUploadExcelScreenState extends State<AdminUploadExcelScreen> {
       var usersSnap = await FirebaseFirestore.instance.collection('users').get();
       
       Map<String, String> userMap = {};
+      Map<String, String> userEmailMap = {}; // Mapa para guardar emails también
+      
       for (var doc in usersSnap.docs) {
-        String nombre = (doc.data()['nombreCompleto'] ?? '').toString().toLowerCase().trim();
+        var data = doc.data();
+        String nombre = (data['nombreCompleto'] ?? '').toString().toLowerCase().trim();
         if (nombre.isNotEmpty) {
           userMap[nombre] = doc.id;
+          if (data['email'] != null) {
+            userEmailMap[doc.id] = data['email'];
+          }
         }
       }
 
@@ -84,17 +84,16 @@ class _AdminUploadExcelScreenState extends State<AdminUploadExcelScreen> {
       int totalRows = table.maxRows;
       int errors = 0;
       int success = 0;
+      int duplicatesUpdated = 0;
 
       var batch = FirebaseFirestore.instance.batch();
       int batchCount = 0;
 
-      // Empezamos en 1 para saltar cabeceras
       for (int i = 1; i < totalRows; i++) {
         var row = table.rows[i];
         if (row.isEmpty) continue;
 
         try {
-          // Usamos índices seguros
           var pacienteNombre = _getCellValue(row.length > 2 ? row[2] : null); 
           var fechaStr = _getCellValue(row.length > 3 ? row[3] : null);       
           var horaInicioStr = _getCellValue(row.length > 4 ? row[4] : null);  
@@ -106,29 +105,36 @@ class _AdminUploadExcelScreenState extends State<AdminUploadExcelScreen> {
           String? userId = userMap[pacienteNombre.toLowerCase().trim()];
           
           if (userId != null) {
-            // Parseo de fecha robusto
             DateTime fechaBase;
             try {
                fechaBase = DateFormat('dd/MM/yyyy').parse(fechaStr);
             } catch (e) {
-               // Intento alternativo por si Excel manda formato inglés
                fechaBase = DateTime.parse(fechaStr);
             }
 
             TimeOfDay hora = _parseTime(horaInicioStr);
             DateTime fechaFinal = DateTime(fechaBase.year, fechaBase.month, fechaBase.day, hora.hour, hora.minute);
 
-            var docRef = FirebaseFirestore.instance.collection('appointments').doc(); 
+            // --- EVITAR DUPLICADOS: ID DETERMINISTA ---
+            // El ID será: userId_timestamp (ej: 004989_1678882200000)
+            String uniqueDocId = "${userId}_${fechaFinal.millisecondsSinceEpoch}";
             
+            var docRef = FirebaseFirestore.instance.collection('appointments').doc(uniqueDocId);
+            
+            // Obtenemos el email para guardarlo directamente (Seguridad Hospital Grade)
+            String? userEmail = userEmailMap[userId];
+
             batch.set(docRef, {
+              'id': uniqueDocId, // Guardamos el ID dentro también por si acaso
               'userId': userId,
+              'userEmail': userEmail, // <--- CLAVE PARA SEGURIDAD
               'pacienteNombre': pacienteNombre,
               'profesional': profesional,
               'especialidad': especialidad,
               'fechaHoraInicio': Timestamp.fromDate(fechaFinal),
               'estado': 'Pendiente',
               'origen': 'Importación App'
-            });
+            }, SetOptions(merge: true)); // <--- IMPORTANTE: merge: true actualiza si existe
 
             batchCount++;
             success++;
@@ -150,7 +156,7 @@ class _AdminUploadExcelScreenState extends State<AdminUploadExcelScreen> {
 
         setState(() {
           _progress = i / totalRows;
-          _status = 'Procesando... ($success OK / $errors Errores)';
+          _status = 'Procesando... ($success procesados / $errors errores)';
         });
       }
 
@@ -158,7 +164,7 @@ class _AdminUploadExcelScreenState extends State<AdminUploadExcelScreen> {
 
       setState(() {
         _isLoading = false;
-        _status = 'Finalizado: $success citas importadas. $errors usuarios no encontrados.';
+        _status = 'Finalizado: $success citas procesadas (nuevas o actualizadas). $errors errores.';
         _progress = 1.0;
       });
 
@@ -174,7 +180,6 @@ class _AdminUploadExcelScreenState extends State<AdminUploadExcelScreen> {
     }
   }
 
-  // CORRECCIÓN CLAVE: Usamos 'dynamic' en lugar de 'Data?' para evitar conflictos de versión
   String _getCellValue(dynamic cell) {
     if (cell == null) return '';
     if (cell.value == null) return '';
@@ -203,7 +208,7 @@ class _AdminUploadExcelScreenState extends State<AdminUploadExcelScreen> {
             const SizedBox(height: 20),
             const Text('Sube el Excel de Citas', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
             const SizedBox(height: 10),
-            const Text('Asegúrate de que la pestaña se llame CITAS y tenga el formato estándar.', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey)),
+            const Text('El sistema detectará automáticamente si la cita ya existe para no duplicarla.', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey)),
             const SizedBox(height: 40),
             
             if (_isLoading) ...[
