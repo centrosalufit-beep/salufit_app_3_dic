@@ -38,9 +38,9 @@ class _AdminTimeReportScreenState extends State<AdminTimeReportScreen> {
 
   // Función auxiliar para formatear duración (ej: 4h 30m)
   String _formatDuration(Duration d) {
-    String twoDigits(int n) => n.toString().padLeft(2, "0");
-    String twoDigitMinutes = twoDigits(d.inMinutes.remainder(60));
-    return "${twoDigits(d.inHours)}:$twoDigitMinutes h";
+    String twoDigits(int n) => n.toString().padLeft(2, '0');
+    final String twoDigitMinutes = twoDigits(d.inMinutes.remainder(60));
+    return '${twoDigits(d.inHours)}:$twoDigitMinutes h';
   }
 
   Future<void> _generarPDF() async {
@@ -48,62 +48,65 @@ class _AdminTimeReportScreenState extends State<AdminTimeReportScreen> {
 
     try {
       // 1. PREPARAR FECHAS
-      DateTime start = DateTime(_startDate.year, _startDate.month, _startDate.day, 0, 0, 0);
-      DateTime end = DateTime(_endDate.year, _endDate.month, _endDate.day, 23, 59, 59);
+      final DateTime start = DateTime(_startDate.year, _startDate.month, _startDate.day, 0, 0, 0);
+      final DateTime end = DateTime(_endDate.year, _endDate.month, _endDate.day, 23, 59, 59);
 
       // 2. CONSULTA A FIREBASE
-      var querySnapshot = await FirebaseFirestore.instance
+      final querySnapshot = await FirebaseFirestore.instance
           .collection('timeClockRecords')
           .where('timestamp', isGreaterThanOrEqualTo: start)
           .where('timestamp', isLessThanOrEqualTo: end)
           .orderBy('timestamp', descending: false) // Importante: Ascendente para emparejar IN -> OUT
           .get();
 
+      // CORRECCIÓN: Check mounted antes de usar context
+      if (!mounted) return;
+
       if (querySnapshot.docs.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("No hay fichajes en esas fechas")));
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No hay fichajes en esas fechas')));
         setState(() { _isLoading = false; });
         return;
       }
 
       // 3. OBTENER NOMBRES
-      Set<String> userIds = querySnapshot.docs.map((d) => d['userId'] as String).toSet();
-      Map<String, String> userNames = {};
+      final Set<String> userIds = querySnapshot.docs.map((d) => d['userId'] as String).toSet();
+      final Map<String, String> userNames = {};
 
-      List<String> idsList = userIds.toList();
+      final List<String> idsList = userIds.toList();
       for (var i = 0; i < idsList.length; i += 10) {
-        var endChunk = (i + 10 < idsList.length) ? i + 10 : idsList.length;
-        var chunk = idsList.sublist(i, endChunk);
+        final endChunk = (i + 10 < idsList.length) ? i + 10 : idsList.length;
+        final chunk = idsList.sublist(i, endChunk);
         
-        var usersSnap = await FirebaseFirestore.instance.collection('users').where(FieldPath.documentId, whereIn: chunk).get();
+        final usersSnap = await FirebaseFirestore.instance.collection('users').where(FieldPath.documentId, whereIn: chunk).get();
         for (var doc in usersSnap.docs) {
-          var data = doc.data();
-          userNames[doc.id] = data['nombreCompleto'] ?? data['nombre'] ?? "Usuario ${doc.id}";
+          final data = doc.data();
+          userNames[doc.id] = data['nombreCompleto'] ?? data['nombre'] ?? 'Usuario ${doc.id}';
         }
       }
 
       // 4. PROCESAR DATOS: AGRUPAR ENTRADAS Y SALIDAS (LA LÓGICA CLAVE)
-      Map<String, List<QueryDocumentSnapshot>> recordsByUser = {};
+      final Map<String, List<QueryDocumentSnapshot>> recordsByUser = {};
       for (var doc in querySnapshot.docs) {
-        String uid = doc['userId'];
+        final String uid = doc['userId'];
         if (!recordsByUser.containsKey(uid)) recordsByUser[uid] = [];
         recordsByUser[uid]!.add(doc);
       }
 
-      List<List<String>> tableData = [];
+      final List<List<String>> tableData = [];
 
       // Recorremos usuario por usuario para armar sus jornadas
       recordsByUser.forEach((uid, records) {
-        String nombreEmpleado = userNames[uid] ?? "ID: $uid";
+        final String nombreEmpleado = userNames[uid] ?? 'ID: $uid';
         
         // Variables temporales para buscar parejas IN -> OUT
         DateTime? entryTime;
         bool isManualEntry = false;
 
         for (var record in records) {
-          Map<String, dynamic> data = record.data() as Map<String, dynamic>;
-          DateTime time = (data['timestamp'] as Timestamp).toDate();
-          String type = data['type']; // 'IN' o 'OUT'
-          bool manual = data['isManualEntry'] ?? false;
+          final Map<String, dynamic> data = record.data() as Map<String, dynamic>;
+          final DateTime time = (data['timestamp'] as Timestamp).toDate();
+          final String type = data['type']; // 'IN' o 'OUT'
+          final bool manual = data['isManualEntry'] ?? false;
 
           if (type == 'IN') {
             // Si ya teníamos una entrada abierta sin cerrar, la cerramos como error
@@ -112,9 +115,9 @@ class _AdminTimeReportScreenState extends State<AdminTimeReportScreen> {
                 DateFormat('dd/MM/yyyy').format(entryTime),
                 nombreEmpleado,
                 DateFormat('HH:mm').format(entryTime),
-                "SIN SALIDA",
-                "---",
-                "Error: Fichaje abierto"
+                'SIN SALIDA',
+                '---',
+                'Error: Fichaje abierto'
               ]);
             }
             // Abrimos nueva sesión
@@ -123,11 +126,11 @@ class _AdminTimeReportScreenState extends State<AdminTimeReportScreen> {
           } else if (type == 'OUT') {
             if (entryTime != null) {
               // ¡Tenemos pareja! Cerrar sesión
-              Duration duration = time.difference(entryTime);
-              bool manualExit = manual;
+              final Duration duration = time.difference(entryTime);
+              final bool manualExit = manual;
               
               // Verificamos si la salida es el mismo día o día siguiente
-              String fechaStr = DateFormat('dd/MM/yyyy').format(entryTime);
+              final String fechaStr = DateFormat('dd/MM/yyyy').format(entryTime);
               
               tableData.add([
                 fechaStr,
@@ -135,7 +138,7 @@ class _AdminTimeReportScreenState extends State<AdminTimeReportScreen> {
                 DateFormat('HH:mm').format(entryTime),
                 DateFormat('HH:mm').format(time),
                 _formatDuration(duration),
-                (isManualEntry || manualExit) ? "CORRECCIÓN MANUAL" : ""
+                (isManualEntry || manualExit) ? 'CORRECCIÓN MANUAL' : ''
               ]);
 
               entryTime = null; // Reset para siguiente ciclo
@@ -145,10 +148,10 @@ class _AdminTimeReportScreenState extends State<AdminTimeReportScreen> {
               tableData.add([
                 DateFormat('dd/MM/yyyy').format(time),
                 nombreEmpleado,
-                "---",
+                '---',
                 DateFormat('HH:mm').format(time),
-                "---",
-                "Error: Falta entrada"
+                '---',
+                'Error: Falta entrada'
               ]);
             }
           }
@@ -160,9 +163,9 @@ class _AdminTimeReportScreenState extends State<AdminTimeReportScreen> {
             DateFormat('dd/MM/yyyy').format(entryTime),
             nombreEmpleado,
             DateFormat('HH:mm').format(entryTime),
-            "EN CURSO",
-            "---",
-            "Jornada activa"
+            'EN CURSO',
+            '---',
+            'Jornada activa'
           ]);
         }
       });
@@ -171,8 +174,8 @@ class _AdminTimeReportScreenState extends State<AdminTimeReportScreen> {
       tableData.sort((a, b) {
         // Formato dd/MM/yyyy -> convertir para ordenar
         try {
-          DateTime dateA = DateFormat('dd/MM/yyyy').parse(a[0]);
-          DateTime dateB = DateFormat('dd/MM/yyyy').parse(b[0]);
+          final DateTime dateA = DateFormat('dd/MM/yyyy').parse(a[0]);
+          final DateTime dateB = DateFormat('dd/MM/yyyy').parse(b[0]);
           return dateA.compareTo(dateB);
         } catch (e) {
           return 0;
@@ -233,8 +236,8 @@ class _AdminTimeReportScreenState extends State<AdminTimeReportScreen> {
       await Printing.sharePdf(bytes: await pdf.save(), filename: 'informe_jornada_detallado.pdf');
 
     } catch (e) {
-      print("ERROR PDF: $e");
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red));
+      debugPrint('ERROR PDF: $e');
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red));
     } finally {
       if (mounted) setState(() { _isLoading = false; });
     }
@@ -244,13 +247,13 @@ class _AdminTimeReportScreenState extends State<AdminTimeReportScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.teal.shade50,
-      appBar: AppBar(title: const Text("Informes de Jornada"), backgroundColor: Colors.teal, foregroundColor: Colors.white),
+      appBar: AppBar(title: const Text('Informes de Jornada'), backgroundColor: Colors.teal, foregroundColor: Colors.white),
       body: Padding(
         padding: const EdgeInsets.all(20.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text("Selecciona el rango:", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.teal)),
+            const Text('Selecciona el rango:', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.teal)),
             const SizedBox(height: 20),
             
             Row(
@@ -258,14 +261,14 @@ class _AdminTimeReportScreenState extends State<AdminTimeReportScreen> {
                 Expanded(
                   child: InkWell(
                     onTap: () => _selectDate(context, true),
-                    child: _DateCard(label: "Desde", date: _startDate),
+                    child: _DateCard(label: 'Desde', date: _startDate),
                   ),
                 ),
                 const SizedBox(width: 15),
                 Expanded(
                   child: InkWell(
                     onTap: () => _selectDate(context, false),
-                    child: _DateCard(label: "Hasta", date: _endDate),
+                    child: _DateCard(label: 'Hasta', date: _endDate),
                   ),
                 ),
               ],
@@ -279,7 +282,7 @@ class _AdminTimeReportScreenState extends State<AdminTimeReportScreen> {
               child: ElevatedButton.icon(
                 onPressed: _isLoading ? null : _generarPDF,
                 icon: _isLoading ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) : const Icon(Icons.picture_as_pdf),
-                label: const Text("DESCARGAR INFORME DETALLADO"),
+                label: const Text('DESCARGAR INFORME DETALLADO'),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.blue,
                   foregroundColor: Colors.white,
@@ -290,7 +293,7 @@ class _AdminTimeReportScreenState extends State<AdminTimeReportScreen> {
             
             const SizedBox(height: 20),
             const Text(
-              "El informe agrupa automáticamente las entradas y salidas para calcular las horas trabajadas por sesión.",
+              'El informe agrupa automáticamente las entradas y salidas para calcular las horas trabajadas por sesión.',
               style: TextStyle(color: Colors.grey, fontSize: 12),
               textAlign: TextAlign.center,
             ),

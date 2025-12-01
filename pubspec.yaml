@@ -29,7 +29,7 @@ dependencies:
   url_launcher: ^6.2.0
 
   # --- SEGURIDAD Y BIOMETRÍA ---
-  local_auth: ^2.3.0
+  local_auth: ^3.0.0
   flutter_secure_storage: ^9.0.0
   shared_preferences: ^2.3.0  # <--- ¡AÑADIDO! IMPORTANTE PARA GUARDAR PROGRESO
 
@@ -57,11 +57,14 @@ dependencies:
   # --- UI ---
   cupertino_icons: ^1.0.2
   firebase_app_check: ^0.3.2+10
+  local_auth_platform_interface: ^1.1.0
+  very_good_analysis: ^10.0.0
+  change_app_package_name: ^1.5.0
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_lints: ^3.0.0
+  flutter_lints: ^6.0.0
   
   # Generador de Iconos
   flutter_launcher_icons: "^0.13.1"

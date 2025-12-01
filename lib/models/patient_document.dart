@@ -18,7 +18,7 @@ class PatientDocument {
   });
 
   factory PatientDocument.fromFirestore(DocumentSnapshot doc) {
-    Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
+    final Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
     
     DateTime? fecha;
     if (data['fechaFirma'] != null) {

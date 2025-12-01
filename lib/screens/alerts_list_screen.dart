@@ -11,7 +11,7 @@ class AlertsListScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Alertas de Feedback"),
+        title: const Text('Alertas de Feedback'),
         backgroundColor: Colors.red,
         foregroundColor: Colors.white,
       ),
@@ -32,24 +32,24 @@ class AlertsListScreen extends StatelessWidget {
                 children: [
                   Icon(Icons.check_circle_outline, size: 60, color: Colors.green),
                   SizedBox(height: 10),
-                  Text("¡Todo limpio! No hay alertas pendientes."),
+                  Text('¡Todo limpio! No hay alertas pendientes.'),
                 ],
               ),
             );
           }
 
-          var docs = snapshot.data!.docs;
+          final docs = snapshot.data!.docs;
 
           return ListView.separated(
             padding: const EdgeInsets.all(20),
             itemCount: docs.length,
             separatorBuilder: (c, i) => const Divider(),
             itemBuilder: (context, index) {
-              var data = docs[index].data() as Map<String, dynamic>;
+              final data = docs[index].data() as Map<String, dynamic>;
               
               // --- CORRECCIÓN DEL ERROR 3502 ---
               // Usamos .toString() para que si viene un número (int), no falle.
-              String userId = data['userId'].toString(); 
+              final String userId = data['userId'].toString(); 
               
               // Protección extra para el feedback
               Map<String, dynamic> feedback = {};
@@ -61,9 +61,9 @@ class AlertsListScreen extends StatelessWidget {
               return FutureBuilder<DocumentSnapshot>(
                 future: FirebaseFirestore.instance.collection('users').doc(userId).get(),
                 builder: (context, userSnap) {
-                  String nombrePaciente = "Usuario $userId";
+                  String nombrePaciente = 'Usuario $userId';
                   if (userSnap.hasData && userSnap.data!.exists) {
-                    var uData = userSnap.data!.data() as Map<String, dynamic>;
+                    final uData = userSnap.data!.data() as Map<String, dynamic>;
                     nombrePaciente = uData['nombreCompleto'] ?? nombrePaciente;
                   }
 
@@ -94,7 +94,7 @@ class AlertsListScreen extends StatelessWidget {
                                 nombreEjercicio = exerciseSnap.data!.docs.first['nombre'];
                               }
                               
-                              return Text("Ejercicio: $nombreEjercicio");
+                              return Text('Ejercicio: $nombreEjercicio');
                             },
                           ),
                           

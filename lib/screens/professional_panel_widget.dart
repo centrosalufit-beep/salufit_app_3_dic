@@ -7,8 +7,9 @@ import 'package:network_info_plus/network_info_plus.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:intl/intl.dart';
+import 'package:firebase_auth/firebase_auth.dart'; 
 
-// --- IMPORTS DE TODAS LAS PANTALLAS ---
+// --- IMPORTS ---
 import 'admin_patient_list_screen.dart';
 import 'qr_scanner_screen.dart';
 import 'admin_create_patient_screen.dart'; 
@@ -35,6 +36,68 @@ class _ProfessionalPanelWidgetState extends State<ProfessionalPanelWidget> {
   final String _ficharUrl = 'https://us-central1-salufitnewapp.cloudfunctions.net/registrarFichaje';
   bool _isLoading = false;
   String _statusMessage = ''; 
+  
+  // NOMBRE DEL PROFESIONAL (Para filtrar sus citas)
+  String _currentUserName = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadProfessionalName();
+  }
+
+  // Cargamos el nombre real del usuario para buscar sus citas
+  Future<void> _loadProfessionalName() async {
+    try {
+      final doc = await FirebaseFirestore.instance.collection('users').doc(widget.userId).get();
+      if (doc.exists && mounted) {
+        setState(() {
+          _currentUserName = doc.data()?['nombreCompleto'] ?? '';
+        });
+      }
+    } catch (e) {
+      debugPrint('Error cargando nombre: $e');
+    }
+  }
+
+  void _showPatientActionSheet(String patientId, String patientName) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (context) => Container(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(patientName, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.teal)),
+            const SizedBox(height: 5),
+            Text('ID: $patientId', style: const TextStyle(color: Colors.grey)),
+            const Divider(height: 30),
+            
+            ListTile(
+              leading: Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: Colors.indigo.shade50, borderRadius: BorderRadius.circular(8)), child: const Icon(Icons.video_library, color: Colors.indigo)),
+              title: const Text('Gestionar Material', style: TextStyle(fontWeight: FontWeight.bold)),
+              subtitle: const Text('Asignar ejercicios y pautas'),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(context, MaterialPageRoute(builder: (c) => AdminPatientMaterialScreen(userId: patientId, userName: patientName)));
+              },
+            ),
+            
+            ListTile(
+              leading: Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: Colors.orange.shade50, borderRadius: BorderRadius.circular(8)), child: const Icon(Icons.folder_shared, color: Colors.orange)),
+              title: const Text('Gestionar Documentos', style: TextStyle(fontWeight: FontWeight.bold)),
+              subtitle: const Text('Consentimientos e informes'),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(context, MaterialPageRoute(builder: (c) => AdminPatientDocumentsScreen(userId: patientId, userName: patientName, viewerRole: widget.userRole)));
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   // --- LÓGICA TÉCNICA (Fichaje) ---
   Future<String?> _getDeviceId() async {
@@ -53,7 +116,7 @@ class _ProfessionalPanelWidgetState extends State<ProfessionalPanelWidget> {
       if (!status.isGranted) return null; 
     }
     try {
-      String? wifiName = await NetworkInfo().getWifiName();
+      final String? wifiName = await NetworkInfo().getWifiName();
       if (wifiName != null) return wifiName.replaceAll('"', ''); 
     } catch (e) { /* Ignore */ }
     return null;
@@ -62,12 +125,16 @@ class _ProfessionalPanelWidgetState extends State<ProfessionalPanelWidget> {
   Future<void> _fichar(String tipo, {String? manualTime}) async {
     setState(() { _isLoading = true; _statusMessage = 'Validando...'; });
     try {
-      String? deviceId = await _getDeviceId();
-      String? wifiSsid = await _getWifiName();
+      final String? deviceId = await _getDeviceId();
+      final String? wifiSsid = await _getWifiName();
+      final String? token = await FirebaseAuth.instance.currentUser?.getIdToken();
       
       final response = await http.post(
         Uri.parse(_ficharUrl),
-        headers: {'Content-Type': 'application/json'},
+        headers: {
+           'Content-Type': 'application/json',
+           'Authorization': 'Bearer $token'
+        },
         body: jsonEncode({
           'userId': widget.userId, 'type': tipo, 'deviceId': deviceId,
           'wifiSsid': wifiSsid, 'manualTime': manualTime, 
@@ -78,13 +145,13 @@ class _ProfessionalPanelWidgetState extends State<ProfessionalPanelWidget> {
       if (!mounted) return; 
 
       if (response.statusCode == 200) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(data['message']), backgroundColor: Colors.green));
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(data['message']), backgroundColor: Colors.green));
         setState(() { _statusMessage = ''; });
       } else if (response.statusCode == 409 && data['code'] == 'OPEN_SHIFT_PREVIOUS_DAY') {
-        _mostrarDialogoCorreccion(data['lastEntry']);
+        if (mounted) _mostrarDialogoCorreccion(data['lastEntry']);
       } else {
         setState(() { _statusMessage = data['error'] ?? 'Error desconocido'; });
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(_statusMessage), backgroundColor: Colors.red));
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(_statusMessage), backgroundColor: Colors.red));
       }
     } catch (e) {
       setState(() { _statusMessage = 'Error: $e'; });
@@ -94,8 +161,8 @@ class _ProfessionalPanelWidgetState extends State<ProfessionalPanelWidget> {
   }
 
   void _mostrarDialogoCorreccion(String? lastEntryIso) {
-    DateTime lastEntry = lastEntryIso != null ? DateTime.parse(lastEntryIso) : DateTime.now();
-    TimeOfDay selectedTime = const TimeOfDay(hour: 20, minute: 0); 
+    final DateTime lastEntry = lastEntryIso != null ? DateTime.parse(lastEntryIso) : DateTime.now();
+    const TimeOfDay selectedTime = TimeOfDay(hour: 20, minute: 0); 
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -124,27 +191,27 @@ class _ProfessionalPanelWidgetState extends State<ProfessionalPanelWidget> {
   }
 
   Future<void> _procesarPase(String userIdScanned) async {
-    String targetId = userIdScanned.trim().padLeft(6, '0');
+    final String targetId = userIdScanned.trim().padLeft(6, '0');
     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Validando...')));
     try {
-      var query = await FirebaseFirestore.instance.collection('passes').where('userId', isEqualTo: targetId).limit(1).get();
+      final query = await FirebaseFirestore.instance.collection('passes').where('userId', isEqualTo: targetId).limit(1).get();
       
       if (!mounted) return; 
 
       if (query.docs.isEmpty) {
-         _alert('Error', "Usuario sin bonos activos.", Colors.red);
+         _alert('Error', 'Usuario sin bonos activos.', Colors.red);
          return;
       }
-      var passDoc = query.docs.first;
-      int tokens = passDoc.data()['tokensRestantes'] ?? 0;
+      final passDoc = query.docs.first;
+      final int tokens = passDoc.data()['tokensRestantes'] ?? 0;
 
       if (tokens <= 0) {
-         _alert('Acceso Denegado', "Sin tokens.", Colors.orange);
+         _alert('Acceso Denegado', 'Sin tokens.', Colors.orange);
          return;
       }
       await passDoc.reference.update({'tokensRestantes': tokens - 1});
       
-      if (mounted) _alert('ACCESO CONCEDIDO', "Quedan ${tokens - 1} tokens.", Colors.green);
+      if (mounted) _alert('ACCESO CONCEDIDO', 'Quedan ${tokens - 1} tokens.', Colors.green);
     } catch (e) { 
       if (mounted) _alert('Error', e.toString(), Colors.red); 
     }
@@ -162,7 +229,7 @@ class _ProfessionalPanelWidgetState extends State<ProfessionalPanelWidget> {
   }
 
   void _verificarPasswordInforme() {
-    TextEditingController passController = TextEditingController();
+    final TextEditingController passController = TextEditingController();
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -196,11 +263,11 @@ class _ProfessionalPanelWidgetState extends State<ProfessionalPanelWidget> {
 
   @override
   Widget build(BuildContext context) {
-    bool isAdmin = widget.userRole == 'admin';
+    final bool isAdmin = widget.userRole == 'admin';
 
-    // Definimos los botones
-    List<Widget> menuItems = [
-      // --- PARA TODOS (Staff) ---
+    // GRID DE MENÚ
+    final List<Widget> menuItems = [
+      // 1. ESCANER
       _MenuGridCard(
         icon: Icons.qr_code_scanner,
         label: 'Escanear Entrada',
@@ -210,16 +277,20 @@ class _ProfessionalPanelWidgetState extends State<ProfessionalPanelWidget> {
           if (res != null && mounted) _procesarPase(res);
         },
       ),
+
+      // 2. AGENDA
       _MenuGridCard(
-        icon: Icons.people_alt,
-        label: 'Listado Pacientes',
+        icon: Icons.calendar_today,
+        label: 'Mi Agenda',
         color: Colors.blue,
-        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => AdminPatientListScreen(viewerRole: widget.userRole))),
+        onTap: () {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Tu agenda está visible en la pantalla principal')));
+        },
       ),
       
-      // --- GESTIÓN DE CLASES ---
+      // 3. GESTIÓN CLASES
       _MenuGridCard(
-        icon: Icons.calendar_month,
+        icon: Icons.people,
         label: 'Gestión Clases',
         color: Colors.teal,
         onTap: () => Navigator.push(
@@ -228,7 +299,7 @@ class _ProfessionalPanelWidgetState extends State<ProfessionalPanelWidget> {
         ),
       ),
 
-      // --- GESTIÓN RÁPIDA MATERIAL ---
+      // 4. MATERIAL
       _MenuGridCard(
         icon: Icons.video_library, 
         label: 'Gestión Material',
@@ -251,7 +322,7 @@ class _ProfessionalPanelWidgetState extends State<ProfessionalPanelWidget> {
         },
       ),
 
-      // --- GESTIÓN RÁPIDA DOCUMENTOS ---
+      // 5. DOCUMENTOS
       _MenuGridCard(
         icon: Icons.folder_shared, 
         label: 'Gestión Docs',
@@ -274,7 +345,7 @@ class _ProfessionalPanelWidgetState extends State<ProfessionalPanelWidget> {
         },
       ),
 
-      // --- BOTÓN 1: CHATS / EQUIPO (Badge: Mensajes no leídos) ---
+      // 6. CHATS
       StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance.collection('internal_chats')
             .where('participants', arrayContains: widget.userId)
@@ -283,14 +354,14 @@ class _ProfessionalPanelWidgetState extends State<ProfessionalPanelWidget> {
           int chatsCount = 0;
           if (chatSnap.hasData) {
             for (var doc in chatSnap.data!.docs) {
-              var data = doc.data() as Map<String, dynamic>;
+              final data = doc.data() as Map<String, dynamic>;
               chatsCount += (data['unreadCount_${widget.userId}'] as num? ?? 0).toInt();
             }
           }
           
           return Badge(
             isLabelVisible: chatsCount > 0,
-            label: Text("$chatsCount"),
+            label: Text('$chatsCount'),
             backgroundColor: Colors.red,
             child: _MenuGridCard(
               icon: Icons.chat, 
@@ -298,25 +369,31 @@ class _ProfessionalPanelWidgetState extends State<ProfessionalPanelWidget> {
               color: Colors.cyan,
               onTap: () => Navigator.push(
                 context,
-                MaterialPageRoute(builder: (context) => InternalManagementScreen(currentUserId: widget.userId, viewType: 'chat')),
+                MaterialPageRoute(
+                  builder: (context) => InternalManagementScreen(
+                    currentUserId: widget.userId, 
+                    viewType: 'chat',
+                    userRole: widget.userRole
+                  )
+                ),
               ),
             ),
           );
         }
       ),
 
-      // --- BOTÓN 2: TAREAS (Badge: Tareas pendientes) ---
+      // 7. TAREAS
       StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance.collection('internal_tasks')
             .where('assignedToId', isEqualTo: widget.userId)
             .where('status', isEqualTo: 'pending')
             .snapshots(),
         builder: (context, taskSnap) {
-          int tasksCount = taskSnap.hasData ? taskSnap.data!.docs.length : 0;
+          final int tasksCount = taskSnap.hasData ? taskSnap.data!.docs.length : 0;
           
           return Badge(
             isLabelVisible: tasksCount > 0,
-            label: Text("$tasksCount"),
+            label: Text('$tasksCount'),
             backgroundColor: Colors.red,
             child: _MenuGridCard(
               icon: Icons.check_circle_outline, 
@@ -324,7 +401,13 @@ class _ProfessionalPanelWidgetState extends State<ProfessionalPanelWidget> {
               color: Colors.deepPurple,
               onTap: () => Navigator.push(
                 context,
-                MaterialPageRoute(builder: (context) => InternalManagementScreen(currentUserId: widget.userId, viewType: 'tasks')),
+                MaterialPageRoute(
+                  builder: (context) => InternalManagementScreen(
+                    currentUserId: widget.userId, 
+                    viewType: 'tasks',
+                    userRole: widget.userRole
+                  )
+                ),
               ),
             ),
           );
@@ -332,7 +415,6 @@ class _ProfessionalPanelWidgetState extends State<ProfessionalPanelWidget> {
       ),
     ];
 
-    // --- SOLO ADMIN ---
     if (isAdmin) {
       menuItems.addAll([
         _MenuGridCard(
@@ -368,75 +450,190 @@ class _ProfessionalPanelWidgetState extends State<ProfessionalPanelWidget> {
       ]);
     }
 
-    return Container(
-      // ELIMINADO: color: const Color(0xFFF5F7FA) -> TRANSPARENTE
-      child: SafeArea(
-        child: Column(
-          children: [
-            // CABECERA
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 20, 20, 10),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
+    return SafeArea(
+      child: Column(
+        children: [
+          const Padding(
+            padding: EdgeInsets.fromLTRB(20, 20, 20, 10),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.admin_panel_settings, color: Colors.teal, size: 28),
+                SizedBox(width: 10),
+                Text(
+                  'Panel Profesional',
+                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.teal),
+                ),
+              ],
+            ),
+          ),
+
+          // 1. ALERTAS
+          StreamBuilder<QuerySnapshot>(
+            stream: FirebaseFirestore.instance.collection('exercise_assignments').where('feedback.alerta', isEqualTo: true).snapshots(),
+            builder: (context, snapshot) {
+              if (!snapshot.hasData || snapshot.data!.docs.isEmpty) return const SizedBox(); 
+              
+              final int alertasCount = snapshot.data!.docs.length;
+              return Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 5),
+                child: Card(
+                  color: Colors.red,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                  elevation: 4,
+                  child: ListTile(
+                    leading: const Icon(Icons.notification_important, color: Colors.white, size: 30),
+                    title: Text('$alertasCount ALERTAS', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                    subtitle: const Text('Revisar feedback', style: TextStyle(color: Colors.white70, fontSize: 12)),
+                    trailing: const Icon(Icons.arrow_forward_ios, color: Colors.white, size: 16),
+                    onTap: () {
+                      Navigator.push(context, MaterialPageRoute(builder: (context) => AlertsListScreen(viewerRole: widget.userRole)));
+                    },
+                  ),
+                ),
+              );
+            }
+          ),
+
+          // 2. FICHAJE
+          Padding(padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10), child: _buildFichajeCard()),
+          
+          // 3. LISTADO DE PRÓXIMAS CITAS (NUEVA AGENDA)
+          if (_currentUserName.isNotEmpty)
+            Expanded(
+              flex: 3,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Icon(Icons.admin_panel_settings, color: Colors.teal, size: 28),
-                  const SizedBox(width: 10),
-                  const Text(
-                    'Panel Profesional',
-                    style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.teal),
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 20, vertical: 5),
+                    child: Text(
+                      'TUS PRÓXIMAS CITAS', 
+                      style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold, fontSize: 12, letterSpacing: 1.5)
+                    ),
+                  ),
+                  Expanded(
+                    child: StreamBuilder<QuerySnapshot>(
+                      stream: FirebaseFirestore.instance
+                          .collection('appointments')
+                          .where('profesional', isEqualTo: _currentUserName)
+                          .where('fechaHoraInicio', isGreaterThan: Timestamp.now())
+                          .orderBy('fechaHoraInicio')
+                          .limit(20)
+                          .snapshots(),
+                      builder: (context, snapshot) {
+                        if (snapshot.hasError) return Center(child: Text('Error: ${snapshot.error}', style: const TextStyle(color: Colors.red, fontSize: 10)));
+                        if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+
+                        final citas = snapshot.data!.docs;
+
+                        if (citas.isEmpty) {
+                          return Container(
+                            margin: const EdgeInsets.symmetric(horizontal: 20),
+                            width: double.infinity,
+                            decoration: BoxDecoration(color: Colors.grey.shade100, borderRadius: BorderRadius.circular(15)),
+                            child: const Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.event_available, color: Colors.grey),
+                                SizedBox(height: 5),
+                                Text('Sin citas programadas', style: TextStyle(color: Colors.grey)),
+                              ],
+                            ),
+                          );
+                        }
+
+                        return ListView.separated(
+                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 5),
+                          itemCount: citas.length,
+                          separatorBuilder: (c, i) => const SizedBox(height: 8),
+                          itemBuilder: (context, index) {
+                            final data = citas[index].data() as Map<String, dynamic>;
+                            final DateTime fecha = (data['fechaHoraInicio'] as Timestamp).toDate();
+                            final String diaNum = DateFormat('d').format(fecha);
+                            final String diaNom = DateFormat('EEE', 'es').format(fecha).toUpperCase().replaceAll('.', '');
+                            final String hora = DateFormat('HH:mm').format(fecha);
+                            final String paciente = data['pacienteNombre'] ?? 'Paciente';
+                            final String historia = data['userId'] ?? '---';
+
+                            return GestureDetector(
+                              onTap: () => _showPatientActionSheet(historia, paciente),
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(color: Colors.grey.shade200),
+                                  boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 5, offset: const Offset(0, 2))]
+                                ),
+                                child: Row(
+                                  children: [
+                                    Container(
+                                      width: 60,
+                                      height: 70,
+                                      decoration: BoxDecoration(
+                                        color: Colors.blue.shade50,
+                                        borderRadius: const BorderRadius.horizontal(left: Radius.circular(12)),
+                                      ),
+                                      child: Column(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                          Text(diaNom, style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.blue.shade800)),
+                                          Text(diaNum, style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.blue.shade900, height: 1)),
+                                        ],
+                                      ),
+                                    ),
+                                    const SizedBox(width: 15),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(paciente, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15), maxLines: 1, overflow: TextOverflow.ellipsis),
+                                          const SizedBox(height: 4),
+                                          Row(
+                                            children: [
+                                              Icon(Icons.badge_outlined, size: 14, color: Colors.grey.shade500),
+                                              const SizedBox(width: 4),
+                                              Text('H.C: $historia', style: TextStyle(fontSize: 12, color: Colors.grey.shade700)),
+                                            ],
+                                          )
+                                        ],
+                                      ),
+                                    ),
+                                    Padding(
+                                      padding: const EdgeInsets.only(right: 15.0),
+                                      child: Text(hora, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87)),
+                                    )
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
+                        );
+                      },
+                    ),
                   ),
                 ],
               ),
             ),
 
-            // 1. ALERTAS
-            StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance.collection('exercise_assignments').where('feedback.alerta', isEqualTo: true).snapshots(),
-              builder: (context, snapshot) {
-                if (!snapshot.hasData || snapshot.data!.docs.isEmpty) return const SizedBox(); 
-                
-                int alertasCount = snapshot.data!.docs.length;
-                return Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 5),
-                  child: Card(
-                    color: Colors.red,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-                    elevation: 4,
-                    child: ListTile(
-                      leading: const Icon(Icons.notification_important, color: Colors.white, size: 30),
-                      title: Text('$alertasCount ALERTAS', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                      subtitle: const Text('Revisar feedback', style: TextStyle(color: Colors.white70, fontSize: 12)),
-                      trailing: const Icon(Icons.arrow_forward_ios, color: Colors.white, size: 16),
-                      onTap: () {
-                        Navigator.push(context, MaterialPageRoute(builder: (context) => AlertsListScreen(viewerRole: widget.userRole)));
-                      },
-                    ),
-                  ),
-                );
-              }
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 20),
+            child: Divider(thickness: 1),
+          ),
+          
+          // 4. GRID (Menos espacio ahora que la lista es prioritaria)
+          Expanded(
+            flex: 2, 
+            child: GridView.count(
+              padding: const EdgeInsets.all(20),
+              crossAxisCount: 3, 
+              crossAxisSpacing: 10, 
+              mainAxisSpacing: 10,
+              childAspectRatio: 0.9, 
+              children: menuItems,
             ),
-
-            // 2. FICHAJE
-            Padding(padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10), child: _buildFichajeCard()),
-            
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 20),
-              child: Divider(thickness: 1),
-            ),
-            
-            // 3. GRID COMPACTO (3 COLUMNAS)
-            Expanded(
-              child: GridView.count(
-                padding: const EdgeInsets.all(20),
-                crossAxisCount: 3, 
-                crossAxisSpacing: 10, 
-                mainAxisSpacing: 10,
-                childAspectRatio: 0.85, 
-                children: menuItems,
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -447,7 +644,7 @@ class _ProfessionalPanelWidgetState extends State<ProfessionalPanelWidget> {
       builder: (context, snapshot) {
         bool isWorking = false; DateTime? lastTime;
         if (snapshot.hasData && snapshot.data!.docs.isNotEmpty) {
-          var data = snapshot.data!.docs.first.data() as Map<String, dynamic>;
+          final data = snapshot.data!.docs.first.data() as Map<String, dynamic>;
           if (data['type'] == 'IN') { isWorking = true; lastTime = (data['timestamp'] as Timestamp).toDate(); }
         }
         return Container(
@@ -455,7 +652,7 @@ class _ProfessionalPanelWidgetState extends State<ProfessionalPanelWidget> {
           decoration: BoxDecoration(
             color: Colors.white, 
             borderRadius: BorderRadius.circular(15), 
-            boxShadow: [BoxShadow(color: Colors.teal.withOpacity(0.1), blurRadius: 10, offset: const Offset(0, 3))],
+            boxShadow: [BoxShadow(color: Colors.teal.withValues(alpha: 0.1), blurRadius: 10, offset: const Offset(0, 3))],
             border: Border.all(color: isWorking ? Colors.green.shade200 : Colors.grey.shade300)
           ),
           child: Column(children: [
@@ -477,7 +674,6 @@ class _ProfessionalPanelWidgetState extends State<ProfessionalPanelWidget> {
   }
 }
 
-// --- TARJETA DE MENÚ ---
 class _MenuGridCard extends StatelessWidget {
   final IconData icon;
   final String label;
@@ -514,23 +710,23 @@ class _MenuGridCard extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: color.withOpacity(0.1),
+                    color: color.withValues(alpha: 0.1),
                     shape: BoxShape.circle,
                   ),
                   child: Icon(icon, size: 24, color: color), 
                 ),
                 const SizedBox(height: 8),
-                Flexible( 
+                // Usamos Flexible para que el texto nunca desborde
+                Flexible(
                   child: Text(
                     label,
                     textAlign: TextAlign.center,
-                    maxLines: 3, 
+                    maxLines: 2, 
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       fontSize: 11, 
                       fontWeight: FontWeight.bold,
-                      color: Colors.grey.shade800,
-                      height: 1.2
+                      color: Colors.grey[800],
                     ),
                   ),
                 ),

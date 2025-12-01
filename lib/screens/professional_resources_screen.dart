@@ -14,7 +14,7 @@ class ProfessionalResourcesScreen extends StatelessWidget {
       length: 2, // Dos pestañas: Docs y Material
       child: Scaffold(
         appBar: AppBar(
-          title: const Text("Mis Recursos", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+          title: const Text('Mis Recursos', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
           backgroundColor: Colors.white,
           elevation: 0,
           automaticallyImplyLeading: false,
@@ -23,8 +23,8 @@ class ProfessionalResourcesScreen extends StatelessWidget {
             unselectedLabelColor: Colors.grey,
             indicatorColor: Colors.teal,
             tabs: [
-              Tab(icon: Icon(Icons.folder_open), text: "Documentos"),
-              Tab(icon: Icon(Icons.play_circle_outline), text: "Material / Vídeos"),
+              Tab(icon: Icon(Icons.folder_open), text: 'Documentos'),
+              Tab(icon: Icon(Icons.play_circle_outline), text: 'Material / Vídeos'),
             ],
           ),
         ),

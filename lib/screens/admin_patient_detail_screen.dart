@@ -1,9 +1,10 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart'; // <--- 1. ESTA LÍNEA FALTABA
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:file_picker/file_picker.dart'; 
 import 'package:firebase_storage/firebase_storage.dart'; 
-import 'package:firebase_auth/firebase_auth.dart'; // <--- NUEVO: Para saber QUIÉN está mirando
+import 'package:firebase_auth/firebase_auth.dart'; 
 
 class AdminPatientDetailScreen extends StatefulWidget {
   final String userId;
@@ -62,18 +63,22 @@ class _AdminPatientDetailScreenState extends State<AdminPatientDetailScreen> {
           'detalles': 'Apertura de ficha clínica desde Panel Profesional'
         });
         
-        print("🔒 Auditoría: Acceso registrado correctamente en audit_logs.");
+        // 2. CORREGIDO: Uso correcto de kDebugMode
+        if (kDebugMode) {
+          print('🔒 Auditoría: Acceso registrado correctamente en audit_logs.');
+        }
       }
     } catch (e) {
-      print("⚠️ Error registrando auditoría: $e");
-      // No mostramos error al usuario para no interrumpir la experiencia,
-      // pero el fallo queda en consola por si acaso.
+      // 3. CORREGIDO: Envuelto en kDebugMode
+      if (kDebugMode) {
+        print('⚠️ Error registrando auditoría: $e');
+      }
     }
   }
 
   // --- FUNCIÓN: BORRAR EJERCICIO (Simple) ---
   Future<void> _borrarEjercicio(String assignmentId) async {
-    bool? confirm = await showDialog(
+    final bool? confirm = await showDialog(
       context: context,
       builder: (c) => AlertDialog(
         title: const Text('Borrar Ejercicio'),
@@ -97,10 +102,10 @@ class _AdminPatientDetailScreenState extends State<AdminPatientDetailScreen> {
 
   // --- FUNCIÓN: BORRAR DOCUMENTO (SEGURIDAD DOBLE LLAVE + AUDITORÍA CRÍTICA) ---
   Future<void> _borrarDocumentoSeguro(String docId, String urlPdf) async {
-    TextEditingController clave1 = TextEditingController();
-    TextEditingController clave2 = TextEditingController();
+    final TextEditingController clave1 = TextEditingController();
+    final TextEditingController clave2 = TextEditingController();
 
-    bool? autorizado = await showDialog(
+    final bool? autorizado = await showDialog(
       context: context,
       barrierDismissible: false,
       builder: (context) => AlertDialog(
@@ -114,35 +119,35 @@ class _AdminPatientDetailScreenState extends State<AdminPatientDetailScreen> {
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text("Estás a punto de eliminar un documento legal firmado. Esta acción es irreversible."),
+            const Text('Estás a punto de eliminar un documento legal firmado. Esta acción es irreversible.'),
             const SizedBox(height: 10),
-            const Text("Se requiere la firma (clave) de ambos administradores:", style: TextStyle(fontWeight: FontWeight.bold)),
+            const Text('Se requiere la firma (clave) de ambos administradores:', style: TextStyle(fontWeight: FontWeight.bold)),
             const SizedBox(height: 15),
             TextField(
               controller: clave1,
               obscureText: true,
-              decoration: const InputDecoration(labelText: "Clave Admin 1", border: OutlineInputBorder(), prefixIcon: Icon(Icons.vpn_key)),
+              decoration: const InputDecoration(labelText: 'Clave Admin 1', border: OutlineInputBorder(), prefixIcon: Icon(Icons.vpn_key)),
             ),
             const SizedBox(height: 10),
             TextField(
               controller: clave2,
               obscureText: true,
-              decoration: const InputDecoration(labelText: "Clave Admin 2", border: OutlineInputBorder(), prefixIcon: Icon(Icons.vpn_key)),
+              decoration: const InputDecoration(labelText: 'Clave Admin 2', border: OutlineInputBorder(), prefixIcon: Icon(Icons.vpn_key)),
             ),
           ],
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("Cancelar")),
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
             onPressed: () {
-              if (clave1.text == "Clave.2020" && clave2.text == "MarciCanela2023*") {
+              if (clave1.text == 'Clave.2020' && clave2.text == 'MarciCanela2023*') {
                 Navigator.pop(context, true);
               } else {
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Claves incorrectas"), backgroundColor: Colors.red));
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Claves incorrectas'), backgroundColor: Colors.red));
               }
             },
-            child: const Text("AUTORIZAR BORRADO"),
+            child: const Text('AUTORIZAR BORRADO'),
           ),
         ],
       ),
@@ -169,17 +174,20 @@ class _AdminPatientDetailScreenState extends State<AdminPatientDetailScreen> {
         try {
           await FirebaseStorage.instance.refFromURL(urlPdf).delete();
         } catch (e) {
-          print("Aviso: No se pudo borrar el archivo de Storage: $e");
+          // 4. CORREGIDO: Envuelto en kDebugMode
+          if (kDebugMode) {
+            print('Aviso: No se pudo borrar el archivo de Storage: $e');
+          }
         }
       }
 
       await FirebaseFirestore.instance.collection('documents').doc(docId).delete();
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Documento eliminado permanentemente"), backgroundColor: Colors.green));
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Documento eliminado permanentemente'), backgroundColor: Colors.green));
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error crítico al borrar: $e"), backgroundColor: Colors.red));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error crítico al borrar: $e'), backgroundColor: Colors.red));
     } finally {
       if (mounted) setState(() => _isUploading = false);
     }
@@ -187,7 +195,7 @@ class _AdminPatientDetailScreenState extends State<AdminPatientDetailScreen> {
 
   // --- FUNCIÓN: SUBIR PDF PERSONALIZADO ---
   Future<void> _subirPdfPersonalizado() async {
-    FilePickerResult? result = await FilePicker.platform.pickFiles(
+    final FilePickerResult? result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['pdf'], 
     );
@@ -197,15 +205,15 @@ class _AdminPatientDetailScreenState extends State<AdminPatientDetailScreen> {
       if (mounted) Navigator.pop(context); 
 
       try {
-        PlatformFile file = result.files.first;
-        String fileName = file.name;
-        String filePath = file.path!;
+        final PlatformFile file = result.files.first;
+        final String fileName = file.name;
+        final String filePath = file.path!;
 
         final storageRef = FirebaseStorage.instance.ref().child('documentos_pacientes/${widget.userId}/$fileName');
         await storageRef.putFile(File(filePath));
-        String downloadUrl = await storageRef.getDownloadURL();
+        final String downloadUrl = await storageRef.getDownloadURL();
 
-        String docId = '${widget.userId}_${DateTime.now().millisecondsSinceEpoch}';
+        final String docId = '${widget.userId}_${DateTime.now().millisecondsSinceEpoch}';
         
         await FirebaseFirestore.instance.collection('documents').doc(docId).set({
           'id': docId, 
@@ -224,9 +232,11 @@ class _AdminPatientDetailScreenState extends State<AdminPatientDetailScreen> {
         }
 
       } catch (e) {
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error al subir: $e'), backgroundColor: Colors.red),
         );
+        }
       } finally {
         if (mounted) setState(() => _isUploading = false);
       }
@@ -236,7 +246,7 @@ class _AdminPatientDetailScreenState extends State<AdminPatientDetailScreen> {
   // --- FUNCIÓN: ENVIAR PLANTILLA ---
   Future<void> _enviarDocumentoReal(String titulo) async {
     try {
-      String docId = '${widget.userId}_${titulo.replaceAll(' ', '_')}';
+      final String docId = '${widget.userId}_${titulo.replaceAll(' ', '_')}';
       await FirebaseFirestore.instance.collection('documents').doc(docId).set({
         'id': docId, 
         'userId': widget.userId, 
@@ -328,12 +338,12 @@ class _AdminPatientDetailScreenState extends State<AdminPatientDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    String idConCeros = widget.userId.padLeft(6, '0');
-    String idSinCeros = widget.userId.replaceFirst(RegExp(r'^0+'), '');
-    List<dynamic> posiblesIds = [idConCeros, idSinCeros];
+    final String idConCeros = widget.userId.padLeft(6, '0');
+    final String idSinCeros = widget.userId.replaceFirst(RegExp(r'^0+'), '');
+    final List<dynamic> posiblesIds = [idConCeros, idSinCeros];
     if (int.tryParse(idSinCeros) != null) posiblesIds.add(int.parse(idSinCeros));
 
-    bool isAdmin = widget.viewerRole == 'admin';
+    final bool isAdmin = widget.viewerRole == 'admin';
 
     return Scaffold(
       backgroundColor: Colors.teal.shade50,
@@ -354,7 +364,7 @@ class _AdminPatientDetailScreenState extends State<AdminPatientDetailScreen> {
                   stream: FirebaseFirestore.instance.collection('users').doc(widget.userId).snapshots(),
                   builder: (context, snapshot) {
                     if (!snapshot.hasData) return const CircularProgressIndicator();
-                    var data = snapshot.data!.data() as Map<String, dynamic>? ?? {};
+                    final data = snapshot.data!.data() as Map<String, dynamic>? ?? {};
                     return Column(
                       children: [
                         const CircleAvatar(radius: 40, backgroundColor: Colors.teal, child: Icon(Icons.person, size: 50, color: Colors.white)),
@@ -391,7 +401,7 @@ class _AdminPatientDetailScreenState extends State<AdminPatientDetailScreen> {
                       builder: (context, snapshot) {
                         int tokens = 0; int total = 0; bool tieneBono = false; DocumentReference? passRef;
                         if (snapshot.hasData && snapshot.data!.docs.isNotEmpty) {
-                           var doc = snapshot.data!.docs[0]; var data = doc.data() as Map<String, dynamic>;
+                           final doc = snapshot.data!.docs[0]; final data = doc.data() as Map<String, dynamic>;
                            tokens = data['tokensRestantes'] ?? 0; total = data['tokensTotales'] ?? 0; passRef = doc.reference; tieneBono = true;
                         }
                         return Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
@@ -424,13 +434,13 @@ class _AdminPatientDetailScreenState extends State<AdminPatientDetailScreen> {
                 if (snapshot.data!.docs.isEmpty) return const Card(child: Padding(padding: EdgeInsets.all(15), child: Text('No tiene ejercicios asignados')));
                 return Column(
                   children: snapshot.data!.docs.map((doc) {
-                    var data = doc.data() as Map<String, dynamic>;
+                    final data = doc.data() as Map<String, dynamic>;
                     
                     Map<String, dynamic>? feedback;
                     if (data['feedback'] != null && data['feedback'] is Map) {
                         feedback = Map<String, dynamic>.from(data['feedback'] as Map);
                     }
-                    bool tieneAlerta = feedback != null && (feedback['alerta'] == true);
+                    final bool tieneAlerta = feedback != null && (feedback['alerta'] == true);
 
                     return Card(
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10), side: tieneAlerta ? const BorderSide(color: Colors.red, width: 1) : BorderSide.none),
@@ -471,10 +481,10 @@ class _AdminPatientDetailScreenState extends State<AdminPatientDetailScreen> {
                 
                 return Column(
                   children: snapshot.data!.docs.map((doc) {
-                    var data = doc.data() as Map<String, dynamic>;
-                    bool firmado = data['firmado'] ?? false;
-                    String docId = doc.id;
-                    String urlPdf = data['urlPdf'] ?? "";
+                    final data = doc.data() as Map<String, dynamic>;
+                    final bool firmado = data['firmado'] ?? false;
+                    final String docId = doc.id;
+                    final String urlPdf = data['urlPdf'] ?? '';
 
                     return Card(
                       child: ListTile(
@@ -520,14 +530,14 @@ class _ExerciseSelector extends StatefulWidget {
   @override State<_ExerciseSelector> createState() => _ExerciseSelectorState();
 }
 class _ExerciseSelectorState extends State<_ExerciseSelector> {
-  String _search = "";
+  String _search = '';
   final TextEditingController _daysController = TextEditingController(text: '30');
   late TextEditingController _instructionsController;
   @override void initState() { super.initState(); _instructionsController = TextEditingController(text: widget.instruccionesDefecto); }
   Future<void> _asignar(Map<String, dynamic> exerciseData, String exerciseIdDoc) async {
     if (_daysController.text.isEmpty) return;
-    String code = (exerciseData['codigoInterno'] ?? 0).toString();
-    String id = '${widget.userId}_${code}_${DateTime.now().millisecondsSinceEpoch}';
+    final String code = (exerciseData['codigoInterno'] ?? 0).toString();
+    final String id = '${widget.userId}_${code}_${DateTime.now().millisecondsSinceEpoch}';
     try {
       await FirebaseFirestore.instance.collection('exercise_assignments').doc(id).set({
         'id': id, 'userId': widget.userId, 'exerciseId': code, 
@@ -543,7 +553,7 @@ class _ExerciseSelectorState extends State<_ExerciseSelector> {
       child: Column(children: [
         const Text('Asignar Ejercicio', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.blue)),
         const SizedBox(height: 10),
-        TextField(decoration: InputDecoration(hintText: 'Buscar...', prefixIcon: const Icon(Icons.search), border: OutlineInputBorder(), filled: true), onChanged: (v)=>setState(()=>_search=v.toLowerCase())),
+        TextField(decoration: const InputDecoration(hintText: 'Buscar...', prefixIcon: Icon(Icons.search), border: OutlineInputBorder(), filled: true), onChanged: (v)=>setState(()=>_search=v.toLowerCase())),
         const SizedBox(height: 10),
         TextField(controller: _instructionsController, maxLines: 2, decoration: const InputDecoration(labelText: 'Instrucciones', border: OutlineInputBorder())),
         const SizedBox(height: 10),
@@ -551,9 +561,9 @@ class _ExerciseSelectorState extends State<_ExerciseSelector> {
           stream: FirebaseFirestore.instance.collection('exercises').orderBy('orden').limit(100).snapshots(),
           builder: (c, s) {
              if(!s.hasData) return const Center(child:CircularProgressIndicator());
-             var f = s.data!.docs.where((d) { var dt=d.data() as Map<String,dynamic>; return (dt['nombre']??'').toString().toLowerCase().contains(_search); }).toList();
+             final f = s.data!.docs.where((d) { final dt=d.data() as Map<String,dynamic>; return (dt['nombre']??'').toString().toLowerCase().contains(_search); }).toList();
              return ListView.separated(itemCount:f.length, separatorBuilder:(c,i)=>const Divider(), itemBuilder:(c,i) {
-                var dt=f[i].data() as Map<String,dynamic>;
+                final dt=f[i].data() as Map<String,dynamic>;
                 return ListTile(title:Text(dt['nombre']??''), trailing:ElevatedButton(onPressed:()=>_asignar(dt, f[i].id), child:const Text('ASIGNAR')));
              });
           }

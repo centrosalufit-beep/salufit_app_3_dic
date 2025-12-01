@@ -18,18 +18,18 @@ class GroupClass {
   });
 
   factory GroupClass.fromFirestore(DocumentSnapshot doc) {
-    Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
+    final Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
 
     // --- 1. LÓGICA PARA FORMATEAR LA HORA ---
     // Convertimos el Timestamp de Firebase (fecha y hora) a un texto bonito "10:00"
     String horarioFormateado = 'Sin hora';
     
     if (data['fechaHoraInicio'] != null) {
-      Timestamp timestamp = data['fechaHoraInicio'];
-      DateTime date = timestamp.toDate();
+      final Timestamp timestamp = data['fechaHoraInicio'];
+      final DateTime date = timestamp.toDate();
       // Truco para que salga "10:00" en vez de "10:0" (añade ceros si hace falta)
-      String hour = date.hour.toString().padLeft(2, '0');
-      String minute = date.minute.toString().padLeft(2, '0');
+      final String hour = date.hour.toString().padLeft(2, '0');
+      final String minute = date.minute.toString().padLeft(2, '0');
       horarioFormateado = '$hour:$minute';
     }
 

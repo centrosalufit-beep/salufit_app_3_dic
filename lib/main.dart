@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart'; 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart'; // <--- IMPORTANTE: Necesario para bloquear orientación
 import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
@@ -18,29 +19,30 @@ import 'screens/terms_acceptance_screen.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
+  // --- BLOQUEO DE ORIENTACIÓN (OPCIÓN BLINDADA) ---
+  await SystemChrome.setPreferredOrientations([
+    DeviceOrientation.portraitUp,
+    DeviceOrientation.portraitDown, // Opcional: permite girar 180 grados, pero no horizontal
+  ]);
+
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform
   );
 
   // --- CAPA DE SEGURIDAD 2: APP CHECK (PRODUCCIÓN) ---
-  // Solo activamos App Check si NO estamos en Web Debug para evitar bloqueos locales.
   if (!kIsWeb || !kDebugMode) {
     await FirebaseAppCheck.instance.activate(
-      // ANDROID:
-      // - Si estamos programando (Debug) -> Usamos el proveedor Debug.
-      // - Si es la app real (Release) -> Usamos Play Integrity (Seguridad máxima).
       androidProvider: kDebugMode ? AndroidProvider.debug : AndroidProvider.playIntegrity,
-      
-      // IOS:
       appleProvider: kDebugMode ? AppleProvider.debug : AppleProvider.deviceCheck,
-      
-      // WEB:
-      // Necesitas una clave reCAPTCHA v3 real aquí para producción.
       webProvider: ReCaptchaV3Provider('TU_CLAVE_RECAPTCHA_V3_AQUI'),
     );
-    print('🛡️ App Check activado (${kDebugMode ? "Modo Debug" : "Modo Producción"}).');
+    if (kDebugMode) {
+      print('🛡️ App Check activado (${kDebugMode ? "Modo Debug" : "Modo Producción"}).');
+    }
   } else {
-    print('⚠️ App Check DESACTIVADO en Web (Debug).');
+    if (kDebugMode) {
+      print('⚠️ App Check DESACTIVADO en Web (Debug).');
+    }
   }
   
   // Configuración Web (Persistencia)
@@ -51,13 +53,15 @@ void main() async {
         sslEnabled: true
       );
     } catch (e) {
-      print('Nota Web: $e');
+      if (kDebugMode) {
+        print('Nota Web: $e');
+      }
     }
   }
 
   // MODO HÍBRIDO (DEBUG)
   if (kDebugMode) {
-    final String host = kIsWeb ? 'localhost' : '10.0.2.2';
+    const String host = kIsWeb ? 'localhost' : '10.0.2.2';
     try {
       FirebaseFunctions.instance.useFunctionsEmulator(host, 5001);
       print('🚀 Salufit Dev: Cloud Functions -> $host:5001');
@@ -118,19 +122,21 @@ class _VersionCheckWrapperState extends State<VersionCheckWrapper> {
     try {
       String currentVersion = '1.0.0'; 
       try {
-        PackageInfo packageInfo = await PackageInfo.fromPlatform();
+        final PackageInfo packageInfo = await PackageInfo.fromPlatform();
         currentVersion = packageInfo.version;
       } catch (e) {
-        print('Error obteniendo versión: $e');
+        if (kDebugMode) {
+          print('Error obteniendo versión: $e');
+        }
       }
 
-      DocumentSnapshot config = await FirebaseFirestore.instance
+      final DocumentSnapshot config = await FirebaseFirestore.instance
           .collection('config')
           .doc('app_settings')
           .get();
 
       if (config.exists) {
-        String minVersion = config.get('min_version') ?? '1.0.0';
+        final String minVersion = config.get('min_version') ?? '1.0.0';
         if (_isVersionLower(currentVersion, minVersion)) {
           if (mounted) {
             setState(() {
@@ -142,7 +148,9 @@ class _VersionCheckWrapperState extends State<VersionCheckWrapper> {
         }
       }
     } catch (e) {
-      print('Error conexión versión: $e');
+      if (kDebugMode) {
+        print('Error conexión versión: $e');
+      }
     }
 
     if (mounted) {
@@ -155,11 +163,11 @@ class _VersionCheckWrapperState extends State<VersionCheckWrapper> {
 
   bool _isVersionLower(String current, String min) {
     try {
-      List<int> c = current.split('.').map(int.parse).toList();
-      List<int> m = min.split('.').map(int.parse).toList();
+      final List<int> c = current.split('.').map(int.parse).toList();
+      final List<int> m = min.split('.').map(int.parse).toList();
       for (int i = 0; i < 3; i++) {
-        int valC = (i < c.length) ? c[i] : 0;
-        int valM = (i < m.length) ? m[i] : 0;
+        final int valC = (i < c.length) ? c[i] : 0;
+        final int valM = (i < m.length) ? m[i] : 0;
         if (valC < valM) return true;
         if (valC > valM) return false;
       }
@@ -184,7 +192,7 @@ class _VersionCheckWrapperState extends State<VersionCheckWrapper> {
           return const LoginScreen();
         }
 
-        User authUser = snapshot.data!;
+        final User authUser = snapshot.data!;
         
         return FutureBuilder<QuerySnapshot>(
           future: FirebaseFirestore.instance
@@ -203,9 +211,9 @@ class _VersionCheckWrapperState extends State<VersionCheckWrapper> {
             bool termsAccepted = false;
 
             if (userQuerySnapshot.hasData && userQuerySnapshot.data!.docs.isNotEmpty) {
-              var doc = userQuerySnapshot.data!.docs.first;
+              final doc = userQuerySnapshot.data!.docs.first;
               finalUserId = doc.id; 
-              var data = doc.data() as Map<String, dynamic>;
+              final data = doc.data() as Map<String, dynamic>;
               role = data['rol'] ?? 'cliente';
               termsAccepted = data['termsAccepted'] == true;
             } 
@@ -216,7 +224,7 @@ class _VersionCheckWrapperState extends State<VersionCheckWrapper> {
                     if (adminSnap.connectionState == ConnectionState.waiting) return const Scaffold(body: Center(child: CircularProgressIndicator()));
                     
                     if (adminSnap.hasData && adminSnap.data!.exists) {
-                       var data = adminSnap.data!.data() as Map<String, dynamic>;
+                       final data = adminSnap.data!.data() as Map<String, dynamic>;
                        role = data['rol'] ?? 'cliente';
                        termsAccepted = data['termsAccepted'] == true;
                     }

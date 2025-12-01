@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:intl/intl.dart'; 
-import '../widgets/salufit_scaffold.dart'; // <--- IMPORT NUEVO
+import 'package:flutter/foundation.dart'; // <--- 1. IMPORTANTE: Para kDebugMode
+import '../widgets/salufit_scaffold.dart';
 
 // Imports de tus pantallas
 import 'material_screen.dart';
@@ -12,7 +10,6 @@ import 'placeholder_screens.dart';
 import 'documents_screen.dart';
 import 'professional_panel_widget.dart'; 
 import 'professional_resources_screen.dart';
-import 'login_screen.dart'; // Necesario si usas Navigator para salir
 
 class HomeScreen extends StatefulWidget {
   final String userId;
@@ -21,7 +18,7 @@ class HomeScreen extends StatefulWidget {
   const HomeScreen({
     super.key, 
     required this.userId, 
-    this.userRole = "cliente"
+    this.userRole = 'cliente'
   });
 
   @override
@@ -39,20 +36,25 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _configurarMenu();
-    // NOTA: NotificationService se inicializa aquí o en main, según tu preferencia
   }
 
   void _configurarMenu() {
     final String rol = widget.userRole.toLowerCase().trim();
     
-    print('🔍 SALUFIT DEBUG: HomeScreen cargada.');
-    print('   -> ID Usuario: ${widget.userId}');
-    print('   -> Rol recibido: "${widget.userRole}" (Procesado: "$rol")');
+    // 2. CORREGIDO: Envuelto en kDebugMode
+    if (kDebugMode) {
+      print('🔍 SALUFIT DEBUG: HomeScreen cargada.');
+      print('   -> ID Usuario: ${widget.userId}');
+      print('   -> Rol recibido: "${widget.userRole}" (Procesado: "$rol")');
+    }
 
-    _esProfesional = (rol == "profesional" || rol == "admin" || rol == "administrador");
+    _esProfesional = (rol == 'profesional' || rol == 'admin' || rol == 'administrador');
 
     if (_esProfesional) {
-      print('✅ Modo PROFESIONAL/ADMIN activado');
+      // 3. CORREGIDO: Envuelto en kDebugMode
+      if (kDebugMode) {
+        print('✅ Modo PROFESIONAL/ADMIN activado');
+      }
       
       _pages = [
         ProfessionalPanelWidget(userId: widget.userId, userRole: widget.userRole), // 0
@@ -71,7 +73,10 @@ class _HomeScreenState extends State<HomeScreen> {
       ];
 
     } else {
-      print('👤 Modo CLIENTE activado');
+      // 4. CORREGIDO: Envuelto en kDebugMode
+      if (kDebugMode) {
+        print('👤 Modo CLIENTE activado');
+      }
       
       _pages = [
         DashboardScreen(userId: widget.userId),        
@@ -99,9 +104,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // USAMOS EL WIDGET PERSONALIZADO CON FONDO
     return SalufitScaffold( 
-      // El cuerpo cambia según la pestaña seleccionada
       body: IndexedStack(
         index: _selectedIndex,
         children: _pages,

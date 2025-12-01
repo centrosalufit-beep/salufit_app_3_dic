@@ -6,7 +6,8 @@ import 'package:intl/intl.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:firebase_auth/firebase_auth.dart'; 
-import 'login_screen.dart'; 
+import 'login_screen.dart';
+import 'class_list_screen.dart'; 
 import '../widgets/salufit_scaffold.dart'; 
 
 class ProfileScreen extends StatefulWidget { 
@@ -20,12 +21,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
   final String _cancelFunctionUrl = 'https://us-central1-salufitnewapp.cloudfunctions.net/cancelarReserva';
   final Uri _urlPrivacidad = Uri.parse('https://www.centrosalufit.com/politica-de-privacidad'); 
   bool _isLoading = false;
+  bool _isSearchingClass = false; 
 
+  // COLOR CORPORATIVO
+  final Color salufitTeal = const Color(0xFF009688);
+
+  // --- LÓGICA DE COLORES DE CLASES ---
   Map<String, dynamic> _getClassVisuals(String nombreClase) {
-    String nombre = nombreClase.toLowerCase();
-    if (nombre.contains('entrenamiento')) return {'colors': [const Color(0xFFD32F2F), const Color(0xFFE57373)], 'icon': Icons.fitness_center, 'textColor': Colors.red.shade900};
-    if (nombre.contains('meditación') || nombre.contains('meditacion')) return {'colors': [const Color(0xFF7B1FA2), const Color(0xFFBA68C8)], 'icon': Icons.self_improvement, 'textColor': Colors.purple.shade900};
-    if (nombre.contains('tribu')) return {'colors': [const Color(0xFFF57C00), const Color(0xFFFFB74D)], 'icon': Icons.directions_walk, 'textColor': Colors.orange.shade900};
+    final String nombre = nombreClase.toLowerCase();
+    if (nombre.contains('entrenamiento')) {
+      return {'colors': [const Color(0xFFD32F2F), const Color(0xFFE57373)], 'icon': Icons.fitness_center, 'textColor': Colors.red.shade900};
+    }
+    if (nombre.contains('meditación') || nombre.contains('meditacion')) {
+      return {'colors': [const Color(0xFF7B1FA2), const Color(0xFFBA68C8)], 'icon': Icons.self_improvement, 'textColor': Colors.purple.shade900};
+    }
+    if (nombre.contains('tribu')) {
+      return {'colors': [const Color(0xFFF57C00), const Color(0xFFFFB74D)], 'icon': Icons.directions_walk, 'textColor': Colors.orange.shade900};
+    }
     return {'colors': [const Color(0xFF1976D2), const Color(0xFF64B5F6)], 'icon': Icons.sports_gymnastics, 'textColor': Colors.blue.shade900};
   }
 
@@ -35,7 +47,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<void> _abrirPrivacidad() async {
     if (!await launchUrl(_urlPrivacidad, mode: LaunchMode.externalApplication)) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("No se pudo abrir la web")));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No se pudo abrir la web')));
+      }
     }
   }
 
@@ -44,158 +58,455 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final Duration diferencia = fechaClase.difference(ahora);
     final int horasRestantes = diferencia.inHours;
     final bool esPenalizado = horasRestantes < 24;
-    bool? confirmar = await showDialog(context: context, builder: (context) => AlertDialog(title: Text(esPenalizado ? "¡Atención!" : "Cancelar Reserva", style: TextStyle(color: esPenalizado ? Colors.red : Colors.black)), content: Text(esPenalizado ? "Menos de 24h. Pierdes el token." : "Se devuelve el token."), actions: [TextButton(onPressed: ()=>Navigator.pop(context,false), child: const Text("No")), TextButton(onPressed: ()=>Navigator.pop(context,true), child: const Text("Sí, cancelar"))]));
+    
+    final bool? confirmar = await showDialog(
+      context: context, 
+      builder: (context) => AlertDialog(
+        title: Text(esPenalizado ? '¡Atención!' : 'Cancelar Reserva', style: TextStyle(color: esPenalizado ? Colors.red : Colors.black)), 
+        content: Text(esPenalizado ? 'Menos de 24h. Pierdes el token.' : 'Se devuelve el token.'), 
+        actions: [
+          TextButton(onPressed: ()=>Navigator.pop(context,false), child: const Text('No')), 
+          TextButton(onPressed: ()=>Navigator.pop(context,true), child: const Text('Sí, cancelar'))
+        ]
+      )
+    );
+    
     if (confirmar != true) return;
+    
     setState(() { _isLoading = true; });
     try {
-      final response = await http.post(Uri.parse(_cancelFunctionUrl), headers: {'Content-Type': 'application/json'}, body: jsonEncode({'userId': widget.userId, 'bookingId': bookingId, 'classId': classId}));
+      final response = await http.post(
+        Uri.parse(_cancelFunctionUrl), 
+        headers: {
+          'Content-Type': 'application/json', 
+          'Authorization': 'Bearer ${await FirebaseAuth.instance.currentUser?.getIdToken()}'
+        }, 
+        body: jsonEncode({
+          'userId': widget.userId, 
+          'bookingId': bookingId, 
+          'classId': classId
+        })
+      );
+      
       final data = jsonDecode(response.body);
       if (!mounted) return;
-      if (response.statusCode == 200) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(data['message']), backgroundColor: Colors.green));
-      else ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(data['error'] ?? 'Error'), backgroundColor: Colors.red));
-    } catch (e) { ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red)); } 
-    finally { if (mounted) setState(() { _isLoading = false; }); }
+      
+      if (response.statusCode == 200) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(data['message']), backgroundColor: Colors.green));
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(data['error'] ?? 'Error'), backgroundColor: Colors.red));
+      }
+    } catch (e) { 
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red)); 
+    } finally { 
+      if (mounted) setState(() { _isLoading = false; }); 
+    }
+  }
+
+  void _mostrarQrGrande() {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        backgroundColor: Colors.transparent,
+        child: Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(25)),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('TU PASE DE ACCESO', style: TextStyle(color: salufitTeal, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
+              const SizedBox(height: 20),
+              QrImageView(
+                data: widget.userId, 
+                version: QrVersions.auto, 
+                size: 250, 
+                eyeStyle: QrEyeStyle(eyeShape: QrEyeShape.circle, color: salufitTeal), 
+                dataModuleStyle: const QrDataModuleStyle(dataModuleShape: QrDataModuleShape.circle, color: Colors.black87)
+              ),
+              const SizedBox(height: 20),
+              const Text('Acerca el móvil al lector', style: TextStyle(color: Colors.grey)),
+              const SizedBox(height: 20),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(context), 
+                style: ElevatedButton.styleFrom(backgroundColor: salufitTeal, foregroundColor: Colors.white), 
+                child: const Text('CERRAR')
+              )
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _buscarYRedirigirClase(String keyword) async {
+    setState(() { _isSearchingClass = true; });
+    try {
+      final now = DateTime.now();
+      final querySnapshot = await FirebaseFirestore.instance
+          .collection('groupClasses')
+          .where('fechaHoraInicio', isGreaterThanOrEqualTo: Timestamp.fromDate(now))
+          .orderBy('fechaHoraInicio')
+          .limit(30) 
+          .get();
+
+      if (!mounted) return;
+
+      DocumentSnapshot? claseEncontrada;
+      for (var doc in querySnapshot.docs) {
+        final String nombreClase = (doc['nombre'] ?? '').toString().toLowerCase();
+        if (nombreClase.contains(keyword.toLowerCase())) {
+          claseEncontrada = doc;
+          break; 
+        }
+      }
+
+      if (claseEncontrada != null) {
+        final fechaClase = (claseEncontrada['fechaHoraInicio'] as Timestamp).toDate();
+        if (mounted) {
+          Navigator.push(context, MaterialPageRoute(builder: (context) => ClassListScreen(userId: widget.userId, initialDate: fechaClase)));
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No hay clases de este tipo programadas próximamente.')));
+          Navigator.push(context, MaterialPageRoute(builder: (context) => ClassListScreen(userId: widget.userId)));
+        }
+      }
+    } catch (e) {
+      debugPrint('Error buscando clase: $e');
+      if (mounted) Navigator.push(context, MaterialPageRoute(builder: (context) => ClassListScreen(userId: widget.userId)));
+    } finally {
+      if (mounted) setState(() { _isSearchingClass = false; });
+    }
+  }
+
+  // --- TARJETA INTELIGENTE PERSONALIZADA ---
+  Widget _buildSmartPromoCard(String? userEmail) {
+    if (userEmail == null) return const SizedBox();
+
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance.collection('bookings')
+          .where('userEmail', isEqualTo: userEmail)
+          .orderBy('fechaReserva', descending: true)
+          .limit(5)
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) return const SizedBox(); 
+
+        final List<String> classIds = snapshot.data!.docs.map((d) => d['groupClassId'] as String).toList();
+
+        if (classIds.isEmpty) {
+          // Usuario nuevo o sin reservas: Default
+          return _promoCardDesign(
+            'REGALO MENSUAL EXCLUSIVO',
+            'Tras estudiar tu perfil, te recomendamos usar tu sesión extra para entrenar en grupo y así mejorar tu fuerza.',
+            Icons.fitness_center,
+            'entrena' 
+          );
+        }
+
+        return FutureBuilder<QuerySnapshot>(
+          future: FirebaseFirestore.instance.collection('groupClasses')
+              .where(FieldPath.documentId, whereIn: classIds)
+              .get(),
+          builder: (context, classesSnap) {
+            if (!classesSnap.hasData) return const SizedBox();
+
+            final Set<String> tiposConsumidos = {};
+            for (var doc in classesSnap.data!.docs) {
+              final data = doc.data() as Map<String, dynamic>;
+              final String nombre = (data['nombre'] ?? '').toString().toLowerCase();
+              if (nombre.contains('entrena')) tiposConsumidos.add('entrenamiento');
+              if (nombre.contains('terap')) tiposConsumidos.add('terapeutico');
+              if (nombre.contains('medita')) tiposConsumidos.add('meditacion');
+            }
+
+            String mensajePersonalizado = '';
+            String keywordBusqueda = ''; 
+            IconData iconoSugerido = Icons.star;
+            
+            // LÓGICA DE PERSONALIZACIÓN DE MENSAJE
+            if (!tiposConsumidos.contains('meditacion')) {
+              mensajePersonalizado = 'Tras haber estudiado tu perfil y conocer más sobre ti, te recomendamos que este mes disfrutes de tu sesión extra mensual para meditar en grupo y reducir tus niveles de estrés.';
+              keywordBusqueda = 'medita'; 
+              iconoSugerido = Icons.self_improvement;
+            } else if (!tiposConsumidos.contains('terapeutico')) {
+              mensajePersonalizado = 'Tras haber estudiado tu perfil y conocer más sobre ti, te recomendamos que este mes disfrutes de tu sesión extra mensual para mejorar el estado de tus articulaciones en una clase de ejercicio terapéutico grupal.';
+              keywordBusqueda = 'terap'; 
+              iconoSugerido = Icons.accessibility_new;
+            } else if (!tiposConsumidos.contains('entrenamiento')) {
+              mensajePersonalizado = 'Tras haber estudiado tu perfil y conocer más sobre ti, te recomendamos que este mes disfrutes de tu sesión extra mensual para entrenar en grupo y así mejorar tu fuerza.';
+              keywordBusqueda = 'entrena'; 
+              iconoSugerido = Icons.fitness_center;
+            } else {
+              // Fallback si hace de todo
+              mensajePersonalizado = 'Tras estudiar tu perfil, te recomendamos usar tu sesión extra para probar una nueva experiencia de salud y bienestar.';
+              keywordBusqueda = 'entrena'; 
+              iconoSugerido = Icons.auto_awesome;
+            }
+
+            return _promoCardDesign(
+              'REGALO MENSUAL EXCLUSIVO',
+              mensajePersonalizado,
+              iconoSugerido,
+              keywordBusqueda
+            );
+          },
+        );
+      },
+    );
+  }
+
+  // --- DISEÑO TARJETA DORADA CON REGALO ---
+  Widget _promoCardDesign(String titulo, String cuerpo, IconData iconoClase, String keywordBusqueda) {
+    return Container(
+      width: double.infinity,
+      // Altura mínima pero flexible
+      constraints: const BoxConstraints(minHeight: 200), 
+      clipBehavior: Clip.hardEdge, 
+      decoration: BoxDecoration(
+        // DEGRADADO DORADO PREMIUM
+        gradient: const LinearGradient(
+          colors: [Color(0xFFFFD700), Color(0xFFFFA000)], // Oro a Ámbar
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight
+        ), 
+        borderRadius: BorderRadius.circular(25), 
+        boxShadow: [
+          BoxShadow(color: Colors.orange.withValues(alpha: 0.4), blurRadius: 12, offset: const Offset(0, 6))
+        ]
+      ),
+      child: Stack(
+        children: [
+          // 1. MARCA DE AGUA: ICONO DE REGALO
+          Positioned(
+            right: -20,
+            bottom: -20,
+            child: Transform.rotate(
+              angle: -0.2, 
+              child: Icon(
+                Icons.card_giftcard, // <--- ICONO DE REGALO EN EL FONDO
+                size: 220, 
+                color: Colors.white.withValues(alpha: 0.25) 
+              ),
+            ),
+          ),
+
+          // 2. CONTENIDO
+          Padding(
+            padding: const EdgeInsets.all(25),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Etiqueta superior
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
+                  child: const Text('SUGERENCIA PERSONALIZADA', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.0))
+                ),
+                const SizedBox(height: 15),
+                
+                // Título
+                Text(
+                  titulo, 
+                  style: TextStyle(fontWeight: FontWeight.w900, color: Colors.brown.shade900, fontSize: 20, height: 1.1)
+                ),
+                const SizedBox(height: 10),
+                
+                // Cuerpo del mensaje (Personalizado)
+                Text(
+                  cuerpo, 
+                  style: TextStyle(color: Colors.brown.shade800, fontSize: 14, height: 1.4, fontWeight: FontWeight.w500),
+                ),
+                
+                const SizedBox(height: 20),
+                
+                // Botón de Acción
+                SizedBox(
+                  width: double.infinity,
+                  height: 50,
+                  child: ElevatedButton(
+                    onPressed: () => _buscarYRedirigirClase(keywordBusqueda),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.brown.shade900, // Botón oscuro para contraste con dorado
+                      foregroundColor: Colors.white, // Texto blanco
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                      elevation: 5,
+                      shadowColor: Colors.brown.withValues(alpha: 0.4)
+                    ),
+                    child: _isSearchingClass
+                        ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                        : const Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.star, size: 18, color: Colors.amber),
+                              SizedBox(width: 8),
+                              Text('MEJORA TU CALIDAD DE VIDA', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, letterSpacing: 0.5)),
+                            ],
+                          ),
+                  ),
+                )
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final String? userEmail = FirebaseAuth.instance.currentUser?.email;
-    if (userEmail == null) return const Center(child: Text("Error sesión"));
+    if (userEmail == null) return const Center(child: Text('Error sesión'));
 
     return SalufitScaffold(
-      appBar: AppBar(title: const Text("Mi Perfil", style: TextStyle(color: Colors.black)), backgroundColor: Colors.transparent, elevation: 0, iconTheme: const IconThemeData(color: Colors.black), automaticallyImplyLeading: false),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20.0),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            // 2. PERFIL
-            StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance.collection('users').where('email', isEqualTo: userEmail).limit(1).snapshots(),
-              builder: (context, snapshotUser) {
-                String nombreMostrado = "Usuario ${widget.userId}";
-                String nombreCompleto = "Cargando...";
-                if (snapshotUser.hasData && snapshotUser.data!.docs.isNotEmpty) { 
-                    var d = snapshotUser.data!.docs.first.data() as Map<String,dynamic>; 
-                    nombreCompleto = d['nombreCompleto']??d['nombre']??'Usuario'; 
-                    nombreMostrado = nombreCompleto; 
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(20.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start, 
+            children: [
+              
+              // 1. CABECERA
+              StreamBuilder<QuerySnapshot>(
+                stream: FirebaseFirestore.instance.collection('users').where('email', isEqualTo: userEmail).limit(1).snapshots(),
+                builder: (context, snapshotUser) {
+                  String nombreCompleto = 'CARGANDO...';
+                  if (snapshotUser.hasData && snapshotUser.data!.docs.isNotEmpty) { 
+                      final d = snapshotUser.data!.docs.first.data() as Map<String,dynamic>; 
+                      nombreCompleto = (d['nombreCompleto']??d['nombre']??'USUARIO').toString().toUpperCase(); 
+                  }
+                  return Row(
+                    children: [
+                      Image.asset('assets/logo_salufit.png', width: 60, fit: BoxFit.contain, errorBuilder: (c,e,s) => Icon(Icons.person, size: 60, color: salufitTeal)),
+                      const SizedBox(width: 15),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(nombreCompleto, style: TextStyle(fontFamily: 'serif', fontSize: 24, fontWeight: FontWeight.w900, letterSpacing: 3.0, color: salufitTeal, height: 1.0, shadows: [Shadow(offset: const Offset(1, 1), color: Colors.black.withValues(alpha: 0.1), blurRadius: 0)]), maxLines: 2, overflow: TextOverflow.ellipsis),
+                          ],
+                        ),
+                      ),
+                    ],
+                  );
                 }
-                
-                // 3. BONOS
-                return StreamBuilder<QuerySnapshot>(
-                  stream: FirebaseFirestore.instance.collection('passes')
-                      .where('userEmail', isEqualTo: userEmail) 
-                      .limit(20) 
-                      .snapshots(),
-                  builder: (context, snapshotPass) {
-                     int tokens = 0; bool isActive = false;
-                     if (snapshotPass.hasError) return Container(padding: const EdgeInsets.all(10), color: Colors.red.shade50, child: Text("Error Bonos: ${snapshotPass.error}", style: const TextStyle(color: Colors.red, fontSize: 10)));
-
-                     if (snapshotPass.hasData && snapshotPass.data!.docs.isNotEmpty) {
-                        var docs = snapshotPass.data!.docs;
-                        var bonoActivo = docs.where((d) => (d.data() as Map<String,dynamic>)['tokensRestantes'] > 0).firstOrNull;
-                        if (bonoActivo != null) { tokens = (bonoActivo.data() as Map<String,dynamic>)['tokensRestantes']; isActive = true; }
-                     }
-
-                     // --- LÓGICA VISUAL DE LA TARJETA (NUEVA) ---
-                     // Si hay tokens: Verde Eléctrico. Si no: Naranja Alerta.
-                     List<Color> cardColors = isActive 
-                        ? [Colors.lightGreenAccent.shade700, Colors.tealAccent.shade700] // Verde Eléctrico
-                        : [Colors.deepOrangeAccent, Colors.orange.shade800]; // Naranja Alerta
-                     
-                     // Icono Hoja (Spa) o Alerta si está a cero
-                     IconData cardIcon = isActive ? Icons.spa : Icons.warning_amber_rounded;
-                     String statusText = isActive ? "ACTIVO" : "AGOTADO";
-
-                     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        Row(children: [CircleAvatar(radius: 30, backgroundColor: Colors.blue.shade100, child: Icon(Icons.person, size: 35, color: Colors.blue.shade800)), const SizedBox(width: 15), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [const Text("Bienvenido/a,", style: TextStyle(color: Colors.grey)), Text(nombreMostrado, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold), overflow: TextOverflow.ellipsis, maxLines: 2)]))]),
-                        const SizedBox(height: 30),
-                        
-                        // TARJETA DE TOKENS REDISEÑADA
-                        Container(
-                          width: double.infinity, 
-                          height: 180, 
-                          padding: const EdgeInsets.all(25), 
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              colors: cardColors, 
-                              begin: Alignment.topLeft, 
-                              end: Alignment.bottomRight
-                            ), 
-                            borderRadius: BorderRadius.circular(25), 
-                            boxShadow: [BoxShadow(color: cardColors[0].withOpacity(0.4), blurRadius: 15, offset: const Offset(0, 10))]
-                          ), 
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start, 
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween, 
-                            children: [
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween, 
+              ),
+              
+              const SizedBox(height: 30),
+              
+              // 2. SESIONES Y QR
+              SizedBox(
+                height: 190, 
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Expanded(
+                      flex: 6, 
+                      child: StreamBuilder<QuerySnapshot>(
+                        stream: FirebaseFirestore.instance.collection('passes').where('userEmail', isEqualTo: userEmail).limit(20).snapshots(),
+                        builder: (context, snapshotPass) {
+                           int tokens = 0; bool isActive = false;
+                           if (snapshotPass.hasData && snapshotPass.data!.docs.isNotEmpty) {
+                              final docs = snapshotPass.data!.docs;
+                              final bonoActivo = docs.where((d) => (d.data() as Map<String,dynamic>)['tokensRestantes'] > 0).firstOrNull;
+                              if (bonoActivo != null) { tokens = (bonoActivo.data() as Map<String,dynamic>)['tokensRestantes']; isActive = true; }
+                           }
+                           final List<Color> cardColors = isActive ? [Colors.lightGreenAccent.shade700, Colors.tealAccent.shade700] : [Colors.deepOrangeAccent, Colors.orange.shade800]; 
+                           return Container(
+                              padding: const EdgeInsets.all(10),
+                              clipBehavior: Clip.hardEdge, 
+                              decoration: BoxDecoration(gradient: LinearGradient(colors: cardColors, begin: Alignment.topLeft, end: Alignment.bottomRight), borderRadius: BorderRadius.circular(20), boxShadow: [BoxShadow(color: cardColors[0].withValues(alpha: 0.4), blurRadius: 10, offset: const Offset(0, 5))]), 
+                              child: Stack(
                                 children: [
-                                  Icon(cardIcon, color: Colors.white.withOpacity(0.8), size: 35), // ICONO HOJA
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5), 
-                                    decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(10)), 
-                                    child: Text(statusText, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12))
-                                  )
-                                ]
-                              ), 
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.start, 
-                                children: [
-                                  Text(nombreCompleto, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w500), maxLines: 1, overflow: TextOverflow.ellipsis), 
-                                  const SizedBox(height: 5), 
-                                  Row(
-                                    children: [
-                                      Text("$tokens", style: const TextStyle(color: Colors.white, fontSize: 40, fontWeight: FontWeight.bold)), 
-                                      const SizedBox(width: 10), 
-                                      const Text("Tokens\nDisponibles", style: TextStyle(color: Colors.white70, height: 1.1))
-                                    ]
-                                  )
-                                ]
+                                  Positioned(bottom: -50, right: -20, left: -20, child: Icon(Icons.bolt, size: 240, color: Colors.white.withValues(alpha: 0.18))),
+                                  Positioned(top: 5, left: 5, child: Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(8)), child: Text(isActive ? 'ACTIVO' : 'AGOTADO', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 10)))),
+                                  Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [const SizedBox(height: 10), Text('$tokens', style: const TextStyle(color: Colors.white, fontSize: 70, fontWeight: FontWeight.w900, height: 1.0, shadows: [Shadow(color: Colors.black12, offset: Offset(2,2), blurRadius: 4)])), const Text('SESIONES', style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold, letterSpacing: 3.0))]))
+                                ],
                               )
-                            ]
+                            );
+                        }
+                      ),
+                    ),
+                    const SizedBox(width: 15),
+                    Expanded(
+                      flex: 4, 
+                      child: GestureDetector(
+                        onTap: _mostrarQrGrande, 
+                        child: Container(
+                          padding: const EdgeInsets.all(4), 
+                          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20), boxShadow: [BoxShadow(color: salufitTeal.withValues(alpha: 0.15), blurRadius: 10, offset: const Offset(0, 5))], border: Border.all(color: salufitTeal.withValues(alpha: 0.3), width: 1.5)), 
+                          child: Column(
+                            children: [
+                              Container(padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8), decoration: BoxDecoration(color: salufitTeal.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12)), child: Row(mainAxisAlignment: MainAxisAlignment.center, mainAxisSize: MainAxisSize.min, children: [Icon(Icons.qr_code_scanner, size: 12, color: salufitTeal), const SizedBox(width: 4), Text('ACCESO', style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: salufitTeal, letterSpacing: 0.5))])),
+                              Expanded(child: Center(child: Stack(alignment: Alignment.center, children: [QrImageView(data: widget.userId, version: QrVersions.auto, padding: const EdgeInsets.all(10), eyeStyle: QrEyeStyle(eyeShape: QrEyeShape.circle, color: salufitTeal), dataModuleStyle: const QrDataModuleStyle(dataModuleShape: QrDataModuleShape.circle, color: Colors.black87)), Container(padding: const EdgeInsets.all(3), decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle, boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 2)]), child: Icon(Icons.fitness_center, size: 14, color: salufitTeal))]))),
+                              const Text('Toca para ampliar', style: TextStyle(fontSize: 8, color: Colors.grey)),
+                              const SizedBox(height: 6),
+                            ],
                           )
                         ),
-                      ]);
-                  }
-                );
-              },
-            ),
-            const SizedBox(height: 20),
-            Center(child: Column(children: [const Text("Tu Pase de Acceso", style: TextStyle(color: Colors.grey, fontSize: 12)), const SizedBox(height: 10), Container(padding: const EdgeInsets.all(15), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(15), boxShadow: [BoxShadow(color: Colors.grey.shade200, blurRadius: 10, offset: const Offset(0, 5))]), child: QrImageView(data: widget.userId, version: QrVersions.auto, size: 180.0, eyeStyle: const QrEyeStyle(eyeShape: QrEyeShape.square, color: Colors.black), dataModuleStyle: const QrDataModuleStyle(dataModuleShape: QrDataModuleShape.square, color: Colors.black))), const SizedBox(height: 5), Text("ID: ${widget.userId}", style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1))])),
-            const SizedBox(height: 30),
-            const Text("Mis Reservas Recientes", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 15),
-            StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance.collection('bookings').where('userEmail', isEqualTo: userEmail).orderBy('fechaReserva', descending: true).limit(10).snapshots(),
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
-                if (snapshot.hasError) return Text("Error Reservas: ${snapshot.error}", style: const TextStyle(color: Colors.red));
-                if (!snapshot.hasData || snapshot.data!.docs.isEmpty) return const Text("No has hecho ninguna reserva todavía.");
-                var reservas = snapshot.data!.docs;
-                return ListView.separated(shrinkWrap: true, physics: const NeverScrollableScrollPhysics(), itemCount: reservas.length, separatorBuilder: (context, index) => const SizedBox(height: 15), itemBuilder: (context, index) {
-                    var doc = reservas[index]; var reserva = doc.data() as Map<String, dynamic>; var bookingId = doc.id;
-                    return FutureBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-                      future: _fetchClassDetails(reserva['groupClassId']),
-                      builder: (context, classSnapshot) {
-                        String nombreClase = "Cargando..."; String fechaTexto = ""; String horaTexto = ""; DateTime? fechaClaseReal;
-                        if (classSnapshot.hasData && classSnapshot.data!.exists) {
-                          var classData = classSnapshot.data!.data()!; nombreClase = classData['nombre'] ?? 'Clase';
-                          if (classData['fechaHoraInicio'] != null) { Timestamp ts = classData['fechaHoraInicio']; fechaClaseReal = ts.toDate(); String diaSemana = DateFormat('EEEE d', 'es').format(fechaClaseReal); if (diaSemana.isNotEmpty) diaSemana = "${diaSemana[0].toUpperCase()}${diaSemana.substring(1)}"; fechaTexto = diaSemana; horaTexto = DateFormat('HH:mm').format(fechaClaseReal); }
-                        } else if (classSnapshot.connectionState == ConnectionState.done) { nombreClase = "Clase eliminada"; }
-                        var visual = _getClassVisuals(nombreClase);
-                        return Container(height: 100, decoration: BoxDecoration(gradient: LinearGradient(colors: visual['colors'], begin: Alignment.topLeft, end: Alignment.bottomRight), borderRadius: BorderRadius.circular(20), boxShadow: [BoxShadow(color: (visual['colors'][0] as Color).withOpacity(0.4), blurRadius: 8, offset: const Offset(0, 4))]), child: Stack(children: [Positioned(right: -15, bottom: -15, child: Icon(visual['icon'], size: 100, color: Colors.white.withOpacity(0.15))), Padding(padding: const EdgeInsets.all(15.0), child: Row(children: [Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10), decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(12)), child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [const Icon(Icons.access_time, color: Colors.white, size: 16), const SizedBox(height: 2), Text(horaTexto, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white))])), const SizedBox(width: 15), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [Text(nombreClase, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white), maxLines: 1, overflow: TextOverflow.ellipsis), Text(fechaTexto, style: const TextStyle(color: Colors.white70, fontSize: 14))])), if (!_isLoading) IconButton(icon: const Icon(Icons.delete_outline, color: Colors.white, size: 28), onPressed: () => _cancelarReserva(bookingId, reserva['groupClassId'], fechaClaseReal ?? DateTime.now().add(const Duration(days: 30)))) else const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))]))]));
-                      },
-                    );
-                  },
-                );
-              },
-            ),
-            const SizedBox(height: 40),
-            SizedBox(width: double.infinity, child: OutlinedButton.icon(onPressed: () { Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (context) => const LoginScreen()), (route) => false); }, icon: const Icon(Icons.logout, color: Colors.red), label: const Text("Cerrar Sesión", style: TextStyle(color: Colors.red)), style: OutlinedButton.styleFrom(padding: const EdgeInsets.all(15), side: const BorderSide(color: Colors.red), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))))),
-            const SizedBox(height: 20),
-            Center(child: TextButton(onPressed: _abrirPrivacidad, child: const Text("Política de Privacidad", style: TextStyle(color: Colors.grey, decoration: TextDecoration.underline, fontSize: 12)))),
-            const SizedBox(height: 20),
-          ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              
+              const SizedBox(height: 20),
+
+              // 3. TARJETA INTELIGENTE PREMIUM (Cross-Selling)
+              _buildSmartPromoCard(userEmail),
+
+              const SizedBox(height: 35),
+              
+              Text('MIS RESERVAS RECIENTES', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: salufitTeal, fontFamily: 'serif', letterSpacing: 1.0)), 
+              const SizedBox(height: 15),
+
+              // 4. LISTA RESERVAS
+              StreamBuilder<QuerySnapshot>(
+                stream: FirebaseFirestore.instance.collection('bookings').where('userEmail', isEqualTo: userEmail).orderBy('fechaReserva', descending: true).limit(10).snapshots(),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
+                  if (!snapshot.hasData || snapshot.data!.docs.isEmpty) return const Padding(padding: EdgeInsets.all(20), child: Text('No has hecho ninguna reserva todavía.', style: TextStyle(color: Colors.grey)));
+                  
+                  final reservas = snapshot.data!.docs;
+                  return ListView.separated(
+                    shrinkWrap: true, 
+                    physics: const NeverScrollableScrollPhysics(), 
+                    itemCount: reservas.length, 
+                    separatorBuilder: (context, index) => const SizedBox(height: 15), 
+                    itemBuilder: (context, index) {
+                      final doc = reservas[index]; final reserva = doc.data() as Map<String, dynamic>; final bookingId = doc.id;
+                      return FutureBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+                        future: _fetchClassDetails(reserva['groupClassId']),
+                        builder: (context, classSnapshot) {
+                          String nombreClase = 'Cargando...'; String fechaTexto = ''; String horaTexto = ''; DateTime? fechaClaseReal;
+                          if (classSnapshot.hasData && classSnapshot.data!.exists) {
+                            final classData = classSnapshot.data!.data()!; nombreClase = classData['nombre'] ?? 'Clase';
+                            if (classData['fechaHoraInicio'] != null) { final Timestamp ts = classData['fechaHoraInicio']; fechaClaseReal = ts.toDate(); String diaSemana = DateFormat('EEEE d', 'es').format(fechaClaseReal); if (diaSemana.isNotEmpty) diaSemana = '${diaSemana[0].toUpperCase()}${diaSemana.substring(1)}'; fechaTexto = diaSemana; horaTexto = DateFormat('HH:mm').format(fechaClaseReal); }
+                          } else if (classSnapshot.connectionState == ConnectionState.done) { nombreClase = 'Clase eliminada'; }
+                          final visual = _getClassVisuals(nombreClase);
+                          return Container(
+                            height: 100, 
+                            decoration: BoxDecoration(gradient: LinearGradient(colors: visual['colors'], begin: Alignment.topLeft, end: Alignment.bottomRight), borderRadius: BorderRadius.circular(20), boxShadow: [BoxShadow(color: (visual['colors'][0] as Color).withValues(alpha: 0.4), blurRadius: 8, offset: const Offset(0, 4))]), 
+                            child: Stack(
+                              children: [
+                                Positioned(right: -15, bottom: -15, child: Icon(visual['icon'], size: 100, color: Colors.white.withValues(alpha: 0.15))), 
+                                Padding(padding: const EdgeInsets.all(15.0), child: Row(children: [Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10), decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(12)), child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [const Icon(Icons.access_time, color: Colors.white, size: 16), const SizedBox(height: 2), Text(horaTexto, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white))])), const SizedBox(width: 15), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [Text(nombreClase, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white), maxLines: 1, overflow: TextOverflow.ellipsis), Text(fechaTexto, style: const TextStyle(color: Colors.white70, fontSize: 14))])), if (!_isLoading) IconButton(icon: const Icon(Icons.delete_outline, color: Colors.white, size: 28), onPressed: () => _cancelarReserva(bookingId, reserva['groupClassId'], fechaClaseReal ?? DateTime.now().add(const Duration(days: 30)))) else const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))]))
+                              ]
+                            )
+                          );
+                        },
+                      );
+                    },
+                  );
+                },
+              ),
+              const SizedBox(height: 40),
+              SizedBox(width: double.infinity, child: OutlinedButton.icon(onPressed: () { Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (context) => const LoginScreen()), (route) => false); }, icon: const Icon(Icons.logout, color: Colors.red), label: const Text('Cerrar Sesión', style: TextStyle(color: Colors.red)), style: OutlinedButton.styleFrom(padding: const EdgeInsets.all(15), side: const BorderSide(color: Colors.red), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))))),
+              const SizedBox(height: 20),
+              Center(child: TextButton(onPressed: _abrirPrivacidad, child: const Text('Política de Privacidad', style: TextStyle(color: Colors.grey, decoration: TextDecoration.underline, fontSize: 12)))),
+              const SizedBox(height: 20),
+            ],
+          ),
         ),
       ),
     );

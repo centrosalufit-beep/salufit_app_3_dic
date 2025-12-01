@@ -46,13 +46,13 @@ class _SignDocumentScreenState extends State<SignDocumentScreen> {
 
   Future<void> _cargarDatosUsuario() async {
     try {
-      DocumentSnapshot userDoc = await FirebaseFirestore.instance
+      final DocumentSnapshot userDoc = await FirebaseFirestore.instance
           .collection('users')
           .doc(widget.userId)
           .get();
 
       if (userDoc.exists && mounted) {
-        var data = userDoc.data() as Map<String, dynamic>;
+        final data = userDoc.data() as Map<String, dynamic>;
         _nombreController.text = data['nombreCompleto'] ?? '';
         _dniController.text = data['dni'] ?? '';
         _direccionController.text = data['direccion'] ?? '';
@@ -60,7 +60,7 @@ class _SignDocumentScreenState extends State<SignDocumentScreen> {
         _localidadController.text = data['localidad'] ?? '';
       }
     } catch (e) {
-      print("Error cargando usuario: $e");
+      debugPrint('Error cargando usuario: $e');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -71,14 +71,14 @@ class _SignDocumentScreenState extends State<SignDocumentScreen> {
     
     if (!_haAbiertoDocumento) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Debes abrir y leer el documento antes de firmar."), backgroundColor: Colors.orange),
+        const SnackBar(content: Text('Debes abrir y leer el documento antes de firmar.'), backgroundColor: Colors.orange),
       );
       return;
     }
 
     if (!_aceptado) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Debes marcar la casilla de aceptación")),
+        const SnackBar(content: Text('Debes marcar la casilla de aceptación')),
       );
       return;
     }
@@ -101,7 +101,7 @@ class _SignDocumentScreenState extends State<SignDocumentScreen> {
 
       if (response.statusCode == 200) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Código enviado a tu email"), backgroundColor: Colors.green),
+          const SnackBar(content: Text('Código enviado a tu email'), backgroundColor: Colors.green),
         );
         _mostrarDialogoOTP();
       } else {
@@ -110,25 +110,27 @@ class _SignDocumentScreenState extends State<SignDocumentScreen> {
         );
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Error de conexión: $e"), backgroundColor: Colors.red),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error de conexión: $e'), backgroundColor: Colors.red),
+        );
+      }
     } finally {
-      setState(() { _isSendingEmail = false; });
+      if (mounted) setState(() { _isSendingEmail = false; });
     }
   }
 
   Future<void> _validarFirma() async {
-    String codigo = _otpController.text.trim();
+    final String codigo = _otpController.text.trim();
     if (codigo.length != 6) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("El código debe tener 6 dígitos")));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('El código debe tener 6 dígitos')));
       return;
     }
 
-    String dni = _dniController.text.trim();
-    String direccion = _direccionController.text.trim();
-    String cp = _cpController.text.trim();
-    String localidad = _localidadController.text.trim();
+    final String dni = _dniController.text.trim();
+    final String direccion = _direccionController.text.trim();
+    final String cp = _cpController.text.trim();
+    final String localidad = _localidadController.text.trim();
 
     Navigator.pop(context); 
     setState(() { _isLoading = true; });
@@ -150,22 +152,29 @@ class _SignDocumentScreenState extends State<SignDocumentScreen> {
 
       final data = jsonDecode(response.body);
 
+      // CORRECCIÓN: Verificar mounted antes de usar context tras el await
+      if (!mounted) return;
+
       if (response.statusCode == 200) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("¡Documento firmado y registrado!"), backgroundColor: Colors.green),
+          const SnackBar(content: Text('¡Documento firmado y registrado!'), backgroundColor: Colors.green),
         );
         if (mounted) Navigator.pop(context); 
       } else {
         setState(() { _isLoading = false; });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(data['error'] ?? "Error al verificar"), backgroundColor: Colors.red),
-        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(data['error'] ?? 'Error al verificar'), backgroundColor: Colors.red),
+          );
+        }
       }
     } catch (e) {
-      setState(() { _isLoading = false; });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Error de conexión: $e"), backgroundColor: Colors.red),
-      );
+      if (mounted) {
+        setState(() { _isLoading = false; });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error de conexión: $e'), backgroundColor: Colors.red),
+        );
+      }
     }
   }
 
@@ -174,11 +183,11 @@ class _SignDocumentScreenState extends State<SignDocumentScreen> {
       context: context,
       barrierDismissible: false,
       builder: (context) => AlertDialog(
-        title: const Text("Valida tu Firma"),
+        title: const Text('Valida tu Firma'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text("Introduce el código de 6 dígitos que hemos enviado a tu email:"),
+            const Text('Introduce el código de 6 dígitos que hemos enviado a tu email:'),
             const SizedBox(height: 20),
             TextField(
               controller: _otpController,
@@ -187,7 +196,7 @@ class _SignDocumentScreenState extends State<SignDocumentScreen> {
               maxLength: 6,
               style: const TextStyle(fontSize: 24, letterSpacing: 5, fontWeight: FontWeight.bold),
               decoration: const InputDecoration(
-                hintText: "000000",
+                hintText: '000000',
                 border: OutlineInputBorder(),
               ),
             ),
@@ -196,11 +205,11 @@ class _SignDocumentScreenState extends State<SignDocumentScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text("Cancelar"),
+            child: const Text('Cancelar'),
           ),
           ElevatedButton(
             onPressed: _validarFirma,
-            child: const Text("FIRMAR DOCUMENTO"),
+            child: const Text('FIRMAR DOCUMENTO'),
           ),
         ],
       ),
@@ -210,14 +219,14 @@ class _SignDocumentScreenState extends State<SignDocumentScreen> {
   void _abrirDocumento() {
     setState(() { _haAbiertoDocumento = true; });
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text("Abriendo documento PDF...")),
+      const SnackBar(content: Text('Abriendo documento PDF...')),
     );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("Datos del Firmante")),
+      appBar: AppBar(title: const Text('Datos del Firmante')),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : SingleChildScrollView(
@@ -238,7 +247,7 @@ class _SignDocumentScreenState extends State<SignDocumentScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text("Vas a firmar:", style: TextStyle(color: Colors.orange, fontSize: 12, fontWeight: FontWeight.bold)),
+                          const Text('Vas a firmar:', style: TextStyle(color: Colors.orange, fontSize: 12, fontWeight: FontWeight.bold)),
                           const SizedBox(height: 5),
                           Text(widget.documentTitle, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                         ],
@@ -250,7 +259,7 @@ class _SignDocumentScreenState extends State<SignDocumentScreen> {
                       child: ElevatedButton.icon(
                         onPressed: _abrirDocumento,
                         icon: Icon(_haAbiertoDocumento ? Icons.check : Icons.remove_red_eye),
-                        label: Text(_haAbiertoDocumento ? "Documento Leído" : "LEER DOCUMENTO COMPLETO"),
+                        label: Text(_haAbiertoDocumento ? 'Documento Leído' : 'LEER DOCUMENTO COMPLETO'),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: _haAbiertoDocumento ? Colors.green : Colors.blue,
                           foregroundColor: Colors.white,
@@ -261,29 +270,29 @@ class _SignDocumentScreenState extends State<SignDocumentScreen> {
                     if (!_haAbiertoDocumento)
                        const Padding(
                          padding: EdgeInsets.only(top: 8.0),
-                         child: Center(child: Text("* Debes abrir el documento para poder continuar", style: TextStyle(color: Colors.red, fontSize: 12))),
+                         child: Center(child: Text('* Debes abrir el documento para poder continuar', style: TextStyle(color: Colors.red, fontSize: 12))),
                        ),
 
                     const SizedBox(height: 30),
 
                     TextFormField(
                       controller: _nombreController,
-                      decoration: const InputDecoration(labelText: "Nombre Completo", border: OutlineInputBorder(), filled: true, fillColor: Color(0xFFF0F0F0)),
+                      decoration: const InputDecoration(labelText: 'Nombre Completo', border: OutlineInputBorder(), filled: true, fillColor: Color(0xFFF0F0F0)),
                       readOnly: true,
                     ),
                     const SizedBox(height: 15),
 
                     TextFormField(
                       controller: _dniController,
-                      decoration: const InputDecoration(labelText: "DNI / NIE / Pasaporte *", border: OutlineInputBorder(), prefixIcon: Icon(Icons.badge)),
-                      validator: (value) => value!.isEmpty ? "El DNI es obligatorio" : null,
+                      decoration: const InputDecoration(labelText: 'DNI / NIE / Pasaporte *', border: OutlineInputBorder(), prefixIcon: Icon(Icons.badge)),
+                      validator: (value) => value!.isEmpty ? 'El DNI es obligatorio' : null,
                     ),
                     const SizedBox(height: 15),
 
                     TextFormField(
                       controller: _direccionController,
-                      decoration: const InputDecoration(labelText: "Dirección (Calle y número) *", border: OutlineInputBorder(), prefixIcon: Icon(Icons.home)),
-                      validator: (value) => value!.isEmpty ? "La dirección es obligatoria" : null,
+                      decoration: const InputDecoration(labelText: 'Dirección (Calle y número) *', border: OutlineInputBorder(), prefixIcon: Icon(Icons.home)),
+                      validator: (value) => value!.isEmpty ? 'La dirección es obligatoria' : null,
                     ),
                     const SizedBox(height: 15),
 
@@ -294,8 +303,8 @@ class _SignDocumentScreenState extends State<SignDocumentScreen> {
                           child: TextFormField(
                             controller: _cpController,
                             keyboardType: TextInputType.number,
-                            decoration: const InputDecoration(labelText: "C.P. * (en números)", border: OutlineInputBorder()),
-                            validator: (value) => value!.isEmpty ? "Falta CP" : null,
+                            decoration: const InputDecoration(labelText: 'C.P. * (en números)', border: OutlineInputBorder()),
+                            validator: (value) => value!.isEmpty ? 'Falta CP' : null,
                           ),
                         ),
                         const SizedBox(width: 15),
@@ -303,8 +312,8 @@ class _SignDocumentScreenState extends State<SignDocumentScreen> {
                           flex: 3,
                           child: TextFormField(
                             controller: _localidadController,
-                            decoration: const InputDecoration(labelText: "Localidad *", border: OutlineInputBorder()),
-                            validator: (value) => value!.isEmpty ? "Falta localidad" : null,
+                            decoration: const InputDecoration(labelText: 'Localidad *', border: OutlineInputBorder()),
+                            validator: (value) => value!.isEmpty ? 'Falta localidad' : null,
                           ),
                         ),
                       ],
@@ -315,12 +324,12 @@ class _SignDocumentScreenState extends State<SignDocumentScreen> {
                     Opacity(
                       opacity: _haAbiertoDocumento ? 1.0 : 0.5,
                       child: CheckboxListTile(
-                        title: const Text("He leído el documento y acepto las condiciones."),
+                        title: const Text('He leído el documento y acepto las condiciones.'),
                         value: _aceptado,
                         onChanged: (val) {
                           if (!_haAbiertoDocumento) {
                             ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text("Por favor, pulsa el botón azul para LEER el documento primero.")),
+                              const SnackBar(content: Text('Por favor, pulsa el botón azul para LEER el documento primero.')),
                             );
                             return;
                           }
@@ -345,7 +354,7 @@ class _SignDocumentScreenState extends State<SignDocumentScreen> {
                         ),
                         child: _isSendingEmail
                           ? const CircularProgressIndicator(color: Colors.white)
-                          : const Text("SOLICITAR CÓDIGO DE FIRMA", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                          : const Text('SOLICITAR CÓDIGO DE FIRMA', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                       ),
                     ),
 
@@ -355,13 +364,13 @@ class _SignDocumentScreenState extends State<SignDocumentScreen> {
                         onPressed: () {
                             if (!_aceptado) {
                               ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text("Debes marcar la casilla de aceptación primero")),
+                                const SnackBar(content: Text('Debes marcar la casilla de aceptación primero')),
                               );
                               return;
                             }
                             _mostrarDialogoOTP();
                         },
-                        child: const Text("Ya tengo un código, quiero introducirlo", style: TextStyle(color: Colors.grey, decoration: TextDecoration.underline)),
+                        child: const Text('Ya tengo un código, quiero introducirlo', style: TextStyle(color: Colors.grey, decoration: TextDecoration.underline)),
                       ),
                     ),
 

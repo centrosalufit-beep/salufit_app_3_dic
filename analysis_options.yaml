@@ -1,22 +1,21 @@
-# This file configures the analyzer, which statically analyzes Dart code to
-# check for errors, warnings, and lints.
-#
-# The issues identified by the analyzer are surfaced in the UI of Dart-enabled
-# IDEs (https://dart.dev/tools#ides-and-editors). The analyzer can also be
-# invoked from the command line by running `flutter analyze`.
-
-# The following line activates a set of recommended lints for Flutter apps,
-# packages, and plugins.
+# Esta línea activa el modo estricto de Very Good Analysis
 include: package:flutter_lints/flutter.yaml
 
 linter:
   rules:
-    # Avoid print is useful for production, but annoying for dev. 
-    # We can disable it here if you want, or just ignore the warnings.
-    avoid_print: false 
+    # --- TUS REGLAS PERSONALIZADAS ---
     
-    # Prefer const ensures better performance
+    # Excepción: Si no quieres documentar cada variable (///), descomenta la siguiente línea:
+    public_member_api_docs: false
+
+    # Rendimiento
     prefer_const_constructors: true
-    
-    # Always use single quotes for strings
+    prefer_const_constructors_in_immutables: true
+    prefer_const_declarations: true
+
+    # Limpieza
+    avoid_print: true 
     prefer_single_quotes: true
+    prefer_final_locals: true
+    sized_box_for_whitespace: true
+    prefer_relative_imports: true

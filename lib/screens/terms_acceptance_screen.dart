@@ -23,7 +23,9 @@ class _TermsAcceptanceScreenState extends State<TermsAcceptanceScreen> {
 
   Future<void> _abrirWeb(Uri url) async {
     if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("No se pudo abrir el enlace")));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No se pudo abrir el enlace')));
+      }
     }
   }
 
@@ -50,7 +52,9 @@ class _TermsAcceptanceScreenState extends State<TermsAcceptanceScreen> {
         );
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error al guardar: $e")));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error al guardar: $e')));
+      }
     } finally {
       if (mounted) setState(() { _isLoading = false; });
     }
@@ -69,12 +73,12 @@ class _TermsAcceptanceScreenState extends State<TermsAcceptanceScreen> {
               const Icon(Icons.security, size: 60, color: Colors.teal),
               const SizedBox(height: 20),
               const Text(
-                "Protección de Datos",
+                'Protección de Datos',
                 style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.black87),
               ),
               const SizedBox(height: 10),
               const Text(
-                "Para garantizar la seguridad de tus datos médicos y cumplir con la normativa vigente, necesitamos tu consentimiento explícito antes de continuar.",
+                'Para garantizar la seguridad de tus datos médicos y cumplir con la normativa vigente, necesitamos tu consentimiento explícito antes de continuar.',
                 style: TextStyle(fontSize: 16, color: Colors.grey),
               ),
               const SizedBox(height: 30),
@@ -87,9 +91,9 @@ class _TermsAcceptanceScreenState extends State<TermsAcceptanceScreen> {
                 title: GestureDetector(
                   onTap: () => _abrirWeb(_urlPrivacidad),
                   child: const Text.rich(
-                    TextSpan(text: "He leído y acepto la ", children: [
-                      TextSpan(text: "Política de Privacidad", style: TextStyle(color: Colors.teal, fontWeight: FontWeight.bold, decoration: TextDecoration.underline)),
-                      TextSpan(text: " (Tratamiento de datos de salud)."),
+                    TextSpan(text: 'He leído y acepto la ', children: [
+                      TextSpan(text: 'Política de Privacidad', style: TextStyle(color: Colors.teal, fontWeight: FontWeight.bold, decoration: TextDecoration.underline)),
+                      TextSpan(text: ' (Tratamiento de datos de salud).'),
                     ]),
                     style: TextStyle(fontSize: 14),
                   ),
@@ -104,9 +108,9 @@ class _TermsAcceptanceScreenState extends State<TermsAcceptanceScreen> {
                 title: GestureDetector(
                   onTap: () => _abrirWeb(_urlTerminos),
                   child: const Text.rich(
-                    TextSpan(text: "Acepto los ", children: [
-                      TextSpan(text: "Términos y Condiciones", style: TextStyle(color: Colors.teal, fontWeight: FontWeight.bold, decoration: TextDecoration.underline)),
-                      TextSpan(text: " del servicio Salufit."),
+                    TextSpan(text: 'Acepto los ', children: [
+                      TextSpan(text: 'Términos y Condiciones', style: TextStyle(color: Colors.teal, fontWeight: FontWeight.bold, decoration: TextDecoration.underline)),
+                      TextSpan(text: ' del servicio Salufit.'),
                     ]),
                     style: TextStyle(fontSize: 14),
                   ),
@@ -127,7 +131,7 @@ class _TermsAcceptanceScreenState extends State<TermsAcceptanceScreen> {
                   ),
                   child: _isLoading 
                     ? const CircularProgressIndicator(color: Colors.white) 
-                    : const Text("ACEPTAR Y CONTINUAR", style: TextStyle(fontWeight: FontWeight.bold)),
+                    : const Text('ACEPTAR Y CONTINUAR', style: TextStyle(fontWeight: FontWeight.bold)),
                 ),
               ),
             ],

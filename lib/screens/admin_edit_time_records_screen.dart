@@ -11,10 +11,9 @@ class AdminEditTimeRecordsScreen extends StatefulWidget {
 
 class _AdminEditTimeRecordsScreenState extends State<AdminEditTimeRecordsScreen> {
   DateTime _selectedDate = DateTime.now();
-  bool _isLoading = false;
   
-  // Lista para el desplegable de profesionales
   List<Map<String, String>> _staffList = []; 
+  Map<String, String> _staffEmails = {}; 
 
   @override
   void initState() {
@@ -22,55 +21,55 @@ class _AdminEditTimeRecordsScreenState extends State<AdminEditTimeRecordsScreen>
     _cargarStaff();
   }
 
-  // Función auxiliar para limpiar acentos (clave para ordenar bien "Álvaro")
   String removeDiacritics(String str) {
-    var withDia = 'ÀÁÂÃÄÅàáâãäåÒÓÔÕÕÖØòóôõöøÈÉÊËèéêëðÇçÐÌÍÎÏìíîïÙÚÛÜùúûüÑñŠšŸÿýŽž';
-    var withoutDia = 'AAAAAAaaaaaaOOOOOOOooooooEEEEeeeeeCcDIIIIiiiiUUUUuuuuNnSsYyyZz';
+    const withDia = 'ÀÁÂÃÄÅàáâãäåÒÓÔÕÕÖØòóôõöøÈÉÊËèéêëðÇçÐÌÍÎÏìíîïÙÚÛÜùúûüÑñŠšŸÿýŽž';
+    const withoutDia = 'AAAAAAaaaaaaOOOOOOOooooooEEEEeeeeeCcDIIIIiiiiUUUUuuuuNnSsYyyZz';
     for (int i = 0; i < withDia.length; i++) {
       str = str.replaceAll(withDia[i], withoutDia[i]);
     }
     return str;
   }
 
-  // --- CARGAR SOLO ADMINS Y PROFESIONALES (ORDENADOS) ---
   Future<void> _cargarStaff() async {
     try {
-      var snapshot = await FirebaseFirestore.instance.collection('users').get();
+      final snapshot = await FirebaseFirestore.instance.collection('users').get();
       
-      List<Map<String, String>> tempStaff = [];
+      final List<Map<String, String>> tempStaff = [];
+      final Map<String, String> tempEmails = {};
       
       for (var doc in snapshot.docs) {
-        var data = doc.data();
-        String rol = (data['rol'] ?? 'cliente').toString().toLowerCase().trim();
+        final data = doc.data();
+        final String rol = (data['rol'] ?? 'cliente').toString().toLowerCase().trim();
         
-        // Filtramos: Solo queremos Staff
         if (rol == 'admin' || rol == 'administrador' || rol == 'profesional') {
-          String nombre = data['nombreCompleto'] ?? data['nombre'] ?? 'Sin Nombre';
+          final String nombre = data['nombreCompleto'] ?? data['nombre'] ?? 'Sin Nombre';
           tempStaff.add({
             'id': doc.id,
-            'label': '$nombre (${doc.id})', // Ej: "Silvio Marin (000001)"
+            'label': '$nombre (${doc.id})', 
           });
+          if (data['email'] != null) {
+            tempEmails[doc.id] = data['email'];
+          }
         }
       }
 
-      // ORDENACIÓN ALFABÉTICA ROBUSTA (Ignora acentos y mayúsculas)
       tempStaff.sort((a, b) {
-        String nombreA = removeDiacritics(a['label']!.toLowerCase());
-        String nombreB = removeDiacritics(b['label']!.toLowerCase());
+        final String nombreA = removeDiacritics(a['label']!.toLowerCase());
+        final String nombreB = removeDiacritics(b['label']!.toLowerCase());
         return nombreA.compareTo(nombreB);
       });
 
       if (mounted) {
         setState(() {
           _staffList = tempStaff;
+          _staffEmails = tempEmails;
         });
       }
     } catch (e) {
-      print("Error cargando staff: $e");
+      debugPrint('Error cargando staff: $e');
     }
   }
 
-  // Función para seleccionar fecha
   Future<void> _selectDate(BuildContext context) async {
     final DateTime? picked = await showDatePicker(
       context: context,
@@ -85,47 +84,46 @@ class _AdminEditTimeRecordsScreenState extends State<AdminEditTimeRecordsScreen>
     }
   }
 
-  // Función para editar un registro concreto
   void _editarRegistro(String docId, Map<String, dynamic> data, String nombreUsuario) {
-    final _timeController = TextEditingController(
+    final timeController = TextEditingController(
       text: DateFormat('HH:mm').format((data['timestamp'] as Timestamp).toDate())
     );
-    String tipoSeleccionado = data['type']; // 'IN' o 'OUT'
+    String tipoSeleccionado = data['type']; 
 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text("Corregir Fichaje"),
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Corregir Fichaje'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text("Empleado: $nombreUsuario", style: const TextStyle(fontWeight: FontWeight.bold)),
+            Text('Empleado: $nombreUsuario', style: const TextStyle(fontWeight: FontWeight.bold)),
             const SizedBox(height: 15),
             DropdownButtonFormField<String>(
-              value: tipoSeleccionado,
+              initialValue: tipoSeleccionado,
               items: const [
-                DropdownMenuItem(value: 'IN', child: Text("Entrada (IN)")),
-                DropdownMenuItem(value: 'OUT', child: Text("Salida (OUT)")),
+                DropdownMenuItem(value: 'IN', child: Text('Entrada (IN)')),
+                DropdownMenuItem(value: 'OUT', child: Text('Salida (OUT)')),
               ],
               onChanged: (val) => tipoSeleccionado = val!,
-              decoration: const InputDecoration(labelText: "Tipo", border: OutlineInputBorder()),
+              decoration: const InputDecoration(labelText: 'Tipo', border: OutlineInputBorder()),
             ),
             const SizedBox(height: 15),
             TextField(
-              controller: _timeController,
+              controller: timeController,
               readOnly: true,
               decoration: const InputDecoration(
-                labelText: "Nueva Hora", 
+                labelText: 'Nueva Hora', 
                 border: OutlineInputBorder(),
                 suffixIcon: Icon(Icons.access_time)
               ),
               onTap: () async {
-                TimeOfDay? time = await showTimePicker(
-                  context: context, 
+                final TimeOfDay? time = await showTimePicker(
+                  context: dialogContext, 
                   initialTime: TimeOfDay.fromDateTime((data['timestamp'] as Timestamp).toDate())
                 );
                 if (time != null) {
-                  _timeController.text = "${time.hour.toString().padLeft(2,'0')}:${time.minute.toString().padLeft(2,'0')}";
+                  timeController.text = "${time.hour.toString().padLeft(2,'0')}:${time.minute.toString().padLeft(2,'0')}";
                 }
               },
             ),
@@ -134,24 +132,34 @@ class _AdminEditTimeRecordsScreenState extends State<AdminEditTimeRecordsScreen>
         actions: [
           TextButton(
             onPressed: () async {
-              // BORRAR REGISTRO
-              bool? confirm = await showDialog(context: context, builder: (c) => AlertDialog(title: const Text("¿Eliminar?"), actions: [TextButton(onPressed: ()=>Navigator.pop(c,true), child: const Text("SÍ"))]));
+              final bool? confirm = await showDialog(
+                context: dialogContext, 
+                builder: (c) => AlertDialog(
+                  title: const Text('¿Eliminar?'), 
+                  actions: [TextButton(onPressed: ()=>Navigator.pop(c,true), child: const Text('SÍ'))]
+                )
+              );
+              
               if (confirm == true) {
                 await FirebaseFirestore.instance.collection('timeClockRecords').doc(docId).delete();
-                if (mounted) {
-                  Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Registro eliminado")));
+                
+                if (!mounted) return; 
+                
+                // ignore: use_build_context_synchronously
+                if (dialogContext.mounted) {
+                  Navigator.pop(dialogContext);
                 }
+                
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Registro eliminado')));
               }
             }, 
-            child: const Text("Borrar", style: TextStyle(color: Colors.red))
+            child: const Text('Borrar', style: TextStyle(color: Colors.red))
           ),
           ElevatedButton(
             onPressed: () async {
-              // GUARDAR CAMBIOS
               try {
-                List<String> parts = _timeController.text.split(':');
-                DateTime nuevaFechaHora = DateTime(
+                final List<String> parts = timeController.text.split(':');
+                final DateTime nuevaFechaHora = DateTime(
                   _selectedDate.year, _selectedDate.month, _selectedDate.day,
                   int.parse(parts[0]), int.parse(parts[1])
                 );
@@ -163,52 +171,57 @@ class _AdminEditTimeRecordsScreenState extends State<AdminEditTimeRecordsScreen>
                   'manualReason': 'Corrección Admin' 
                 });
 
-                if (mounted) {
-                  Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Corregido correctamente"), backgroundColor: Colors.green));
+                if (!mounted) return;
+
+                // ignore: use_build_context_synchronously
+                if (dialogContext.mounted) {
+                  Navigator.pop(dialogContext);
                 }
+                
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Corregido correctamente'), backgroundColor: Colors.green));
+                
               } catch (e) {
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+                }
               }
             },
-            child: const Text("Guardar Cambios")
+            child: const Text('Guardar Cambios')
           ),
         ],
       ),
     );
   }
 
-  // --- FUNCIÓN MEJORADA: CON DESPLEGABLE DE STAFF ---
   void _crearFichajeManual() {
-    final _timeController = TextEditingController(text: "09:00");
+    final timeController = TextEditingController(text: '09:00');
     String tipo = 'IN';
     String? selectedUserId; 
 
     showDialog(
       context: context,
-      builder: (context) {
+      builder: (dialogContext) {
         return StatefulBuilder(
           builder: (context, setStateDialog) {
             return AlertDialog(
-              title: const Text("Añadir Fichaje Manual"),
+              title: const Text('Añadir Fichaje Manual'),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Text("Añade un fichaje que no se registró."),
+                  const Text('Añade un fichaje que no se registró.'),
                   const SizedBox(height: 15),
                   
-                  // DESPLEGABLE DE PROFESIONALES (Ya ordenado en _cargarStaff)
                   if (_staffList.isEmpty)
-                    const Text("Cargando lista de profesionales...", style: TextStyle(color: Colors.grey))
+                    const Text('Cargando lista de profesionales...', style: TextStyle(color: Colors.grey))
                   else
                     DropdownButtonFormField<String>(
                       isExpanded: true,
                       decoration: const InputDecoration(
-                        labelText: "Seleccionar Profesional", 
+                        labelText: 'Seleccionar Profesional', 
                         border: OutlineInputBorder(),
                         prefixIcon: Icon(Icons.person)
                       ),
-                      value: selectedUserId,
+                      initialValue: selectedUserId,
                       items: _staffList.map((staff) {
                         return DropdownMenuItem(
                           value: staff['id'],
@@ -225,10 +238,10 @@ class _AdminEditTimeRecordsScreenState extends State<AdminEditTimeRecordsScreen>
                   const SizedBox(height: 10),
                   
                   DropdownButtonFormField<String>(
-                    value: tipo,
+                    initialValue: tipo,
                     items: const [
-                      DropdownMenuItem(value: 'IN', child: Text("Entrada (IN)")),
-                      DropdownMenuItem(value: 'OUT', child: Text("Salida (OUT)")),
+                      DropdownMenuItem(value: 'IN', child: Text('Entrada (IN)')),
+                      DropdownMenuItem(value: 'OUT', child: Text('Salida (OUT)')),
                     ],
                     onChanged: (val) => setStateDialog(() => tipo = val!),
                     decoration: const InputDecoration(border: OutlineInputBorder()),
@@ -237,35 +250,38 @@ class _AdminEditTimeRecordsScreenState extends State<AdminEditTimeRecordsScreen>
                   const SizedBox(height: 10),
                   
                   TextField(
-                    controller: _timeController,
+                    controller: timeController,
                     readOnly: true,
-                    decoration: const InputDecoration(labelText: "Hora", border: OutlineInputBorder(), suffixIcon: Icon(Icons.access_time)),
+                    decoration: const InputDecoration(labelText: 'Hora', border: OutlineInputBorder(), suffixIcon: Icon(Icons.access_time)),
                     onTap: () async {
-                      TimeOfDay? time = await showTimePicker(context: context, initialTime: const TimeOfDay(hour: 9, minute: 0));
+                      final TimeOfDay? time = await showTimePicker(context: dialogContext, initialTime: const TimeOfDay(hour: 9, minute: 0));
                       if (time != null) {
-                        _timeController.text = "${time.hour.toString().padLeft(2,'0')}:${time.minute.toString().padLeft(2,'0')}";
+                        timeController.text = "${time.hour.toString().padLeft(2,'0')}:${time.minute.toString().padLeft(2,'0')}";
                       }
                     },
                   ),
                 ],
               ),
               actions: [
-                TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancelar")),
+                TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Cancelar')),
                 ElevatedButton(
                   onPressed: () async {
                     if (selectedUserId == null) {
-                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Selecciona un profesional")));
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Selecciona un profesional')));
                       return;
                     }
                     try {
-                      List<String> parts = _timeController.text.split(':');
-                      DateTime fechaHora = DateTime(
+                      final List<String> parts = timeController.text.split(':');
+                      final DateTime fechaHora = DateTime(
                         _selectedDate.year, _selectedDate.month, _selectedDate.day,
                         int.parse(parts[0]), int.parse(parts[1])
                       );
+                      
+                      final String? userEmail = _staffEmails[selectedUserId];
 
                       await FirebaseFirestore.instance.collection('timeClockRecords').add({
                         'userId': selectedUserId, 
+                        'userEmail': userEmail, 
                         'timestamp': Timestamp.fromDate(fechaHora),
                         'type': tipo,
                         'deviceId': 'manual_admin',
@@ -273,15 +289,22 @@ class _AdminEditTimeRecordsScreenState extends State<AdminEditTimeRecordsScreen>
                         'manualReason': 'Añadido por Admin'
                       });
 
-                      if (mounted) {
-                        Navigator.pop(context);
-                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Fichaje creado"), backgroundColor: Colors.green));
+                      if (!mounted) return; 
+
+                      // ignore: use_build_context_synchronously
+                      if (dialogContext.mounted) {
+                        Navigator.pop(dialogContext); 
                       }
+                      
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Fichaje creado'), backgroundColor: Colors.green));
+                      
                     } catch (e) {
-                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
+                       if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+                      }
                     }
                   },
-                  child: const Text("Crear")
+                  child: const Text('Crear')
                 ),
               ],
             );
@@ -293,25 +316,24 @@ class _AdminEditTimeRecordsScreenState extends State<AdminEditTimeRecordsScreen>
 
   @override
   Widget build(BuildContext context) {
-    DateTime startOfDay = DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day, 0, 0, 0);
-    DateTime endOfDay = DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day, 23, 59, 59);
+    final DateTime startOfDay = DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day, 0, 0, 0);
+    final DateTime endOfDay = DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day, 23, 59, 59);
 
     return Scaffold(
-      appBar: AppBar(title: const Text("Corregir Fichajes"), backgroundColor: Colors.orange, foregroundColor: Colors.white),
+      appBar: AppBar(title: const Text('Corregir Fichajes'), backgroundColor: Colors.orange, foregroundColor: Colors.white),
       floatingActionButton: FloatingActionButton(
         backgroundColor: Colors.orange,
-        child: const Icon(Icons.add),
         onPressed: _crearFichajeManual,
+        child: const Icon(Icons.add),
       ),
       body: Column(
         children: [
-          // SELECTOR DE FECHA
           Container(
             padding: const EdgeInsets.all(15),
             color: Colors.orange.shade50,
             child: Row(
               children: [
-                const Text("Viendo día: ", style: TextStyle(fontWeight: FontWeight.bold)),
+                const Text('Viendo día: ', style: TextStyle(fontWeight: FontWeight.bold)),
                 TextButton.icon(
                   icon: const Icon(Icons.calendar_today, color: Colors.orange),
                   label: Text(DateFormat('dd/MM/yyyy').format(_selectedDate), style: const TextStyle(fontSize: 16, color: Colors.black)),
@@ -321,7 +343,6 @@ class _AdminEditTimeRecordsScreenState extends State<AdminEditTimeRecordsScreen>
             ),
           ),
 
-          // LISTA DE FICHAJES DEL DÍA
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance.collection('timeClockRecords')
@@ -330,27 +351,27 @@ class _AdminEditTimeRecordsScreenState extends State<AdminEditTimeRecordsScreen>
                   .orderBy('timestamp', descending: false)
                   .snapshots(),
               builder: (context, snapshot) {
-                if (snapshot.hasError) return Center(child: Text("Error: ${snapshot.error}"));
+                if (snapshot.hasError) return Center(child: Text('Error: ${snapshot.error}'));
                 if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
                 
-                var docs = snapshot.data!.docs;
-                if (docs.isEmpty) return const Center(child: Text("No hay fichajes este día"));
+                final docs = snapshot.data!.docs;
+                if (docs.isEmpty) return const Center(child: Text('No hay fichajes este día'));
 
                 return ListView.builder(
                   itemCount: docs.length,
                   itemBuilder: (context, index) {
-                    var data = docs[index].data() as Map<String, dynamic>;
-                    DateTime dt = (data['timestamp'] as Timestamp).toDate();
-                    String userId = data['userId'];
-                    String type = data['type'];
-                    bool manual = data['isManualEntry'] ?? false;
+                    final data = docs[index].data() as Map<String, dynamic>;
+                    final DateTime dt = (data['timestamp'] as Timestamp).toDate();
+                    final String userId = data['userId'];
+                    final String type = data['type'];
+                    final bool manual = data['isManualEntry'] ?? false;
 
                     return FutureBuilder<DocumentSnapshot>(
                       future: FirebaseFirestore.instance.collection('users').doc(userId).get(),
                       builder: (context, userSnap) {
-                        String nombre = "ID: $userId";
+                        String nombre = 'ID: $userId';
                         if (userSnap.hasData && userSnap.data!.exists) {
-                          var uData = userSnap.data!.data() as Map<String, dynamic>;
+                          final uData = userSnap.data!.data() as Map<String, dynamic>;
                           nombre = uData['nombreCompleto'] ?? uData['nombre'] ?? nombre;
                         }
 

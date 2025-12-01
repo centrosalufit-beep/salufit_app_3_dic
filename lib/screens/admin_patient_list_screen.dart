@@ -19,12 +19,12 @@ class AdminPatientListScreen extends StatefulWidget {
 }
 
 class _AdminPatientListScreenState extends State<AdminPatientListScreen> {
-  String _searchQuery = "";
+  String _searchQuery = '';
   final TextEditingController _searchController = TextEditingController();
 
   String removeDiacritics(String str) {
-    var withDia = 'ÀÁÂÃÄÅàáâãäåÒÓÔÕÕÖØòóôõöøÈÉÊËèéêëðÇçÐÌÍÎÏìíîïÙÚÛÜùúûüÑñŠšŸÿýŽž';
-    var withoutDia = 'AAAAAAaaaaaaOOOOOOOooooooEEEEeeeeeCcDIIIIiiiiUUUUuuuuNnSsYyyZz';
+    const withDia = 'ÀÁÂÃÄÅàáâãäåÒÓÔÕÕÖØòóôõöøÈÉÊËèéêëðÇçÐÌÍÎÏìíîïÙÚÛÜùúûüÑñŠšŸÿýŽž';
+    const withoutDia = 'AAAAAAaaaaaaOOOOOOOooooooEEEEeeeeeCcDIIIIiiiiUUUUuuuuNnSsYyyZz';
     for (int i = 0; i < withDia.length; i++) {
       str = str.replaceAll(withDia[i], withoutDia[i]);
     }
@@ -33,14 +33,14 @@ class _AdminPatientListScreenState extends State<AdminPatientListScreen> {
 
   @override
   Widget build(BuildContext context) {
-    bool isAdmin = widget.viewerRole == 'admin';
+    final bool isAdmin = widget.viewerRole == 'admin';
     // Si estamos en modo selección, cambiamos el título y ocultamos el botón de crear
-    bool isSelectionMode = widget.onUserSelected != null;
+    final bool isSelectionMode = widget.onUserSelected != null;
 
     return Scaffold(
       backgroundColor: Colors.teal.shade50,
       appBar: AppBar(
-        title: Text(isSelectionMode ? "Seleccionar Paciente" : "Pacientes y Staff"),
+        title: Text(isSelectionMode ? 'Seleccionar Paciente' : 'Pacientes y Staff'),
         backgroundColor: Colors.teal,
         foregroundColor: Colors.white,
       ),
@@ -64,12 +64,12 @@ class _AdminPatientListScreenState extends State<AdminPatientListScreen> {
             child: TextField(
               controller: _searchController,
               decoration: InputDecoration(
-                hintText: "Buscar (Ej: Jose Baydal...)",
+                hintText: 'Buscar (Ej: Jose Baydal...)',
                 prefixIcon: const Icon(Icons.search),
                 filled: true, fillColor: Colors.white,
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
                 suffixIcon: _searchQuery.isNotEmpty 
-                  ? IconButton(icon: const Icon(Icons.clear), onPressed: () { _searchController.clear(); setState(() => _searchQuery = ""); }) 
+                  ? IconButton(icon: const Icon(Icons.clear), onPressed: () { _searchController.clear(); setState(() => _searchQuery = ''); }) 
                   : null
               ),
               onChanged: (value) { 
@@ -81,47 +81,47 @@ class _AdminPatientListScreenState extends State<AdminPatientListScreen> {
             child: StreamBuilder<QuerySnapshot>(
               stream: _getUsersStream(),
               builder: (context, snapshot) {
-                if (snapshot.hasError) return Center(child: Text("Error: ${snapshot.error}"));
+                if (snapshot.hasError) return Center(child: Text('Error: ${snapshot.error}'));
                 if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
                 
                 var docs = snapshot.data!.docs;
                 
                 if (_searchQuery.isNotEmpty) {
-                  List<String> terminosBusqueda = _searchQuery.split(' '); 
+                  final List<String> terminosBusqueda = _searchQuery.split(' '); 
                   docs = docs.where((doc) {
-                    var data = doc.data() as Map<String, dynamic>;
-                    String nombreOriginal = (data['nombreCompleto'] ?? data['nombre'] ?? "").toString();
-                    String nombreLimpio = removeDiacritics(nombreOriginal.toLowerCase());
-                    String id = doc.id.toLowerCase();
+                    final data = doc.data() as Map<String, dynamic>;
+                    final String nombreOriginal = (data['nombreCompleto'] ?? data['nombre'] ?? '').toString();
+                    final String nombreLimpio = removeDiacritics(nombreOriginal.toLowerCase());
+                    final String id = doc.id.toLowerCase();
                     bool coincideTodo = true;
                     for (var termino in terminosBusqueda) {
                       if (termino.isEmpty) continue;
-                      bool estaEnNombre = nombreLimpio.contains(termino);
-                      bool estaEnId = id.contains(termino);
+                      final bool estaEnNombre = nombreLimpio.contains(termino);
+                      final bool estaEnId = id.contains(termino);
                       if (!estaEnNombre && !estaEnId) { coincideTodo = false; break; }
                     }
                     return coincideTodo;
                   }).toList();
                 }
 
-                if (docs.isEmpty) return const Center(child: Text("No se encontraron coincidencias"));
+                if (docs.isEmpty) return const Center(child: Text('No se encontraron coincidencias'));
 
                 return ListView.separated(
                   itemCount: docs.length,
                   separatorBuilder: (c, i) => const Divider(height: 1),
                   itemBuilder: (context, index) {
-                    var data = docs[index].data() as Map<String, dynamic>;
-                    String nombre = (data['nombreCompleto'] ?? data['nombre'] ?? "Sin nombre").toString();
-                    String id = docs[index].id;
-                    String rol = (data['rol'] ?? "cliente").toString();
-                    String telefono = (data['telefono'] ?? "").toString(); 
-                    bool showPhone = widget.viewerRole == 'admin';
+                    final data = docs[index].data() as Map<String, dynamic>;
+                    final String nombre = (data['nombreCompleto'] ?? data['nombre'] ?? 'Sin nombre').toString();
+                    final String id = docs[index].id;
+                    final String rol = (data['rol'] ?? 'cliente').toString();
+                    final String telefono = (data['telefono'] ?? '').toString(); 
+                    final bool showPhone = widget.viewerRole == 'admin';
 
                     return ListTile(
                       tileColor: Colors.white,
                       leading: CircleAvatar(
                         backgroundColor: rol == 'profesional' || rol == 'admin' ? Colors.orange.shade400 : Colors.blue.shade400,
-                        child: Text(nombre.isNotEmpty ? nombre[0].toUpperCase() : "?", style: const TextStyle(color: Colors.white)),
+                        child: Text(nombre.isNotEmpty ? nombre[0].toUpperCase() : '?', style: const TextStyle(color: Colors.white)),
                       ),
                       title: Text(nombre, style: const TextStyle(fontWeight: FontWeight.bold)),
                       subtitle: Text("ID: $id • ${rol.toUpperCase()} ${showPhone && telefono.isNotEmpty ? '• $telefono' : ''}"),
@@ -147,9 +147,9 @@ class _AdminPatientListScreenState extends State<AdminPatientListScreen> {
   }
 
   Stream<QuerySnapshot> _getUsersStream() {
-    CollectionReference users = FirebaseFirestore.instance.collection('users');
+    final CollectionReference users = FirebaseFirestore.instance.collection('users');
     if (_searchQuery.isEmpty) return users.orderBy('nombreCompleto').limit(50).snapshots();
-    String primeraPalabra = _searchQuery.split(' ')[0]; 
+    final String primeraPalabra = _searchQuery.split(' ')[0]; 
     return users.where('keywords', arrayContains: primeraPalabra).limit(50).snapshots();
   }
 }

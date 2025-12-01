@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
+import 'package:firebase_auth/firebase_auth.dart'; // <--- 1. IMPORT NECESARIO
 
 class AdminRenewalScreen extends StatefulWidget {
   const AdminRenewalScreen({super.key});
@@ -17,18 +18,17 @@ class _AdminRenewalScreenState extends State<AdminRenewalScreen> {
   int _selectedMonth = DateTime.now().month;
   int _selectedYear = DateTime.now().year;
   
-  final TextEditingController _tokensController = TextEditingController(text: "8"); 
+  final TextEditingController _tokensController = TextEditingController(text: '8'); 
 
-  String _searchQuery = ""; 
+  String _searchQuery = ''; 
   Set<String> _selectedUserIds = {}; 
   bool _isLoading = false;
   bool _selectAll = false;
   bool _soloPendientes = true; 
 
-  // --- FUNCIÓN: QUITAR ACENTOS ---
   String removeDiacritics(String str) {
-    var withDia = 'ÀÁÂÃÄÅàáâãäåÒÓÔÕÕÖØòóôõöøÈÉÊËèéêëðÇçÐÌÍÎÏìíîïÙÚÛÜùúûüÑñŠšŸÿýŽž';
-    var withoutDia = 'AAAAAAaaaaaaOOOOOOOooooooEEEEeeeeeCcDIIIIiiiiUUUUuuuuNnSsYyyZz';
+    const withDia = 'ÀÁÂÃÄÅàáâãäåÒÓÔÕÕÖØòóôõöøÈÉÊËèéêëðÇçÐÌÍÎÏìíîïÙÚÛÜùúûüÑñŠšŸÿýŽž';
+    const withoutDia = 'AAAAAAaaaaaaOOOOOOOooooooEEEEeeeeeCcDIIIIiiiiUUUUuuuuNnSsYyyZz';
     for (int i = 0; i < withDia.length; i++) {
       str = str.replaceAll(withDia[i], withoutDia[i]);
     }
@@ -38,16 +38,19 @@ class _AdminRenewalScreenState extends State<AdminRenewalScreen> {
   Future<void> _ejecutarRenovacion() async {
     if (_selectedUserIds.isEmpty) return;
 
-    int? tokensInput = int.tryParse(_tokensController.text);
+    final int? tokensInput = int.tryParse(_tokensController.text);
     if (tokensInput == null || tokensInput < 0) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Introduce un número de tokens válido"), backgroundColor: Colors.red));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Introduce un número de tokens válido'), backgroundColor: Colors.red));
       return;
     }
 
     setState(() { _isLoading = true; });
 
     try {
-      List<Map<String, dynamic>> listaParaEnviar = _selectedUserIds.map((uid) {
+      // 2. OBTENER TOKEN DE SEGURIDAD
+      final String? token = await FirebaseAuth.instance.currentUser?.getIdToken();
+
+      final List<Map<String, dynamic>> listaParaEnviar = _selectedUserIds.map((uid) {
         return {
           'userId': uid,
           'tokens': tokensInput, 
@@ -56,7 +59,10 @@ class _AdminRenewalScreenState extends State<AdminRenewalScreen> {
 
       final response = await http.post(
         Uri.parse(_apiUrl),
-        headers: {'Content-Type': 'application/json'},
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token' // <--- 3. ENVIAR TOKEN EN CABECERA
+        },
         body: jsonEncode({
           'listaUsuarios': listaParaEnviar,
           'mes': _selectedMonth,
@@ -75,28 +81,25 @@ class _AdminRenewalScreenState extends State<AdminRenewalScreen> {
             _selectAll = false;
           });
         } else {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(data['error']), backgroundColor: Colors.red));
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(data['error'] ?? 'Error desconocido'), backgroundColor: Colors.red));
         }
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red));
     } finally {
       if (mounted) setState(() { _isLoading = false; });
     }
   }
 
-  // --- LÓGICA DE BÚSQUEDA HÍBRIDA ---
   Stream<QuerySnapshot> _getUsersStream() {
-    CollectionReference usersRef = FirebaseFirestore.instance.collection('users');
+    final CollectionReference usersRef = FirebaseFirestore.instance.collection('users');
     
     if (_searchQuery.isEmpty) {
       return usersRef.orderBy('nombreCompleto').limit(100).snapshots();
     }
 
-    // Buscamos en Firebase por la primera palabra (asumiendo keywords reparadas)
-    // Usamos una RegExp para dividir por espacios y coger la primera palabra válida
-    List<String> palabras = _searchQuery.split(RegExp(r'\s+')).where((s) => s.isNotEmpty).toList();
-    String primeraPalabra = palabras.isNotEmpty ? palabras[0] : "";
+    final List<String> palabras = _searchQuery.split(RegExp(r'\s+')).where((s) => s.isNotEmpty).toList();
+    final String primeraPalabra = palabras.isNotEmpty ? palabras[0] : '';
 
     if (primeraPalabra.isEmpty) return usersRef.limit(100).snapshots();
 
@@ -111,13 +114,12 @@ class _AdminRenewalScreenState extends State<AdminRenewalScreen> {
     return Scaffold(
       backgroundColor: Colors.teal.shade50,
       appBar: AppBar(
-        title: const Text("Renovaciones Mensuales"),
+        title: const Text('Renovaciones Mensuales'),
         backgroundColor: Colors.teal,
         foregroundColor: Colors.white,
       ),
       body: Column(
         children: [
-          // FILTROS
           Container(
             padding: const EdgeInsets.all(15),
             color: Colors.white,
@@ -126,35 +128,56 @@ class _AdminRenewalScreenState extends State<AdminRenewalScreen> {
                 Row(
                   children: [
                     Expanded(
+                      flex: 4, 
+                      child: InputDecorator(
+                        decoration: const InputDecoration(
+                          labelText: 'Mes',
+                          border: OutlineInputBorder(),
+                          contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 0),
+                        ),
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<int>(
+                            value: _selectedMonth,
+                            isDense: true,
+                            isExpanded: true,
+                            items: List.generate(12, (index) => DropdownMenuItem(value: index + 1, child: Text(DateFormat('MMMM', 'es').format(DateTime(2024, index + 1)), overflow: TextOverflow.ellipsis))),
+                            onChanged: (val) => setState(() => _selectedMonth = val!),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 5),
+                    Expanded(
                       flex: 2,
-                      child: DropdownButtonFormField<int>(
-                        value: _selectedMonth,
-                        decoration: const InputDecoration(labelText: "Mes", border: OutlineInputBorder(), contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 0)),
-                        items: List.generate(12, (index) => DropdownMenuItem(value: index + 1, child: Text(DateFormat('MMMM', 'es').format(DateTime(2024, index + 1))))),
-                        onChanged: (val) => setState(() => _selectedMonth = val!),
+                      child: InputDecorator(
+                        decoration: const InputDecoration(
+                          labelText: 'Año',
+                          border: OutlineInputBorder(),
+                          contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 0),
+                        ),
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<int>(
+                            value: _selectedYear,
+                            isDense: true,
+                            isExpanded: true,
+                            items: [2024, 2025, 2026].map((y) => DropdownMenuItem(value: y, child: Text('$y'))).toList(),
+                            onChanged: (val) => setState(() => _selectedYear = val!),
+                          ),
+                        ),
                       ),
                     ),
-                    const SizedBox(width: 10),
+                    const SizedBox(width: 5), 
                     Expanded(
-                      flex: 1,
-                      child: DropdownButtonFormField<int>(
-                        value: _selectedYear,
-                        decoration: const InputDecoration(labelText: "Año", border: OutlineInputBorder(), contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 0)),
-                        items: [2024, 2025, 2026].map((y) => DropdownMenuItem(value: y, child: Text("$y"))).toList(),
-                        onChanged: (val) => setState(() => _selectedYear = val!),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      flex: 1,
+                      flex: 2,
                       child: TextField(
                         controller: _tokensController,
                         keyboardType: TextInputType.number,
                         textAlign: TextAlign.center,
                         decoration: const InputDecoration(
-                          labelText: "Tokens", 
+                          labelText: 'Tokens', 
                           border: OutlineInputBorder(), 
-                          contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 0)
+                          contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 14), 
+                          isDense: true
                         ),
                       ),
                     ),
@@ -164,7 +187,7 @@ class _AdminRenewalScreenState extends State<AdminRenewalScreen> {
                 
                 TextField(
                   decoration: InputDecoration(
-                    hintText: "Buscar (Ej: Jose Baydal...)",
+                    hintText: 'Buscar (Ej: Jose Baydal...)',
                     prefixIcon: const Icon(Icons.search),
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                     contentPadding: const EdgeInsets.symmetric(horizontal: 10)
@@ -175,12 +198,12 @@ class _AdminRenewalScreenState extends State<AdminRenewalScreen> {
                 ),
                 
                 SwitchListTile(
-                  title: const Text("Ocultar los que ya tienen bono", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+                  title: const Text('Ocultar los que ya tienen bono', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
                   subtitle: _searchQuery.isNotEmpty 
-                      ? const Text("(Desactivado temporalmente por búsqueda)", style: TextStyle(color: Colors.orange, fontSize: 12))
+                      ? const Text('(Desactivado temporalmente por búsqueda)', style: TextStyle(color: Colors.orange, fontSize: 12))
                       : null,
                   value: _soloPendientes,
-                  activeColor: Colors.teal,
+                  activeThumbColor: Colors.teal,
                   dense: true,
                   contentPadding: EdgeInsets.zero,
                   onChanged: (val) => setState(() => _soloPendientes = val),
@@ -189,14 +212,13 @@ class _AdminRenewalScreenState extends State<AdminRenewalScreen> {
             ),
           ),
 
-          // LISTA
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
               stream: _getUsersStream(), 
               builder: (context, snapshotUsers) {
                 
                 if (snapshotUsers.hasError) {
-                   return Center(child: Padding(padding: const EdgeInsets.all(20.0), child: SelectableText("Error: ${snapshotUsers.error}", style: const TextStyle(color: Colors.red))));
+                   return Center(child: Padding(padding: const EdgeInsets.all(20.0), child: SelectableText('Error: ${snapshotUsers.error}', style: const TextStyle(color: Colors.red))));
                 }
                 if (snapshotUsers.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
 
@@ -208,32 +230,27 @@ class _AdminRenewalScreenState extends State<AdminRenewalScreen> {
                   builder: (context, snapshotPasses) {
                     if (!snapshotPasses.hasData) return const Center(child: CircularProgressIndicator());
 
-                    Set<String> usuariosConBono = {};
+                    final Set<String> usuariosConBono = {};
                     for (var doc in snapshotPasses.data!.docs) {
-                      // Normalizamos ID para el Set
-                      String uid = doc['userId'].toString();
+                      final String uid = doc['userId'].toString();
                       usuariosConBono.add(uid); 
                       usuariosConBono.add(uid.replaceFirst(RegExp(r'^0+'), ''));
                     }
 
-                    List<String> terminos = _searchQuery.split(RegExp(r'\s+')).where((s) => s.isNotEmpty).toList();
+                    final List<String> terminos = _searchQuery.split(RegExp(r'\s+')).where((s) => s.isNotEmpty).toList();
 
-                    var usuariosFiltrados = snapshotUsers.data!.docs.where((doc) {
-                      var data = doc.data() as Map<String, dynamic>;
+                    final usuariosFiltrados = snapshotUsers.data!.docs.where((doc) {
+                      final data = doc.data() as Map<String, dynamic>;
                       
-                      // --- CORRECCIÓN CRÍTICA AQUÍ ---
-                      String nombreRaw = (data['nombreCompleto'] ?? data['nombre'] ?? "").toString();
-                      // LIMPIAMOS ACENTOS DEL NOMBRE DE LA BASE DE DATOS ANTES DE COMPARAR
-                      String nombreLimpio = removeDiacritics(nombreRaw.toLowerCase());
+                      final String nombreRaw = (data['nombreCompleto'] ?? data['nombre'] ?? '').toString();
+                      final String nombreLimpio = removeDiacritics(nombreRaw.toLowerCase());
                       
-                      String id = doc.id.toLowerCase();
-                      String idSinCeros = doc.id.replaceFirst(RegExp(r'^0+'), '');
+                      final String id = doc.id.toLowerCase();
+                      final String idSinCeros = doc.id.replaceFirst(RegExp(r'^0+'), '');
                       
-                      // 1. FILTRO DE BÚSQUEDA
                       bool coincide = true;
                       if (terminos.isNotEmpty) {
                         for (var termino in terminos) {
-                          // Comparamos termino (sin tilde) con nombreLimpio (sin tilde)
                           if (!nombreLimpio.contains(termino) && !id.contains(termino)) {
                             coincide = false;
                             break;
@@ -242,15 +259,14 @@ class _AdminRenewalScreenState extends State<AdminRenewalScreen> {
                       }
                       if (!coincide) return false;
 
-                      // 2. FILTRO DE PAGO (INTELIGENTE)
-                      bool yaTieneBono = usuariosConBono.contains(doc.id) || usuariosConBono.contains(idSinCeros); 
+                      final bool yaTieneBono = usuariosConBono.contains(doc.id) || usuariosConBono.contains(idSinCeros); 
                       
                       if (_searchQuery.isNotEmpty) {
-                        return true; // Mostrar siempre si coincide con búsqueda
+                        return true; 
                       }
 
                       if (_soloPendientes && yaTieneBono) {
-                        return false; // Ocultar si pagado y no buscando
+                        return false; 
                       }
                       
                       return true;
@@ -263,7 +279,7 @@ class _AdminRenewalScreenState extends State<AdminRenewalScreen> {
                           children: [
                             Icon(Icons.search_off, size: 60, color: Colors.grey),
                             SizedBox(height: 10),
-                            Text("No se encontraron usuarios."),
+                            Text('No se encontraron usuarios.'),
                           ],
                         ),
                       );
@@ -276,8 +292,8 @@ class _AdminRenewalScreenState extends State<AdminRenewalScreen> {
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              Text("${usuariosFiltrados.length} Coincidencias", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.grey)),
-                              if (_searchQuery.isEmpty) // Solo permitir seleccionar todo si no es búsqueda específica
+                              Text('${usuariosFiltrados.length} Coincidencias', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.grey)),
+                              if (_searchQuery.isEmpty)
                                 TextButton(
                                   onPressed: () {
                                     setState(() {
@@ -289,7 +305,7 @@ class _AdminRenewalScreenState extends State<AdminRenewalScreen> {
                                       }
                                     });
                                   },
-                                  child: Text(_selectAll ? "Deseleccionar todo" : "Seleccionar todo"),
+                                  child: Text(_selectAll ? 'Deseleccionar todo' : 'Seleccionar todo'),
                                 )
                             ],
                           ),
@@ -298,14 +314,13 @@ class _AdminRenewalScreenState extends State<AdminRenewalScreen> {
                           child: ListView.builder(
                             itemCount: usuariosFiltrados.length,
                             itemBuilder: (context, index) {
-                              var user = usuariosFiltrados[index];
-                              var data = user.data() as Map<String, dynamic>;
-                              String nombre = data['nombreCompleto'] ?? data['nombre'] ?? "Usuario";
-                              String rol = data['rol'] ?? "cliente";
-                              bool isSelected = _selectedUserIds.contains(user.id);
+                              final user = usuariosFiltrados[index];
+                              final data = user.data() as Map<String, dynamic>;
+                              final String nombre = data['nombreCompleto'] ?? data['nombre'] ?? 'Usuario';
                               
-                              String idSinCeros = user.id.replaceFirst(RegExp(r'^0+'), '');
-                              bool yaPagado = usuariosConBono.contains(user.id) || usuariosConBono.contains(idSinCeros);
+                              final bool isSelected = _selectedUserIds.contains(user.id);
+                              final String idSinCeros = user.id.replaceFirst(RegExp(r'^0+'), '');
+                              final bool yaPagado = usuariosConBono.contains(user.id) || usuariosConBono.contains(idSinCeros);
 
                               return CheckboxListTile(
                                 value: isSelected,
@@ -313,13 +328,13 @@ class _AdminRenewalScreenState extends State<AdminRenewalScreen> {
                                 title: Text(nombre, style: const TextStyle(fontWeight: FontWeight.bold)),
                                 subtitle: Row(
                                   children: [
-                                    Text("ID: ${user.id}"),
+                                    Text('ID: ${user.id}'),
                                     if (yaPagado) ...[
                                       const SizedBox(width: 10),
                                       Container(
                                         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                         decoration: BoxDecoration(color: Colors.green.shade100, borderRadius: BorderRadius.circular(4)),
-                                        child: const Text("PAGADO", style: TextStyle(fontSize: 10, color: Colors.green, fontWeight: FontWeight.bold)),
+                                        child: const Text('PAGADO', style: TextStyle(fontSize: 10, color: Colors.green, fontWeight: FontWeight.bold)),
                                       )
                                     ]
                                   ],
@@ -352,7 +367,7 @@ class _AdminRenewalScreenState extends State<AdminRenewalScreen> {
           if (_selectedUserIds.isNotEmpty)
             Container(
               padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(color: Colors.white, boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 10, offset: const Offset(0, -5))]),
+              decoration: const BoxDecoration(color: Colors.white, boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 10, offset: Offset(0, -5))]),
               child: SizedBox(
                 width: double.infinity,
                 height: 55,
@@ -361,7 +376,7 @@ class _AdminRenewalScreenState extends State<AdminRenewalScreen> {
                   style: ElevatedButton.styleFrom(backgroundColor: Colors.teal, foregroundColor: Colors.white),
                   child: _isLoading 
                     ? const CircularProgressIndicator(color: Colors.white)
-                    : Text("ASIGNAR ${_tokensController.text} TOKENS A (${_selectedUserIds.length})", style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                    : Text('ASIGNAR ${_tokensController.text} TOKENS A (${_selectedUserIds.length})', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                 ),
               ),
             )

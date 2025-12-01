@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 import 'package:chewie/chewie.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart'; // <--- IMPORT NECESARIO
+import 'package:firebase_auth/firebase_auth.dart';
 
 class VideoPlayerScreen extends StatefulWidget {
   final String videoUrl;
@@ -38,10 +38,10 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   bool _isWorking = true; 
   int _currentSet = 1;
   
-  // Configuración Timer
-  int _cfgSets = 3;
-  int _cfgWork = 30;
-  int _cfgRest = 15;
+  // --- CONFIGURACIÓN TIMER ---
+  int _cfgSets = 2;
+  int _cfgWork = 60;
+  int _cfgRest = 40;
 
   @override
   void initState() {
@@ -51,11 +51,8 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
 
   Future<void> _initializePlayer() async {
     try {
-      // --- MAGIA DE SEGURIDAD AQUÍ ---
-      // 1. Obtenemos el token actual del usuario para demostrar a Storage que tenemos permiso
-      String? token = await FirebaseAuth.instance.currentUser?.getIdToken();
+      final String? token = await FirebaseAuth.instance.currentUser?.getIdToken();
       
-      // 2. Configuramos el reproductor con la cabecera de autorización
       _videoPlayerController = VideoPlayerController.networkUrl(
         Uri.parse(widget.videoUrl),
         httpHeaders: token != null ? {
@@ -73,7 +70,6 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
           autoPlay: true,
           looping: true,
           aspectRatio: _videoPlayerController.value.aspectRatio,
-          // Personalización de colores
           materialProgressColors: ChewieProgressColors(
             playedColor: Colors.teal,
             handleColor: Colors.tealAccent,
@@ -93,7 +89,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
         );
       });
     } catch (e) {
-      debugPrint("🔴 Error vídeo: $e");
+      debugPrint('🔴 Error vídeo: $e');
       if (mounted) setState(() { _isError = true; });
     }
   }
@@ -129,17 +125,18 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
         if (_currentSeconds > 0) {
           _currentSeconds--;
         } else {
-          // Cambio de fase
           if (_isWorking) {
             if (_currentSet < _cfgSets) {
-              _isWorking = false; // Toca descanso
+              _isWorking = false; 
               _currentSeconds = _cfgRest;
             } else {
-              _stopTimer(); // Fin
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('¡Entrenamiento completado! 🎉'), backgroundColor: Colors.green));
+              _stopTimer(); 
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('¡Entrenamiento completado! 🎉'), backgroundColor: Colors.green));
+              }
             }
           } else {
-            _isWorking = true; // Toca trabajo
+            _isWorking = true; 
             _currentSet++;
             _currentSeconds = _cfgWork;
           }
@@ -156,11 +153,13 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
 
   void _stopTimer() {
     if (_workoutTimer != null) _workoutTimer!.cancel();
-    setState(() { 
-      _isTimerRunning = false; 
-      _isPaused = false;
-      _currentSeconds = 0; 
-    });
+    if (mounted) {
+      setState(() { 
+        _isTimerRunning = false; 
+        _isPaused = false;
+        _currentSeconds = 0; 
+      });
+    }
   }
 
   void _mostrarConfiguradorTimer() {
@@ -244,25 +243,25 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      // FONDO OSCURO
       backgroundColor: const Color(0xFF1A1A1A),
       appBar: AppBar(
         title: Text(widget.title),
         backgroundColor: Colors.transparent,
         foregroundColor: Colors.white,
+        scrolledUnderElevation: 0,
       ),
       body: Column(
         children: [
-          // 1. ZONA VIDEO
+          // 1. ZONA VIDEO (FLEX 3)
           Expanded(
-            flex: 4,
+            flex: 3, 
             child: Container(
               margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
               decoration: BoxDecoration(
                 color: Colors.black,
                 borderRadius: BorderRadius.circular(20),
                 boxShadow: [
-                  BoxShadow(color: Colors.black.withOpacity(0.5), blurRadius: 10, offset: const Offset(0, 5))
+                  BoxShadow(color: Colors.black.withValues(alpha: 0.5), blurRadius: 10, offset: const Offset(0, 5))
                 ],
               ),
               child: ClipRRect(
@@ -278,83 +277,100 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
             ),
           ),
 
-          // 2. PANEL CONTROL
+          // 2. PANEL CONTROL CON FONDO ACUARELA (FLEX 5)
           Expanded(
-            flex: 5,
+            flex: 5, 
             child: Container(
               width: double.infinity,
-              padding: const EdgeInsets.fromLTRB(20, 25, 20, 20),
               decoration: const BoxDecoration(
-                color: Color(0xFFF5F7FA), 
+                color: Color(0xFFF5F7FA), // Color base blanco suave
                 borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
+                
+                // ---> CORRECCIÓN AQUÍ <---
+                image: DecorationImage(
+                  // Antes decía 'assets/images/login_bg.jpg', ahora coincide con pubspec:
+                  image: AssetImage('assets/login_bg.jpg'), 
+                  fit: BoxFit.cover, 
+                  opacity: 0.3,
+                )
               ),
-              child: Column(
-                children: [
-                  // FEEDBACK
-                  Row(
+              child: SingleChildScrollView(
+                physics: const BouncingScrollPhysics(),
+                child: Padding(
+                  padding: EdgeInsets.only(
+                    left: 20, 
+                    right: 20, 
+                    top: 25, 
+                    bottom: MediaQuery.of(context).padding.bottom + 20
+                  ),
+                  child: Column(
                     children: [
-                      Expanded(
-                        child: Container(
-                          height: 90,
-                          padding: const EdgeInsets.all(10),
-                          decoration: BoxDecoration(
-                            gradient: const LinearGradient(colors: [Color(0xFFFFF8E1), Color(0xFFFFE0B2)], begin: Alignment.topLeft, end: Alignment.bottomRight),
-                            borderRadius: BorderRadius.circular(15),
-                            boxShadow: [BoxShadow(color: Colors.orange.withOpacity(0.1), blurRadius: 8, offset: const Offset(0, 3))],
-                          ),
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Text("¿Te gustó?", style: TextStyle(fontSize: 12, color: Colors.orange.shade800, fontWeight: FontWeight.bold)),
-                              const SizedBox(height: 5),
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                                children: [
-                                  InkWell(onTap: () => _enviarFeedback('gustado', true), child: Icon(Icons.thumb_up, color: _leGusta == true ? Colors.green : Colors.green.withOpacity(0.4), size: 32)),
-                                  InkWell(onTap: () => _enviarFeedback('gustado', false), child: Icon(Icons.thumb_down, color: _leGusta == false ? Colors.red : Colors.red.withOpacity(0.4), size: 32)),
-                                ],
-                              )
-                            ],
-                          ),
+                      // SECCIÓN FEEDBACK (Transparente con toque Teal)
+                      SizedBox(
+                        height: 90,
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Container(
+                                padding: const EdgeInsets.all(10),
+                                decoration: BoxDecoration(
+                                  color: Colors.teal.withValues(alpha: 0.1), // Cristal teal
+                                  borderRadius: BorderRadius.circular(15),
+                                  border: Border.all(color: Colors.teal.withValues(alpha: 0.2)),
+                                ),
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    const Text('¿Te gustó?', style: TextStyle(fontSize: 12, color: Colors.teal, fontWeight: FontWeight.bold)),
+                                    const SizedBox(height: 5),
+                                    Row(
+                                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                                      children: [
+                                        InkWell(onTap: () => _enviarFeedback('gustado', true), child: Icon(Icons.thumb_up, color: _leGusta == true ? Colors.green : Colors.green.withValues(alpha: 0.4), size: 32)),
+                                        InkWell(onTap: () => _enviarFeedback('gustado', false), child: Icon(Icons.thumb_down, color: _leGusta == false ? Colors.red : Colors.red.withValues(alpha: 0.4), size: 32)),
+                                      ],
+                                    )
+                                  ],
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 15),
+                            Expanded(
+                              child: Container(
+                                padding: const EdgeInsets.all(10),
+                                decoration: BoxDecoration(
+                                  color: Colors.teal.withValues(alpha: 0.1), // Cristal teal
+                                  borderRadius: BorderRadius.circular(15),
+                                  border: Border.all(color: Colors.teal.withValues(alpha: 0.2)),
+                                ),
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    const Text('Dificultad', style: TextStyle(fontSize: 12, color: Colors.teal, fontWeight: FontWeight.bold)),
+                                    const SizedBox(height: 10),
+                                    Row(
+                                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                                      children: [
+                                        _semaforoDot(Colors.green, 'facil'),
+                                        _semaforoDot(Colors.orange, 'medio'),
+                                        _semaforoDot(Colors.red, 'dificil'),
+                                      ],
+                                    )
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                      const SizedBox(width: 15),
-                      Expanded(
-                        child: Container(
-                          height: 90,
-                          padding: const EdgeInsets.all(10),
-                          decoration: BoxDecoration(
-                            gradient: const LinearGradient(colors: [Color(0xFFFFF8E1), Color(0xFFFFE0B2)], begin: Alignment.topLeft, end: Alignment.bottomRight),
-                            borderRadius: BorderRadius.circular(15),
-                            boxShadow: [BoxShadow(color: Colors.orange.withOpacity(0.1), blurRadius: 8, offset: const Offset(0, 3))],
-                          ),
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Text("Dificultad", style: TextStyle(fontSize: 12, color: Colors.orange.shade800, fontWeight: FontWeight.bold)),
-                              const SizedBox(height: 10),
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                                children: [
-                                  _semaforoDot(Colors.green, 'facil'),
-                                  _semaforoDot(Colors.orange, 'medio'),
-                                  _semaforoDot(Colors.red, 'dificil'),
-                                ],
-                              )
-                            ],
-                          ),
-                        ),
-                      ),
+
+                      const SizedBox(height: 25), 
+
+                      // SECCIÓN TIMER
+                      _isTimerRunning ? _buildActiveTimer() : _buildIdleTimer(),
                     ],
                   ),
-
-                  const SizedBox(height: 20),
-
-                  // TIMER
-                  Expanded(
-                    child: _isTimerRunning ? _buildActiveTimer() : _buildIdleTimer(),
-                  ),
-                ],
+                ),
               ),
             ),
           ),
@@ -364,15 +380,15 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   }
 
   Widget _semaforoDot(Color color, String valor) {
-    bool selected = _dificultad == valor;
+    final bool selected = _dificultad == valor;
     return InkWell(
       onTap: () => _enviarFeedback('dificultad', valor),
       child: Container(
         width: 24, height: 24,
         decoration: BoxDecoration(
-          color: color.withOpacity(selected ? 1.0 : 0.5),
+          color: color.withValues(alpha: selected ? 1.0 : 0.3),
           shape: BoxShape.circle,
-          border: Border.all(color: Colors.black26, width: 1.5)
+          border: Border.all(color: Colors.black12, width: 1.5)
         ),
         child: selected ? const Icon(Icons.check, size: 16, color: Colors.white) : null,
       ),
@@ -382,43 +398,48 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   Widget _buildIdleTimer() {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 25),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(colors: [Colors.teal, Color(0xFF4DB6AC)]),
+        color: Colors.teal.withValues(alpha: 0.1), // Cristal teal
         borderRadius: BorderRadius.circular(20),
-        boxShadow: [BoxShadow(color: Colors.teal.withOpacity(0.4), blurRadius: 10, offset: const Offset(0, 5))],
+        border: Border.all(color: Colors.teal.withValues(alpha: 0.2)),
+        boxShadow: [BoxShadow(color: Colors.teal.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, 5))],
       ),
       child: Column(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        mainAxisSize: MainAxisSize.min,
         children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               const Row(
                 children: [
-                  Icon(Icons.timer, color: Colors.white),
+                  Icon(Icons.timer, color: Colors.teal),
                   SizedBox(width: 10),
-                  Text("Temporizador", style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+                  Text('Temporizador', style: TextStyle(color: Colors.teal, fontSize: 22, fontWeight: FontWeight.bold)),
                 ],
               ),
               IconButton(
                 onPressed: _mostrarConfiguradorTimer,
-                icon: const Icon(Icons.edit, color: Colors.white),
-                tooltip: "Editar Tiempos",
+                icon: const Icon(Icons.edit, color: Colors.teal),
+                tooltip: 'Editar Tiempos',
               )
             ],
           ),
           
+          const SizedBox(height: 20),
+
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
-              _timerStat("$_cfgSets", "Series"),
-              Container(width: 1, height: 30, color: Colors.white30),
-              _timerStat("${_cfgWork}s", "Trabajo"),
-              Container(width: 1, height: 30, color: Colors.white30),
-              _timerStat("${_cfgRest}s", "Descanso"),
+              _timerStat('$_cfgSets', 'Series', Colors.black87),
+              Container(width: 1, height: 30, color: Colors.teal.withValues(alpha: 0.3)), 
+              _timerStat('${_cfgWork}s', 'Trabajo', Colors.black87),
+              Container(width: 1, height: 30, color: Colors.teal.withValues(alpha: 0.3)), 
+              _timerStat('${_cfgRest}s', 'Descanso', Colors.black87),
             ],
           ),
+
+          const SizedBox(height: 25),
 
           SizedBox(
             width: double.infinity,
@@ -426,12 +447,13 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
             child: ElevatedButton.icon(
               onPressed: _startTimer,
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.white,
-                foregroundColor: Colors.teal,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15))
+                backgroundColor: Colors.teal, 
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                elevation: 2,
               ),
               icon: const Icon(Icons.play_arrow_rounded, size: 30),
-              label: const Text("COMENZAR", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              label: const Text('COMENZAR', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
             ),
           )
         ],
@@ -439,35 +461,36 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     );
   }
 
-  Widget _timerStat(String val, String label) {
+  Widget _timerStat(String val, String label, [Color color = Colors.white]) {
     return Column(
       children: [
-        Text(val, style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
-        Text(label, style: const TextStyle(color: Colors.white70, fontSize: 10)),
+        Text(val, style: TextStyle(color: color, fontSize: 20, fontWeight: FontWeight.bold)),
+        Text(label, style: TextStyle(color: color.withValues(alpha: 0.7), fontSize: 10)),
       ],
     );
   }
 
   Widget _buildActiveTimer() {
-    Color bg1 = _isWorking ? const Color(0xFF43A047) : const Color(0xFFFB8C00); 
-    Color bg2 = _isWorking ? const Color(0xFF66BB6A) : const Color(0xFFFFA726);
-    String phaseText = _isWorking ? "🔥 TRABAJO" : "💤 DESCANSO";
+    final Color bg1 = _isWorking ? const Color(0xFF43A047) : const Color(0xFFFB8C00); 
+    final Color bg2 = _isWorking ? const Color(0xFF66BB6A) : const Color(0xFFFFA726);
+    final String phaseText = _isWorking ? '🔥 TRABAJO' : '💤 DESCANSO';
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 30),
       decoration: BoxDecoration(
         gradient: LinearGradient(colors: [bg1, bg2], begin: Alignment.topLeft, end: Alignment.bottomRight),
         borderRadius: BorderRadius.circular(20),
-        boxShadow: [BoxShadow(color: bg1.withOpacity(0.4), blurRadius: 10, offset: const Offset(0, 5))],
+        boxShadow: [BoxShadow(color: bg1.withValues(alpha: 0.4), blurRadius: 10, offset: const Offset(0, 5))],
       ),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text("SERIE $_currentSet / $_cfgSets", style: const TextStyle(color: Colors.white70, fontWeight: FontWeight.bold, letterSpacing: 1)),
+              Text('SERIE $_currentSet / $_cfgSets', style: const TextStyle(color: Colors.white70, fontWeight: FontWeight.bold, letterSpacing: 1)),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(color: Colors.black26, borderRadius: BorderRadius.circular(8)),
@@ -476,15 +499,15 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
             ],
           ),
           
-          const Spacer(),
+          const SizedBox(height: 30),
           
           Text(
-            "$_currentSeconds", 
+            '$_currentSeconds', 
             style: const TextStyle(color: Colors.white, fontSize: 80, fontWeight: FontWeight.bold, height: 1)
           ),
-          const Text("segundos", style: TextStyle(color: Colors.white70)),
+          const Text('segundos', style: TextStyle(color: Colors.white70)),
           
-          const Spacer(),
+          const SizedBox(height: 30),
 
           Row(
             children: [
@@ -493,7 +516,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                   onPressed: _togglePause,
                   style: ElevatedButton.styleFrom(backgroundColor: Colors.white24, foregroundColor: Colors.white, elevation: 0),
                   icon: Icon(_isPaused ? Icons.play_arrow : Icons.pause),
-                  label: Text(_isPaused ? "REANUDAR" : "PAUSAR"),
+                  label: Text(_isPaused ? 'REANUDAR' : 'PAUSAR'),
                 ),
               ),
               const SizedBox(width: 10),
@@ -501,7 +524,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                 onPressed: _stopTimer,
                 style: IconButton.styleFrom(backgroundColor: Colors.white, foregroundColor: bg1),
                 icon: const Icon(Icons.stop),
-                tooltip: "Detener",
+                tooltip: 'Detener',
               )
             ],
           )

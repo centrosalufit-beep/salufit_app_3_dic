@@ -24,7 +24,7 @@ class Exercise {
   });
 
   factory Exercise.fromFirestore(DocumentSnapshot doc) {
-    Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
+    final Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
     return Exercise(
       id: doc.id,
       nombre: data['nombre'] ?? 'Ejercicio sin nombre',

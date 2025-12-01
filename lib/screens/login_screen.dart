@@ -2,11 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:local_auth/local_auth.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:url_launcher/url_launcher.dart';
-import 'home_screen.dart';
 import 'activation_screen.dart';
-import 'terms_acceptance_screen.dart';
+import 'home_screen.dart'; 
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -16,319 +13,335 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
+  // Controladores
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
-  
-  bool _isLoading = false;
-  bool _obscurePassword = true;
-  bool _canCheckBiometrics = false; 
-  bool _hasStoredCredentials = false; 
 
+  // Estado
+  bool _isLoading = false;
+  bool _isObscure = true;
+
+  // Biometría y Estilos
   final LocalAuthentication auth = LocalAuthentication();
-  final FlutterSecureStorage storage = const FlutterSecureStorage();
-  
-  final Uri _urlPrivacidad = Uri.parse('https://www.centrosalufit.com/politica-de-privacidad');
+  final Color salufitGreen = const Color(0xFF009688);
 
   @override
   void initState() {
     super.initState();
-    _checkBiometrics();
-  }
-
-  Future<void> _checkBiometrics() async {
-    bool canCheck = false;
-    try {
-      canCheck = await auth.canCheckBiometrics;
-    } catch (e) { /* Ignore */ }
-
-    String? storedEmail = await storage.read(key: 'user_email');
-    String? storedPass = await storage.read(key: 'user_pass');
-
-    if (mounted) {
-      setState(() {
-        _canCheckBiometrics = canCheck;
-        _hasStoredCredentials = (storedEmail != null && storedPass != null);
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      Future.delayed(const Duration(milliseconds: 500), () {
+        _checkBiometrics();
       });
     }
   }
 
-  Future<void> _abrirPrivacidad() async {
-    if (!await launchUrl(_urlPrivacidad, mode: LaunchMode.externalApplication)) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No se pudo abrir la web')));
-      }
-    }
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
   }
 
-  Future<void> _loginBiometrico() async {
+  // --- LÓGICA DE REDIRECCIÓN INTELIGENTE ---
+  Future<void> _navegarAlHome(String userId) async {
     try {
-      final bool authenticated = await auth.authenticate(
-        localizedReason: 'Accede a tu cuenta Salufit',
-      );
-
-      if (authenticated) {
-        String? email = await storage.read(key: 'user_email');
-        String? pass = await storage.read(key: 'user_pass');
-
-        if (email != null && pass != null) {
-          _emailController.text = email;
-          _passwordController.text = pass;
-          _login(isBiometric: true); 
-        }
+      final DocumentSnapshot userDoc = await FirebaseFirestore.instance.collection('users').doc(userId).get();
+      
+      String role = 'cliente'; 
+      if (userDoc.exists) {
+        final data = userDoc.data() as Map<String, dynamic>;
+        role = data['rol'] ?? 'cliente';
       }
+
+      if (!mounted) return;
+
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => HomeScreen(userId: userId, userRole: role),
+        ),
+      );
     } catch (e) {
-       debugPrint("Biometría cancelada o fallida: $e");
+      debugPrint('Error obteniendo rol: $e');
+      if (mounted) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (_) => HomeScreen(userId: userId, userRole: 'cliente'),
+          ),
+        );
+      }
     }
   }
 
-  Future<void> _login({bool isBiometric = false}) async {
-    if (_emailController.text.isEmpty || _passwordController.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Rellena los campos')));
+  /// Verifica la huella
+  Future<void> _checkBiometrics() async {
+    bool canCheckBiometrics = false;
+    try {
+      canCheckBiometrics = await auth.canCheckBiometrics;
+    } catch (e) {
+      debugPrint('Error hardware: $e');
       return;
     }
 
-    setState(() { _isLoading = true; });
+    if (!canCheckBiometrics) return;
 
     try {
-      // 1. Autenticación
-      final UserCredential userCredential = await FirebaseAuth.instance.signInWithEmailAndPassword(
+      final bool didAuthenticate = await auth.authenticate(
+        localizedReason: 'Salufit requiere autenticación para acceder',
+        persistAcrossBackgrounding: true,
+        biometricOnly: true,
+      );
+
+      if (didAuthenticate && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('✅ Identidad verificada'), backgroundColor: Colors.green));
+
+        final user = FirebaseAuth.instance.currentUser;
+        if (user != null) {
+          _navegarAlHome(user.uid);
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+              content: Text('Huella correcta. Inicia sesión para vincularla.'),
+              backgroundColor: Colors.orange));
+        }
+      }
+    } catch (e) {
+      debugPrint('Error auth: $e');
+    }
+  }
+
+  Future<void> _login() async {
+    if (_emailController.text.isEmpty || _passwordController.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Por favor rellena todos los campos')),
+      );
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    try {
+      final credential = await FirebaseAuth.instance.signInWithEmailAndPassword(
         email: _emailController.text.trim(),
         password: _passwordController.text.trim(),
       );
 
-      if (!mounted) return;
-
-      // 2. Búsqueda segura por EMAIL
-      final String emailBuscado = userCredential.user!.email!;
-
-      final query = await FirebaseFirestore.instance
-          .collection('users')
-          .where('email', isEqualTo: emailBuscado)
-          .limit(1)
-          .get();
-
-      if (query.docs.isEmpty) {
-        await FirebaseAuth.instance.signOut(); 
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No se encuentra ficha médica asociada.'), backgroundColor: Colors.red));
-          setState(() { _isLoading = false; });
-        }
-        return;
+      if (mounted && credential.user != null) {
+        await _navegarAlHome(credential.user!.uid);
       }
-
-      final userDoc = query.docs.first;
-      final String userId = userDoc.id; 
-      final data = userDoc.data();
-      final String rol = data['rol'] ?? 'cliente';
-      final bool termsAccepted = data['termsAccepted'] == true;
-
-      // 3. Guardar credenciales si aplica
-      if (!isBiometric && _canCheckBiometrics && !_hasStoredCredentials) {
-        if (mounted) _offerBiometricSave();
-      }
-
-      // 4. Muro Legal
-      if (mounted) {
-        if (termsAccepted) {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (context) => HomeScreen(userId: userId, userRole: rol)),
-          );
-        } else {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (context) => TermsAcceptanceScreen(userId: userId, userRole: rol)),
-          );
-        }
-      }
-
     } on FirebaseAuthException catch (e) {
-      String msg = 'Error de acceso';
-      if (e.code == 'invalid-credential' || e.code == 'user-not-found' || e.code == 'wrong-password') {
-        msg = 'Email o contraseña incorrectos';
+      String msg = 'Error de autenticación';
+
+      if (e.code == 'user-not-found') {
+        msg = 'Usuario no encontrado';
+      } else if (e.code == 'wrong-password') {
+        msg = 'Contraseña incorrecta';
       } else if (e.code == 'invalid-email') {
-        msg = 'El formato del email no es válido';
+        msg = 'Email inválido';
+      } else if (e.code == 'too-many-requests') {
+        msg = 'Demasiados intentos. Intenta más tarde.';
       }
+
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: Colors.red));
-        setState(() { _isLoading = false; });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(msg), backgroundColor: Colors.red),
+        );
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error técnico: $e'), backgroundColor: Colors.red));
-        setState(() { _isLoading = false; });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+        );
       }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
-  }
-
-  void _offerBiometricSave() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('¿Activar Acceso Rápido?'),
-        content: const Text('Podemos guardar tu contraseña de forma segura para que entres con Huella o FaceID la próxima vez.'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('No')),
-          TextButton(
-            onPressed: () async {
-              await storage.write(key: 'user_email', value: _emailController.text.trim());
-              await storage.write(key: 'user_pass', value: _passwordController.text.trim());
-              if (context.mounted) {
-                Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('¡Activado!'), backgroundColor: Colors.green));
-                _checkBiometrics(); 
-              }
-            },
-            child: const Text('Sí, Activar')
-          ),
-        ],
-      ),
-    );
   }
 
   @override
   Widget build(BuildContext context) {
+    final size = MediaQuery.of(context).size;
+
     return Scaffold(
-      // Usamos Stack para apilar el fondo y el contenido
       body: Stack(
         children: [
-          // 1. IMAGEN DE FONDO (Hormigón)
-          Positioned.fill(
-            child: Image.asset(
-              'assets/login_bg.jpg', // Asegúrate de que el nombre coincida
-              fit: BoxFit.cover, // Cubre toda la pantalla sin deformarse
-            ),
-          ),
-          
-          // 2. CAPA DE OSCURECIMIENTO SUTIL (Opcional, para mejorar contraste)
-          Positioned.fill(
-            child: Container(
-              color: Colors.black.withOpacity(0.1), // Un 10% de negro sobre el hormigón
+          // 1. CAPA DE FONDO
+          Container(
+            decoration: const BoxDecoration(
+              image: DecorationImage(
+                image: AssetImage('assets/login_bg.jpg'),
+                fit: BoxFit.cover,
+              ),
             ),
           ),
 
-          // 3. CONTENIDO PRINCIPAL
-          Center(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(20.0),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  // LOGO NUEVO
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 40.0), 
-                    child: Image.asset(
-                      'assets/login_logo.png', // Asegúrate de que el nombre coincida
-                      height: 180, // Un poco más grande ya que incluye texto
+          // 2. CAPA DE CONTENIDO
+          SafeArea(
+            child: Center(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(horizontal: 30.0, vertical: 10.0),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    // LOGO XL (Tamaño restaurado a 0.35)
+                    Image.asset(
+                      'assets/login_logo.png',
+                      height: size.height * 0.35, // <--- TAMAÑO ORIGINAL GRANDE
                       fit: BoxFit.contain,
-                      errorBuilder: (c,e,s) => const Icon(Icons.fitness_center, size: 120, color: Colors.white),
-                    ),
-                  ),
-                  
-                  // TARJETA DEL FORMULARIO
-                  Card(
-                    elevation: 10,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                    color: Colors.white, // Tarjeta blanca sobre fondo de hormigón
-                    child: Padding(
-                      padding: const EdgeInsets.all(25.0),
-                      child: Column(
-                        children: [
-                          const Text(
-                            'Bienvenido',
-                            style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: Colors.black87),
-                          ),
-                          const SizedBox(height: 5),
-                          const Text("Inicia sesión en tu cuenta", style: TextStyle(color: Colors.grey)),
-                          const SizedBox(height: 30),
-                          TextField(
-                            controller: _emailController,
-                            keyboardType: TextInputType.emailAddress,
-                            decoration: InputDecoration(
-                              labelText: 'Email',
-                              prefixIcon: const Icon(Icons.email_outlined, color: Colors.teal),
-                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                              filled: true,
-                              fillColor: Colors.grey.shade50
-                            ),
-                          ),
-                          const SizedBox(height: 20),
-                          TextField(
-                            controller: _passwordController,
-                            obscureText: _obscurePassword,
-                            decoration: InputDecoration(
-                              labelText: 'Contraseña',
-                              prefixIcon: const Icon(Icons.lock_outline, color: Colors.teal),
-                              suffixIcon: IconButton(
-                                icon: Icon(_obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined, color: Colors.grey),
-                                onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
-                              ),
-                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                              filled: true,
-                              fillColor: Colors.grey.shade50
-                            ),
-                          ),
-                          Align(
-                            alignment: Alignment.centerRight,
-                            child: TextButton(
-                              onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const ActivationScreen())),
-                              child: const Text('¿Olvidaste tu contraseña?', style: TextStyle(color: Colors.teal)),
-                            ),
-                          ),
-                          const SizedBox(height: 20),
-                          SizedBox(
-                            width: double.infinity,
-                            height: 50,
-                            child: ElevatedButton(
-                              onPressed: _isLoading ? null : () => _login(),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.teal, 
-                                foregroundColor: Colors.white,
-                                elevation: 5,
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                              ),
-                              child: _isLoading 
-                                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) 
-                                : const Text('ENTRAR', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 1)),
-                            ),
-                          ),
-                          if (_hasStoredCredentials && !_isLoading) ...[
-                            const SizedBox(height: 25),
-                            const Divider(),
-                            const SizedBox(height: 10),
-                            GestureDetector(
-                              onTap: _loginBiometrico,
-                              child: Column(
-                                children: [
-                                  Icon(Icons.fingerprint, size: 50, color: Colors.teal.shade300),
-                                  const Text('Entrar con Huella / FaceID', style: TextStyle(color: Colors.grey, fontSize: 12)),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ],
+                      errorBuilder: (c, e, s) => Icon(
+                        Icons.fitness_center,
+                        size: 150,
+                        color: salufitGreen,
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 30),
-                  // BOTONES INFERIORES (Texto blanco sobre el fondo oscuro)
-                  TextButton(
-                    onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const ActivationScreen())),
-                    child: const Text.rich(
-                      TextSpan(
-                        text: "¿Primera vez? ",
-                        style: TextStyle(color: Colors.white70),
-                        children: [
-                          TextSpan(text: "Activa tu cuenta aquí", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, decoration: TextDecoration.underline))
-                        ]
-                      )
+                    
+                    const SizedBox(height: 20), 
+
+                    TextField(
+                      controller: _emailController,
+                      keyboardType: TextInputType.emailAddress,
+                      textInputAction: TextInputAction.next,
+                      decoration: InputDecoration(
+                        labelText: 'Email',
+                        filled: true,
+                        fillColor: Colors.white,
+                        prefixIcon: const Icon(Icons.email_outlined),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide.none,
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                           borderSide: const BorderSide(color: Colors.white),
+                        )
+                      ),
                     ),
-                  ),
-                  TextButton(
-                    onPressed: _abrirPrivacidad,
-                    child: const Text('Política de Privacidad', style: TextStyle(color: Colors.white54, fontSize: 11)),
-                  ),
-                ],
+                    const SizedBox(height: 15), 
+
+                    TextField(
+                      controller: _passwordController,
+                      obscureText: _isObscure,
+                      textInputAction: TextInputAction.done,
+                      onSubmitted: (_) => _login(),
+                      decoration: InputDecoration(
+                        labelText: 'Contraseña',
+                        filled: true,
+                        fillColor: Colors.white,
+                        prefixIcon: const Icon(Icons.lock_outline),
+                        suffixIcon: IconButton(
+                          icon: Icon(_isObscure
+                              ? Icons.visibility
+                              : Icons.visibility_off),
+                          onPressed: () =>
+                              setState(() => _isObscure = !_isObscure),
+                        ),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                           borderSide: BorderSide.none,
+                        ),
+                         enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(color: Colors.white),
+                        )
+                      ),
+                    ),
+                    const SizedBox(height: 25),
+
+                    // BOTÓN LOGIN
+                    SizedBox(
+                      width: double.infinity,
+                      height: 50,
+                      child: ElevatedButton(
+                        onPressed: _isLoading ? null : _login,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: salufitGreen,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          elevation: 5,
+                        ),
+                        child: _isLoading
+                            ? const CircularProgressIndicator(color: Colors.white)
+                            : const Text(
+                                'INICIAR SESIÓN',
+                                style: TextStyle(
+                                    fontWeight: FontWeight.bold, fontSize: 16),
+                              ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 5), 
+
+                    // BOTÓN REGISTRO (Pegado al login)
+                    TextButton(
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (context) => const ActivationScreen()),
+                        );
+                      },
+                      style: TextButton.styleFrom(
+                        padding: EdgeInsets.zero,
+                        minimumSize: const Size(0, 0),
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                      child: Text(
+                        '¿Primera vez? Activa tu cuenta aquí',
+                        style: TextStyle(
+                            color: salufitGreen,
+                            fontWeight: FontWeight.bold,
+                            decoration: TextDecoration.underline,
+                            fontSize: 13,
+                            shadows: [Shadow(color: Colors.white.withValues(alpha: 0.8), blurRadius: 2, offset: const Offset(0,1))]
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 20),
+
+                    Row(children: [
+                      Expanded(child: Divider(color: Colors.grey.shade300)),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 10),
+                        child: Text(
+                          'O usa biometría',
+                          style: TextStyle(color: Colors.grey.shade100, fontSize: 12),
+                        ),
+                      ),
+                      Expanded(child: Divider(color: Colors.grey.shade300)),
+                    ]),
+
+                    const SizedBox(height: 15), 
+
+                    // BOTÓN BIOMETRÍA COMPACTO
+                    InkWell(
+                      onTap: _checkBiometrics,
+                      borderRadius: BorderRadius.circular(50),
+                      child: Container(
+                        padding: const EdgeInsets.all(10), 
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: salufitGreen.withValues(alpha: 0.3),
+                            width: 2,
+                          ),
+                        ),
+                        child:
+                            Icon(Icons.fingerprint, size: 32, color: salufitGreen), 
+                      ),
+                    ),
+                    const SizedBox(height: 5),
+                    Text(
+                      'Toca para validar',
+                      style: TextStyle(color: Colors.grey.shade100, fontSize: 11),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),

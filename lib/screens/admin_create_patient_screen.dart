@@ -19,8 +19,8 @@ class _AdminCreatePatientScreenState extends State<AdminCreatePatientScreen> {
   bool _isLoading = false;
 
   String removeDiacritics(String str) {
-    var withDia = 'ÀÁÂÃÄÅàáâãäåÒÓÔÕÕÖØòóôõöøÈÉÊËèéêëðÇçÐÌÍÎÏìíîïÙÚÛÜùúûüÑñŠšŸÿýŽž';
-    var withoutDia = 'AAAAAAaaaaaaOOOOOOOooooooEEEEeeeeeCcDIIIIiiiiUUUUuuuuNnSsYyyZz';
+    const withDia = 'ÀÁÂÃÄÅàáâãäåÒÓÔÕÕÖØòóôõöøÈÉÊËèéêëðÇçÐÌÍÎÏìíîïÙÚÛÜùúûüÑñŠšŸÿýŽž';
+    const withoutDia = 'AAAAAAaaaaaaOOOOOOOooooooEEEEeeeeeCcDIIIIiiiiUUUUuuuuNnSsYyyZz';
     for (int i = 0; i < withDia.length; i++) {
       str = str.replaceAll(withDia[i], withoutDia[i]);
     }
@@ -28,18 +28,18 @@ class _AdminCreatePatientScreenState extends State<AdminCreatePatientScreen> {
   }
 
   List<String> _generateKeywords(String nombre, String id) {
-    List<String> keywords = [];
-    String nombreLimpio = removeDiacritics(nombre.toLowerCase().trim());
-    List<String> palabras = nombreLimpio.split(RegExp(r'\s+'));
+    final List<String> keywords = [];
+    final String nombreLimpio = removeDiacritics(nombre.toLowerCase().trim());
+    final List<String> palabras = nombreLimpio.split(RegExp(r'\s+'));
     keywords.addAll(palabras);
-    String idSinCeros = id.replaceFirst(RegExp(r'^0+'), '');
+    final String idSinCeros = id.replaceFirst(RegExp(r'^0+'), '');
     keywords.add(id.toLowerCase());
     if (idSinCeros.isNotEmpty) keywords.add(idSinCeros);
     return keywords.toSet().toList();
   }
 
   Future<void> _selectDate() async {
-    DateTime? picked = await showDatePicker(
+    final DateTime? picked = await showDatePicker(
       context: context,
       initialDate: DateTime(1990),
       firstDate: DateTime(1920),
@@ -54,21 +54,24 @@ class _AdminCreatePatientScreenState extends State<AdminCreatePatientScreen> {
     if (!_formKey.currentState!.validate()) return;
     setState(() { _isLoading = true; });
 
-    String idRaw = _idController.text.trim();
-    String idConCeros = idRaw.padLeft(6, '0');
-    String nombreInput = _nombreController.text.trim();
+    final String idRaw = _idController.text.trim();
+    final String idConCeros = idRaw.padLeft(6, '0');
+    final String nombreInput = _nombreController.text.trim();
 
     try {
       final docRef = FirebaseFirestore.instance.collection('users').doc(idConCeros);
       final docSnap = await docRef.get();
 
+      // CORRECCIÓN: Verificar si el widget sigue vivo tras el await
+      if (!mounted) return;
+
       if (docSnap.exists) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("¡Error! Ya existe un paciente con ese ID."), backgroundColor: Colors.red));
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('¡Error! Ya existe un paciente con ese ID.'), backgroundColor: Colors.red));
         setState(() { _isLoading = false; });
         return;
       }
 
-      List<String> searchKeywords = _generateKeywords(nombreInput, idConCeros);
+      final List<String> searchKeywords = _generateKeywords(nombreInput, idConCeros);
 
       await docRef.set({
         'id': idConCeros,
@@ -82,12 +85,16 @@ class _AdminCreatePatientScreenState extends State<AdminCreatePatientScreen> {
         'keywords': searchKeywords, 
       });
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Paciente $idConCeros creado con éxito"), backgroundColor: Colors.green));
-        Navigator.pop(context); 
-      }
+      // CORRECCIÓN: Verificar de nuevo tras el segundo await
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Paciente $idConCeros creado con éxito'), backgroundColor: Colors.green));
+      Navigator.pop(context); 
+      
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error al crear: $e"), backgroundColor: Colors.red));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error al crear: $e'), backgroundColor: Colors.red));
+      }
     } finally {
       if (mounted) setState(() { _isLoading = false; });
     }
@@ -96,7 +103,7 @@ class _AdminCreatePatientScreenState extends State<AdminCreatePatientScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("Alta Nuevo Paciente"), backgroundColor: Colors.teal, foregroundColor: Colors.white),
+      appBar: AppBar(title: const Text('Alta Nuevo Paciente'), backgroundColor: Colors.teal, foregroundColor: Colors.white),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
         child: Form(
@@ -105,17 +112,17 @@ class _AdminCreatePatientScreenState extends State<AdminCreatePatientScreen> {
             children: [
               const Icon(Icons.person_add, size: 60, color: Colors.teal),
               const SizedBox(height: 20),
-              TextFormField(controller: _idController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: "Número de Historia *", hintText: "Ej: 5800", border: OutlineInputBorder(), prefixIcon: Icon(Icons.badge)), validator: (v) => v!.isEmpty ? "Obligatorio" : null),
+              TextFormField(controller: _idController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Número de Historia *', hintText: 'Ej: 5800', border: OutlineInputBorder(), prefixIcon: Icon(Icons.badge)), validator: (v) => v!.isEmpty ? 'Obligatorio' : null),
               const SizedBox(height: 15),
-              TextFormField(controller: _nombreController, decoration: const InputDecoration(labelText: "Nombre y Apellidos *", border: OutlineInputBorder(), prefixIcon: Icon(Icons.person)), validator: (v) => v!.isEmpty ? "Obligatorio" : null),
+              TextFormField(controller: _nombreController, decoration: const InputDecoration(labelText: 'Nombre y Apellidos *', border: OutlineInputBorder(), prefixIcon: Icon(Icons.person)), validator: (v) => v!.isEmpty ? 'Obligatorio' : null),
               const SizedBox(height: 15),
-              TextFormField(controller: _emailController, keyboardType: TextInputType.emailAddress, decoration: const InputDecoration(labelText: "Email *", border: OutlineInputBorder(), prefixIcon: Icon(Icons.email)), validator: (v) => v!.contains('@') ? null : "Email inválido"),
+              TextFormField(controller: _emailController, keyboardType: TextInputType.emailAddress, decoration: const InputDecoration(labelText: 'Email *', border: OutlineInputBorder(), prefixIcon: Icon(Icons.email)), validator: (v) => v!.contains('@') ? null : 'Email inválido'),
               const SizedBox(height: 15),
-              TextFormField(controller: _telefonoController, keyboardType: TextInputType.phone, decoration: const InputDecoration(labelText: "Teléfono", hintText: "34629011055", border: OutlineInputBorder(), prefixIcon: Icon(Icons.phone))),
+              TextFormField(controller: _telefonoController, keyboardType: TextInputType.phone, decoration: const InputDecoration(labelText: 'Teléfono', hintText: '34629011055', border: OutlineInputBorder(), prefixIcon: Icon(Icons.phone))),
               const SizedBox(height: 15),
-              TextFormField(controller: _fechaController, readOnly: true, onTap: _selectDate, decoration: const InputDecoration(labelText: "Fecha Nacimiento", border: OutlineInputBorder(), prefixIcon: Icon(Icons.calendar_today))),
+              TextFormField(controller: _fechaController, readOnly: true, onTap: _selectDate, decoration: const InputDecoration(labelText: 'Fecha Nacimiento', border: OutlineInputBorder(), prefixIcon: Icon(Icons.calendar_today))),
               const SizedBox(height: 30),
-              SizedBox(width: double.infinity, height: 55, child: ElevatedButton(onPressed: _isLoading ? null : _crearPaciente, style: ElevatedButton.styleFrom(backgroundColor: Colors.teal, foregroundColor: Colors.white), child: _isLoading ? const CircularProgressIndicator(color: Colors.white) : const Text("GUARDAR PACIENTE")))
+              SizedBox(width: double.infinity, height: 55, child: ElevatedButton(onPressed: _isLoading ? null : _crearPaciente, style: ElevatedButton.styleFrom(backgroundColor: Colors.teal, foregroundColor: Colors.white), child: _isLoading ? const CircularProgressIndicator(color: Colors.white) : const Text('GUARDAR PACIENTE')))
             ],
           ),
         ),

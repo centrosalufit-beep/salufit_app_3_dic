@@ -33,6 +33,35 @@
           ]
         }
       }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:682610782118:android:27f57d8fb485b17800e967",
+        "android_client_info": {
+          "package_name": "com.salufit.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "682610782118-up9vf2fli9dvc9n970htdlt1p179fd6o.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBZqrHi4neZxNpoZ6Kg-rYtvE8nnP93jIU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "682610782118-up9vf2fli9dvc9n970htdlt1p179fd6o.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
     }
   ],
   "configuration_version": "1"

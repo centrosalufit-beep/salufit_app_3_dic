@@ -20,7 +20,7 @@ class _AdminUploadExcelScreenState extends State<AdminUploadExcelScreen> {
 
   Future<void> _procesarExcel() async {
     try {
-      FilePickerResult? result = await FilePicker.platform.pickFiles(
+      final FilePickerResult? result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
         allowedExtensions: ['xlsx'],
         withData: true, 
@@ -43,7 +43,7 @@ class _AdminUploadExcelScreenState extends State<AdminUploadExcelScreen> {
         }
       } else {
         if (result.files.single.path != null) {
-          File file = File(result.files.single.path!);
+          final File file = File(result.files.single.path!);
           bytes = file.readAsBytesSync();
         } else {
           if (result.files.single.bytes != null) {
@@ -54,17 +54,18 @@ class _AdminUploadExcelScreenState extends State<AdminUploadExcelScreen> {
         }
       }
 
-      var excel = Excel.decodeBytes(bytes);
+      final excel = Excel.decodeBytes(bytes);
 
-      _status = 'Descargando lista de pacientes...';
-      var usersSnap = await FirebaseFirestore.instance.collection('users').get();
+      setState(() { _status = 'Descargando lista de pacientes...'; });
       
-      Map<String, String> userMap = {};
-      Map<String, String> userEmailMap = {}; // Mapa para guardar emails también
+      final usersSnap = await FirebaseFirestore.instance.collection('users').get();
+      
+      final Map<String, String> userMap = {};
+      final Map<String, String> userEmailMap = {}; 
       
       for (var doc in usersSnap.docs) {
-        var data = doc.data();
-        String nombre = (data['nombreCompleto'] ?? '').toString().toLowerCase().trim();
+        final data = doc.data();
+        final String nombre = (data['nombreCompleto'] ?? '').toString().toLowerCase().trim();
         if (nombre.isNotEmpty) {
           userMap[nombre] = doc.id;
           if (data['email'] != null) {
@@ -73,36 +74,36 @@ class _AdminUploadExcelScreenState extends State<AdminUploadExcelScreen> {
         }
       }
 
-      String sheetName = excel.tables.keys.firstWhere(
+      final String sheetName = excel.tables.keys.firstWhere(
         (k) => k.toUpperCase() == 'CITAS',
         orElse: () => excel.tables.keys.first
       );
 
-      var table = excel.tables[sheetName];
+      final table = excel.tables[sheetName];
       if (table == null) throw 'No se encontró la pestaña CITAS';
 
-      int totalRows = table.maxRows;
+      final int totalRows = table.maxRows;
       int errors = 0;
       int success = 0;
-      int duplicatesUpdated = 0;
+      // CORRECCIÓN: Eliminada variable 'duplicatesUpdated' no usada
 
       var batch = FirebaseFirestore.instance.batch();
       int batchCount = 0;
 
       for (int i = 1; i < totalRows; i++) {
-        var row = table.rows[i];
+        final row = table.rows[i];
         if (row.isEmpty) continue;
 
         try {
-          var pacienteNombre = _getCellValue(row.length > 2 ? row[2] : null); 
-          var fechaStr = _getCellValue(row.length > 3 ? row[3] : null);       
-          var horaInicioStr = _getCellValue(row.length > 4 ? row[4] : null);  
-          var especialidad = _getCellValue(row.length > 10 ? row[10] : null);  
-          var profesional = _getCellValue(row.length > 1 ? row[1] : null);    
+          final pacienteNombre = _getCellValue(row.length > 2 ? row[2] : null); 
+          final fechaStr = _getCellValue(row.length > 3 ? row[3] : null);       
+          final horaInicioStr = _getCellValue(row.length > 4 ? row[4] : null);  
+          final especialidad = _getCellValue(row.length > 10 ? row[10] : null);  
+          final profesional = _getCellValue(row.length > 1 ? row[1] : null);    
 
           if (pacienteNombre.isEmpty || fechaStr.isEmpty) continue;
 
-          String? userId = userMap[pacienteNombre.toLowerCase().trim()];
+          final String? userId = userMap[pacienteNombre.toLowerCase().trim()];
           
           if (userId != null) {
             DateTime fechaBase;
@@ -112,39 +113,35 @@ class _AdminUploadExcelScreenState extends State<AdminUploadExcelScreen> {
                fechaBase = DateTime.parse(fechaStr);
             }
 
-            TimeOfDay hora = _parseTime(horaInicioStr);
-            DateTime fechaFinal = DateTime(fechaBase.year, fechaBase.month, fechaBase.day, hora.hour, hora.minute);
+            final TimeOfDay hora = _parseTime(horaInicioStr);
+            final DateTime fechaFinal = DateTime(fechaBase.year, fechaBase.month, fechaBase.day, hora.hour, hora.minute);
 
-            // --- EVITAR DUPLICADOS: ID DETERMINISTA ---
-            // El ID será: userId_timestamp (ej: 004989_1678882200000)
-            String uniqueDocId = "${userId}_${fechaFinal.millisecondsSinceEpoch}";
+            final String uniqueDocId = '${userId}_${fechaFinal.millisecondsSinceEpoch}';
             
-            var docRef = FirebaseFirestore.instance.collection('appointments').doc(uniqueDocId);
-            
-            // Obtenemos el email para guardarlo directamente (Seguridad Hospital Grade)
-            String? userEmail = userEmailMap[userId];
+            final docRef = FirebaseFirestore.instance.collection('appointments').doc(uniqueDocId);
+            final String? userEmail = userEmailMap[userId];
 
             batch.set(docRef, {
-              'id': uniqueDocId, // Guardamos el ID dentro también por si acaso
+              'id': uniqueDocId, 
               'userId': userId,
-              'userEmail': userEmail, // <--- CLAVE PARA SEGURIDAD
+              'userEmail': userEmail,
               'pacienteNombre': pacienteNombre,
               'profesional': profesional,
               'especialidad': especialidad,
               'fechaHoraInicio': Timestamp.fromDate(fechaFinal),
               'estado': 'Pendiente',
               'origen': 'Importación App'
-            }, SetOptions(merge: true)); // <--- IMPORTANTE: merge: true actualiza si existe
+            }, SetOptions(merge: true));
 
             batchCount++;
             success++;
           } else {
-            print('No encontrado usuario: $pacienteNombre');
+            debugPrint('No encontrado usuario: $pacienteNombre');
             errors++;
           }
 
         } catch (e) {
-          print('Error en fila $i: $e');
+          debugPrint('Error en fila $i: $e');
           errors++;
         }
 
@@ -188,7 +185,7 @@ class _AdminUploadExcelScreenState extends State<AdminUploadExcelScreen> {
 
   TimeOfDay _parseTime(String timeStr) {
     try {
-      List<String> parts = timeStr.split(':');
+      final List<String> parts = timeStr.split(':');
       return TimeOfDay(hour: int.parse(parts[0]), minute: int.parse(parts[1]));
     } catch (e) {
       return const TimeOfDay(hour: 0, minute: 0);
