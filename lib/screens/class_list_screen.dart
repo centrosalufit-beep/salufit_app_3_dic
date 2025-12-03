@@ -67,7 +67,7 @@ class _ClassListScreenState extends State<ClassListScreen> {
   }
 
   Map<String, dynamic> _getClassVisuals(String nombreClase) {
-    String nombre = nombreClase.toLowerCase();
+    final String nombre = nombreClase.toLowerCase();
     
     if (nombre.contains('entrenamiento')) {
       return {'colors': [const Color(0xFFD32F2F), const Color(0xFFE57373)], 'icon': Icons.fitness_center, 'textColor': Colors.red.shade900};
@@ -82,7 +82,7 @@ class _ClassListScreenState extends State<ClassListScreen> {
   }
 
   Future<void> _borrarClaseAdmin(String classId) async {
-    bool? confirmar = await showDialog(
+    final bool? confirmar = await showDialog(
       context: context, 
       builder: (c) => AlertDialog(
         title: const Text('Borrar Clase (Admin)'), 
@@ -111,7 +111,7 @@ class _ClassListScreenState extends State<ClassListScreen> {
   Future<void> _reservarClase(String classId, String className) async {
     setState(() { _isLoadingAction = true; });
     try {
-      String? token = await FirebaseAuth.instance.currentUser?.getIdToken();
+      final String? token = await FirebaseAuth.instance.currentUser?.getIdToken();
       final response = await http.post(
         Uri.parse(_crearReservaUrl), 
         headers: {
@@ -144,7 +144,7 @@ class _ClassListScreenState extends State<ClassListScreen> {
     final int horasRestantes = fechaClase.difference(ahora).inHours;
     final bool esPenalizado = horasRestantes < 24;
     
-    bool? confirmar = await showDialog(
+    final bool? confirmar = await showDialog(
       context: context, 
       builder: (c) => AlertDialog(
         title: Text(esPenalizado ? '¡Atención!' : 'Cancelar Reserva', style: TextStyle(color: esPenalizado ? Colors.red : Colors.black, fontWeight: FontWeight.bold)), 
@@ -160,7 +160,7 @@ class _ClassListScreenState extends State<ClassListScreen> {
 
     setState(() { _isLoadingAction = true; });
     try {
-      String? token = await FirebaseAuth.instance.currentUser?.getIdToken();
+      final String? token = await FirebaseAuth.instance.currentUser?.getIdToken();
       final response = await http.post(
         Uri.parse(_cancelarReservaUrl), 
         headers: {
@@ -175,8 +175,8 @@ class _ClassListScreenState extends State<ClassListScreen> {
       if (!mounted) return;
       
       if (response.statusCode == 200) {
-        bool tokenDevuelto = data['tokenDevuelto'] ?? false;
-        Color colorSnack = tokenDevuelto ? Colors.green : Colors.orange;
+        final bool tokenDevuelto = data['tokenDevuelto'] ?? false;
+        final Color colorSnack = tokenDevuelto ? Colors.green : Colors.orange;
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(data['message']), backgroundColor: colorSnack, duration: const Duration(seconds: 4)));
       } else {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(data['error'] ?? 'Error'), backgroundColor: Colors.red));
@@ -204,8 +204,8 @@ class _ClassListScreenState extends State<ClassListScreen> {
 
   @override
   Widget build(BuildContext context) {
-    String idConCeros = widget.userId.padLeft(6, '0');
-    bool isAdmin = _adminIds.contains(idConCeros);
+    final String idConCeros = widget.userId.padLeft(6, '0');
+    final bool isAdmin = _adminIds.contains(idConCeros);
     
     final String? userEmail = FirebaseAuth.instance.currentUser?.email;
     if (userEmail == null) return const Center(child: Text('Error de sesión'));
@@ -267,10 +267,10 @@ class _ClassListScreenState extends State<ClassListScreen> {
                     .where('userEmail', isEqualTo: userEmail)
                     .snapshots(),
                 builder: (context, bookingSnapshot) {
-                  Map<String, String> misReservas = {};
+                  final Map<String, String> misReservas = {};
                   if (bookingSnapshot.hasData) {
                     for (var doc in bookingSnapshot.data!.docs) {
-                      var data = doc.data() as Map<String, dynamic>;
+                      final data = doc.data() as Map<String, dynamic>;
                       misReservas[data['groupClassId']] = doc.id;
                     }
                   }
@@ -289,7 +289,7 @@ class _ClassListScreenState extends State<ClassListScreen> {
                             final date = _calendarDays[index]; 
                             final isSelected = isSameDay(date, _selectedDate);
                             final List<String> diasSemana = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
-                            String nombreDia = diasSemana[date.weekday - 1];
+                            final String nombreDia = diasSemana[date.weekday - 1];
 
                             return GestureDetector(
                               onTap: () => setState(() => _selectedDate = date),
@@ -339,11 +339,11 @@ class _ClassListScreenState extends State<ClassListScreen> {
                             final todasLasClases = snapshot.data!.docs.map((doc) => GroupClass.fromFirestore(doc)).toList();
 
                             final clasesDelDia = todasLasClases.where((clase) {
-                              var docSnapshot = snapshot.data!.docs.firstWhere((d) => d.id == clase.id);
-                              Timestamp? ts = (docSnapshot.data() as Map<String, dynamic>)['fechaHoraInicio'];
+                              final docSnapshot = snapshot.data!.docs.firstWhere((d) => d.id == clase.id);
+                              final Timestamp? ts = (docSnapshot.data() as Map<String, dynamic>)['fechaHoraInicio'];
                               if (ts == null) return false;
-                              DateTime fechaClase = ts.toDate();
-                              bool coincideDia = isSameDay(fechaClase, _selectedDate);
+                              final DateTime fechaClase = ts.toDate();
+                              final bool coincideDia = isSameDay(fechaClase, _selectedDate);
                               
                               // CORRECCIÓN: Ahora filtramos por hora PARA TODOS, incluidos admins
                               bool esFutura = true;
@@ -361,28 +361,28 @@ class _ClassListScreenState extends State<ClassListScreen> {
                               itemCount: clasesDelDia.length,
                               separatorBuilder: (c, i) => const SizedBox(height: 15),
                               itemBuilder: (context, index) {
-                                var doc = clasesDelDia[index];
-                                var claseData = snapshot.data!.docs.firstWhere((d) => d.id == doc.id).data() as Map<String, dynamic>;
+                                final doc = clasesDelDia[index];
+                                final claseData = snapshot.data!.docs.firstWhere((d) => d.id == doc.id).data() as Map<String, dynamic>;
                                 
-                                String classId = doc.id;
-                                String nombre = claseData['nombre'] ?? 'Clase';
-                                String monitor = claseData['monitor'] ?? '';
-                                int aforoActual = claseData['aforoActual'] ?? 0;
-                                int aforoMax = claseData['aforoMaximo'] ?? 12;
-                                Timestamp ts = claseData['fechaHoraInicio'];
-                                DateTime fechaClase = ts.toDate();
+                                final String classId = doc.id;
+                                final String nombre = claseData['nombre'] ?? 'Clase';
+                                final String monitor = claseData['monitor'] ?? '';
+                                final int aforoActual = claseData['aforoActual'] ?? 0;
+                                final int aforoMax = claseData['aforoMaximo'] ?? 12;
+                                final Timestamp ts = claseData['fechaHoraInicio'];
+                                final DateTime fechaClase = ts.toDate();
                                 
-                                String horario = "${DateFormat('HH:mm').format(fechaClase)} - ${DateFormat('HH:mm').format(fechaClase.add(const Duration(hours: 1)))}";
+                                final String horario = "${DateFormat('HH:mm').format(fechaClase)} - ${DateFormat('HH:mm').format(fechaClase.add(const Duration(hours: 1)))}";
                                 
                                 final bool estaLlena = aforoActual >= aforoMax;
                                 final bool yaReservada = misReservas.containsKey(classId);
                                 String? bookingId;
                                 if(yaReservada) bookingId = misReservas[classId];
 
-                                Map<String, dynamic> visual = _getClassVisuals(nombre);
-                                List<Color> gradientColors = visual['colors'];
-                                IconData iconData = visual['icon'];
-                                Color textBtnColor = visual['textColor'];
+                                final Map<String, dynamic> visual = _getClassVisuals(nombre);
+                                final List<Color> gradientColors = visual['colors'];
+                                final IconData iconData = visual['icon'];
+                                final Color textBtnColor = visual['textColor'];
 
                                 return Container(
                                   constraints: const BoxConstraints(minHeight: 125), 
@@ -552,7 +552,7 @@ class _CreateClassModalState extends State<_CreateClassModal> {
       },
     );
     if (picked != null) {
-      bool existe = _selectedTimes.any((t) => t.hour == picked.hour && t.minute == picked.minute);
+      final bool existe = _selectedTimes.any((t) => t.hour == picked.hour && t.minute == picked.minute);
       if (!existe) {
         setState(() {
           _selectedTimes.add(picked);
@@ -570,14 +570,14 @@ class _CreateClassModalState extends State<_CreateClassModal> {
       return;
     }
     setState(() { _isLoading = true; });
-    DateTime now = DateTime.now();
-    DateTime targetDate = DateTime(now.year, now.month + _selectedMonthOffset, 1);
+    final DateTime now = DateTime.now();
+    final DateTime targetDate = DateTime(now.year, now.month + _selectedMonthOffset, 1);
     int totalCreated = 0;
     int errors = 0;
-    String? token = await FirebaseAuth.instance.currentUser?.getIdToken();
+    final String? token = await FirebaseAuth.instance.currentUser?.getIdToken();
 
     for (int i = 0; i < _selectedTimes.length; i++) {
-      TimeOfDay time = _selectedTimes[i];
+      final TimeOfDay time = _selectedTimes[i];
       if (mounted) setState(() => _loadingStatus = "Creando horario ${time.hour}:${time.minute.toString().padLeft(2,'0')}...");
       try {
         final response = await http.post(
@@ -615,9 +615,9 @@ class _CreateClassModalState extends State<_CreateClassModal> {
 
   @override
   Widget build(BuildContext context) {
-    DateTime now = DateTime.now();
-    String mesActual = DateFormat('MMMM', 'es').format(now).toUpperCase();
-    String mesSiguiente = DateFormat('MMMM', 'es').format(DateTime(now.year, now.month + 1)).toUpperCase();
+    final DateTime now = DateTime.now();
+    final String mesActual = DateFormat('MMMM', 'es').format(now).toUpperCase();
+    final String mesSiguiente = DateFormat('MMMM', 'es').format(DateTime(now.year, now.month + 1)).toUpperCase();
 
     // CORRECCIÓN: Botón "Generar" protegido por SafeArea
     return SafeArea(
@@ -671,7 +671,7 @@ class _CreateClassModalState extends State<_CreateClassModal> {
   }
 
   Widget _dayBtn(String label, int value) {
-    bool selected = _selectedDays.contains(value);
+    final bool selected = _selectedDays.contains(value);
     return GestureDetector(onTap: () => setState(() => selected ? _selectedDays.remove(value) : _selectedDays.add(value)), child: CircleAvatar(backgroundColor: selected ? Colors.teal : Colors.grey.shade200, child: Text(label, style: TextStyle(color: selected ? Colors.white : Colors.black))));
   }
 }

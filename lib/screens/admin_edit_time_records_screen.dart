@@ -24,10 +24,11 @@ class _AdminEditTimeRecordsScreenState extends State<AdminEditTimeRecordsScreen>
   String removeDiacritics(String str) {
     const withDia = 'ÀÁÂÃÄÅàáâãäåÒÓÔÕÕÖØòóôõöøÈÉÊËèéêëðÇçÐÌÍÎÏìíîïÙÚÛÜùúûüÑñŠšŸÿýŽž';
     const withoutDia = 'AAAAAAaaaaaaOOOOOOOooooooEEEEeeeeeCcDIIIIiiiiUUUUuuuuNnSsYyyZz';
+    var result = str;
     for (int i = 0; i < withDia.length; i++) {
-      str = str.replaceAll(withDia[i], withoutDia[i]);
+      result = result.replaceAll(withDia[i], withoutDia[i]);
     }
-    return str;
+    return result;
   }
 
   Future<void> _cargarStaff() async {
@@ -132,6 +133,7 @@ class _AdminEditTimeRecordsScreenState extends State<AdminEditTimeRecordsScreen>
         actions: [
           TextButton(
             onPressed: () async {
+              // Confirmación de borrado
               final bool? confirm = await showDialog(
                 context: dialogContext, 
                 builder: (c) => AlertDialog(
@@ -143,13 +145,15 @@ class _AdminEditTimeRecordsScreenState extends State<AdminEditTimeRecordsScreen>
               if (confirm == true) {
                 await FirebaseFirestore.instance.collection('timeClockRecords').doc(docId).delete();
                 
+                // Verificamos si el widget principal sigue montado antes de usar lógica de UI
                 if (!mounted) return; 
                 
-                // ignore: use_build_context_synchronously
+                // Cerramos el diálogo usando su propio contexto si sigue válido
                 if (dialogContext.mounted) {
                   Navigator.pop(dialogContext);
                 }
                 
+                // Usamos el contexto global (this.context) que está protegido por !mounted
                 ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Registro eliminado')));
               }
             }, 
@@ -173,7 +177,6 @@ class _AdminEditTimeRecordsScreenState extends State<AdminEditTimeRecordsScreen>
 
                 if (!mounted) return;
 
-                // ignore: use_build_context_synchronously
                 if (dialogContext.mounted) {
                   Navigator.pop(dialogContext);
                 }
@@ -267,7 +270,7 @@ class _AdminEditTimeRecordsScreenState extends State<AdminEditTimeRecordsScreen>
                 ElevatedButton(
                   onPressed: () async {
                     if (selectedUserId == null) {
-                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Selecciona un profesional')));
+                      ScaffoldMessenger.of(this.context).showSnackBar(const SnackBar(content: Text('Selecciona un profesional')));
                       return;
                     }
                     try {
@@ -291,16 +294,16 @@ class _AdminEditTimeRecordsScreenState extends State<AdminEditTimeRecordsScreen>
 
                       if (!mounted) return; 
 
-                      // ignore: use_build_context_synchronously
+                      // Verificación segura del contexto del diálogo
                       if (dialogContext.mounted) {
                         Navigator.pop(dialogContext); 
                       }
                       
-                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Fichaje creado'), backgroundColor: Colors.green));
+                      ScaffoldMessenger.of(this.context).showSnackBar(const SnackBar(content: Text('Fichaje creado'), backgroundColor: Colors.green));
                       
                     } catch (e) {
                        if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+                        ScaffoldMessenger.of(this.context).showSnackBar(SnackBar(content: Text('Error: $e')));
                       }
                     }
                   },

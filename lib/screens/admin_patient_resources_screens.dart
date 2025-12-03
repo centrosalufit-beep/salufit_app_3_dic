@@ -20,15 +20,15 @@ class _AdminPatientDocumentsScreenState extends State<AdminPatientDocumentsScree
   bool _isUploading = false;
 
   Future<void> _subirArchivoPrivado() async {
-    FilePickerResult? result = await FilePicker.platform.pickFiles(type: FileType.custom, allowedExtensions: ['pdf', 'jpg', 'png']);
+    final FilePickerResult? result = await FilePicker.platform.pickFiles(type: FileType.custom, allowedExtensions: ['pdf', 'jpg', 'png']);
     if (result != null) {
       setState(() => _isUploading = true);
       try {
-        File file = File(result.files.single.path!);
-        String fileName = result.files.single.name;
-        Reference ref = FirebaseStorage.instance.ref().child('pacientes/${widget.userId}/documentos/$fileName');
+        final File file = File(result.files.single.path!);
+        final String fileName = result.files.single.name;
+        final Reference ref = FirebaseStorage.instance.ref().child('pacientes/${widget.userId}/documentos/$fileName');
         await ref.putFile(file);
-        String url = await ref.getDownloadURL();
+        final String url = await ref.getDownloadURL();
 
         await FirebaseFirestore.instance.collection('documents').add({
           'userId': widget.userId,
@@ -60,7 +60,7 @@ class _AdminPatientDocumentsScreenState extends State<AdminPatientDocumentsScree
           return ListView.builder(
             itemCount: s.data!.docs.length,
             itemBuilder: (c, i) {
-              var d = s.data!.docs[i];
+              final d = s.data!.docs[i];
               return ListTile(
                 leading: const Icon(Icons.insert_drive_file),
                 title: Text(d['titulo']),

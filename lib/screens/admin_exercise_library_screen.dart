@@ -32,7 +32,7 @@ class _AdminExerciseLibraryScreenState extends State<AdminExerciseLibraryScreen>
   Future<void> _sugerirSiguienteNumero() async {
     final query = await FirebaseFirestore.instance.collection('exercises').orderBy('orden', descending: true).limit(1).get();
     if (query.docs.isNotEmpty) {
-      final ultimo = query.docs.first.data()['orden'] as int;
+      final int ultimo = query.docs.first.data()['orden'] as int;
       setState(() => _ordenController.text = (ultimo + 1).toString());
     } else {
       setState(() => _ordenController.text = '1');
@@ -40,16 +40,15 @@ class _AdminExerciseLibraryScreenState extends State<AdminExerciseLibraryScreen>
   }
 
   Future<void> _seleccionarArchivo(bool video) async {
-    final picker = ImagePicker();
-    final XFile? pickedFile;
-    if (video) {
-      pickedFile = await picker.pickVideo(source: ImageSource.gallery);
-    } else {
-      pickedFile = await picker.pickImage(source: ImageSource.gallery);
-    }
+    final ImagePicker picker = ImagePicker();
+    // Usamos final con un operador ternario para satisfacer 'prefer_final_locals' y limpiar el flujo
+    final XFile? pickedFile = video 
+        ? await picker.pickVideo(source: ImageSource.gallery) 
+        : await picker.pickImage(source: ImageSource.gallery);
+
     if (pickedFile != null) {
       setState(() {
-        _archivoSeleccionado = File(pickedFile!.path);
+        _archivoSeleccionado = File(pickedFile.path); // path siempre existe si pickedFile no es null
         _isVideo = video;
       });
     }
@@ -70,7 +69,7 @@ class _AdminExerciseLibraryScreenState extends State<AdminExerciseLibraryScreen>
 
       if (queryOcupado.docs.isNotEmpty) {
         if (mounted) {
-          bool? confirm = await showDialog(
+          final bool? confirm = await showDialog(
             context: context,
             builder: (c) => AlertDialog(
               title: const Text('Posición ocupada'),
@@ -157,7 +156,12 @@ class _AdminExerciseLibraryScreenState extends State<AdminExerciseLibraryScreen>
           key: _formKey,
           child: Column(
             children: [
-              DropdownButtonFormField<String>(value: _selectedFamily, items: _familias.map((f) => DropdownMenuItem(value: f, child: Text(f))).toList(), onChanged: (v) => setState(() => _selectedFamily = v!)),
+              DropdownButtonFormField<String>(
+                // CORRECCIÓN: Usamos initialValue para evitar el warning de 'deprecated'
+                initialValue: _selectedFamily, 
+                items: _familias.map((f) => DropdownMenuItem(value: f, child: Text(f))).toList(), 
+                onChanged: (v) => setState(() => _selectedFamily = v!)
+              ),
               const SizedBox(height: 20),
               TextFormField(controller: _ordenController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Nº Orden')),
               const SizedBox(height: 20),

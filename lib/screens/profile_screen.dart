@@ -53,6 +53,56 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
+  // --- FUNCIÓN DE ELIMINAR CUENTA (REQUISITO APPLE) ---
+  Future<void> _eliminarCuenta() async {
+    final bool? confirmar = await showDialog(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: const Text('Eliminar Cuenta', style: TextStyle(color: Colors.red)),
+        content: const Text('Esta acción es irreversible. Se borrarán tus datos personales y reservas.\n\n¿Estás seguro?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Cancelar')),
+          TextButton(
+            onPressed: () => Navigator.pop(c, true), 
+            child: const Text('SÍ, BORRAR', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold))
+          ),
+        ],
+      )
+    );
+
+    if (confirmar != true) return;
+
+    setState(() => _isLoading = true);
+
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return;
+
+      // 1. Borrar datos de Firestore (opcional: o marcar como deleted)
+      await FirebaseFirestore.instance.collection('users').doc(user.uid).delete();
+      
+      // 2. Borrar autenticación
+      await user.delete();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Cuenta eliminada correctamente')));
+        Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (c) => const LoginScreen()), (r) => false);
+      }
+    } on FirebaseAuthException catch (e) {
+      if (e.code == 'requires-recent-login') {
+        if (mounted) {
+           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Por seguridad, cierra sesión e inicia de nuevo para borrar la cuenta.')));
+        }
+      } else {
+         if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+      }
+    } catch (e) {
+       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error general: $e')));
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
   Future<void> _cancelarReserva(String bookingId, String classId, DateTime fechaClase) async {
     final DateTime ahora = DateTime.now();
     final Duration diferencia = fechaClase.difference(ahora);
@@ -501,8 +551,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 },
               ),
               const SizedBox(height: 40),
-              SizedBox(width: double.infinity, child: OutlinedButton.icon(onPressed: () { Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (context) => const LoginScreen()), (route) => false); }, icon: const Icon(Icons.logout, color: Colors.red), label: const Text('Cerrar Sesión', style: TextStyle(color: Colors.red)), style: OutlinedButton.styleFrom(padding: const EdgeInsets.all(15), side: const BorderSide(color: Colors.red), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))))),
-              const SizedBox(height: 20),
+              
+              // BOTONES DE GESTIÓN DE CUENTA
+              SizedBox(width: double.infinity, child: OutlinedButton.icon(onPressed: () { Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (context) => const LoginScreen()), (route) => false); }, icon: const Icon(Icons.logout, color: Colors.orange), label: const Text('Cerrar Sesión', style: TextStyle(color: Colors.orange)), style: OutlinedButton.styleFrom(padding: const EdgeInsets.all(15), side: const BorderSide(color: Colors.orange), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))))),
+              const SizedBox(height: 10),
+              Center(
+                child: TextButton(
+                  onPressed: _eliminarCuenta,
+                  child: const Text('Eliminar mi cuenta definitivamente', style: TextStyle(color: Colors.red, fontSize: 12, fontWeight: FontWeight.bold)),
+                ),
+              ),
+
+              const SizedBox(height: 10),
               Center(child: TextButton(onPressed: _abrirPrivacidad, child: const Text('Política de Privacidad', style: TextStyle(color: Colors.grey, decoration: TextDecoration.underline, fontSize: 12)))),
               const SizedBox(height: 20),
             ],

@@ -2,7 +2,9 @@ name: salufit_app
 description: Aplicación de gestión integral para Salufit.
 publish_to: 'none'
 
-version: 1.0.0+1
+# CAMBIO 1: Subimos versión. 
+# El +2 es vital para que la tienda detecte la actualización.
+version: 1.0.1+2
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
@@ -23,6 +25,7 @@ dependencies:
   firebase_storage: ^12.0.0
   cloud_functions: ^5.0.0
   firebase_messaging: ^15.0.0 
+  firebase_app_check: ^0.3.2+10
 
   # --- CONEXIÓN INTERNET ---
   http: ^1.2.0
@@ -30,8 +33,9 @@ dependencies:
 
   # --- SEGURIDAD Y BIOMETRÍA ---
   local_auth: ^3.0.0
+  local_auth_platform_interface: ^1.1.0
   flutter_secure_storage: ^9.0.0
-  shared_preferences: ^2.3.0  # <--- ¡AÑADIDO! IMPORTANTE PARA GUARDAR PROGRESO
+  shared_preferences: ^2.3.0
 
   # --- HARDWARE Y SENSORES ---
   permission_handler: ^11.3.0
@@ -53,19 +57,19 @@ dependencies:
   # --- MULTIMEDIA ---
   video_player: ^2.8.0
   chewie: ^1.8.0
+  image_picker: ^1.2.1
 
   # --- UI ---
   cupertino_icons: ^1.0.2
-  firebase_app_check: ^0.3.2+10
-  local_auth_platform_interface: ^1.1.0
-  very_good_analysis: ^10.0.0
-  change_app_package_name: ^1.5.0
-  image_picker: ^1.2.1
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
+  
+  # CAMBIO 2: Movidos aquí para no ensuciar la app final
+  very_good_analysis: ^10.0.0
+  change_app_package_name: ^1.5.0
   
   # Generador de Iconos
   flutter_launcher_icons: "^0.13.1"

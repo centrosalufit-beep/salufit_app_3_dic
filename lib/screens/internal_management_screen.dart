@@ -523,7 +523,9 @@ class _TaskList extends StatelessWidget {
           String msg = '¡Todo limpio!';
           if (filterField == 'creatorId') {
             msg = 'No has asignado tareas aún';
-          } else if (statusFilter == 'done') msg = 'Sin tareas completadas';
+          } else if (statusFilter == 'done') {
+            msg = 'Sin tareas completadas';
+          }
           return Center(child: Text(msg, style: const TextStyle(color: Colors.grey)));
         }
 
@@ -562,8 +564,11 @@ class _TaskList extends StatelessWidget {
                     ),
                 title: Text(data['title'], style: TextStyle(decoration: esCompletada ? TextDecoration.lineThrough : null, fontWeight: FontWeight.bold)),
                 subtitle: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    // ignore: curly_braces_in_flow_control_structures
-                    if(data['description'] != null) Text(data['description'], maxLines: 2, overflow: TextOverflow.ellipsis),
+                    // Solución: Usar ternario en lugar de if para satisfacer al linter
+                    data['description'] != null 
+                        ? Text(data['description'], maxLines: 2, overflow: TextOverflow.ellipsis)
+                        : const SizedBox.shrink(),
+                        
                     const SizedBox(height: 5),
                     Row(children: [Icon(Icons.calendar_today, size: 12, color: fechaColor), const SizedBox(width: 4), Text(DateFormat('dd/MM/yyyy').format(limite), style: TextStyle(color: fechaColor, fontSize: 12, fontWeight: FontWeight.bold)), const Spacer(), Text(soyElCreador ? "Para: ${data['assignedToName'] ?? 'Desconocido'}" : "De: ${data['creatorName'] ?? 'Admin'}", style: const TextStyle(fontSize: 10, fontStyle: FontStyle.italic, color: Colors.deepPurple))]),
                 ]),
@@ -675,7 +680,9 @@ class _CreateTaskDialogState extends State<_CreateTaskDialog> {
             
             String myName = 'Admin'; 
             final myDoc = await FirebaseFirestore.instance.collection('users').doc(widget.creatorId).get(); 
-            if(myDoc.exists) myName = myDoc.data()?['nombreCompleto'] ?? 'Compañero';
+            if(myDoc.exists) {
+              myName = myDoc.data()?['nombreCompleto'] ?? 'Compañero';
+            }
             
             await FirebaseFirestore.instance.collection('internal_tasks').add({
               'title': _titleController.text.trim(), 
@@ -689,7 +696,6 @@ class _CreateTaskDialogState extends State<_CreateTaskDialog> {
               'createdAt': FieldValue.serverTimestamp()
             });
             
-            // CORREGIDO: Añadidas llaves al if
             if (!context.mounted) {
               return;
             }

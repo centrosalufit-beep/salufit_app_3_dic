@@ -28,7 +28,7 @@ class _AdminUploadExcelScreenState extends State<AdminUploadExcelScreen> {
   }
 
   Future<void> _seleccionarArchivo() async {
-    FilePickerResult? result = await FilePicker.platform.pickFiles(
+    final FilePickerResult? result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['xlsx', 'csv'], // Solo permitimos Excel
     );
@@ -47,13 +47,13 @@ class _AdminUploadExcelScreenState extends State<AdminUploadExcelScreen> {
 
     try {
       // 1. Definir la ruta en Storage según el tipo
-      String carpeta = _tipoImportacion == 'pacientes' ? 'imports_pacientes' : 'imports_citas';
-      String fileName = '${_tipoImportacion}_${DateTime.now().millisecondsSinceEpoch}.${_archivoSeleccionado!.path.split('.').last}';
+      final String carpeta = _tipoImportacion == 'pacientes' ? 'imports_pacientes' : 'imports_citas';
+      final String fileName = '${_tipoImportacion}_${DateTime.now().millisecondsSinceEpoch}.${_archivoSeleccionado!.path.split('.').last}';
       
       // 2. Subir el archivo
-      Reference ref = FirebaseStorage.instance.ref().child('$carpeta/$fileName');
+      final Reference ref = FirebaseStorage.instance.ref().child('$carpeta/$fileName');
       await ref.putFile(_archivoSeleccionado!);
-      String downloadUrl = await ref.getDownloadURL();
+      final String downloadUrl = await ref.getDownloadURL();
 
       // 3. Crear registro en Firestore para que una Cloud Function lo procese
       // NOTA: Normalmente aquí se activa una Cloud Function. Creamos un registro de "solicitud".
@@ -165,7 +165,7 @@ class _AdminUploadExcelScreenState extends State<AdminUploadExcelScreen> {
                   border: Border.all(
                     color: _archivoSeleccionado != null ? Colors.purple : Colors.grey.shade400,
                     width: 2,
-                    style: _archivoSeleccionado != null ? BorderStyle.solid : BorderStyle.solid // Podrías usar dash path aquí si quisieras
+                    style: _archivoSeleccionado != null ? BorderStyle.solid : BorderStyle.solid
                   ),
                   borderRadius: BorderRadius.circular(15)
                 ),
@@ -218,7 +218,7 @@ class _AdminUploadExcelScreenState extends State<AdminUploadExcelScreen> {
 
   // Widget auxiliar para las tarjetas de selección
   Widget _buildSelectorCard({required String label, required IconData icon, required String value, required Color color}) {
-    bool isSelected = _tipoImportacion == value;
+    final bool isSelected = _tipoImportacion == value;
     return GestureDetector(
       onTap: () => setState(() { 
         _tipoImportacion = value; 
@@ -227,7 +227,7 @@ class _AdminUploadExcelScreenState extends State<AdminUploadExcelScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 20),
         decoration: BoxDecoration(
-          color: isSelected ? color.withOpacity(0.1) : Colors.white,
+          color: isSelected ? color.withValues(alpha: 0.1) : Colors.white,
           border: Border.all(color: isSelected ? color : Colors.grey.shade300, width: 2),
           borderRadius: BorderRadius.circular(12),
         ),

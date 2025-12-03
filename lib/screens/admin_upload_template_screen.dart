@@ -17,7 +17,7 @@ class _AdminUploadTemplateScreenState extends State<AdminUploadTemplateScreen> {
   bool _isLoading = false;
 
   Future<void> _seleccionarPDF() async {
-    FilePickerResult? result = await FilePicker.platform.pickFiles(type: FileType.custom, allowedExtensions: ['pdf']);
+    final FilePickerResult? result = await FilePicker.platform.pickFiles(type: FileType.custom, allowedExtensions: ['pdf']);
     if (result != null) {
       setState(() {
         _archivoSeleccionado = File(result.files.single.path!);
@@ -30,10 +30,10 @@ class _AdminUploadTemplateScreenState extends State<AdminUploadTemplateScreen> {
     if (_tituloController.text.isEmpty || _archivoSeleccionado == null) return;
     setState(() => _isLoading = true);
     try {
-      String fileName = 'plantilla_${DateTime.now().millisecondsSinceEpoch}.pdf';
-      Reference ref = FirebaseStorage.instance.ref().child('plantillas_globales/$fileName');
+      final String fileName = 'plantilla_${DateTime.now().millisecondsSinceEpoch}.pdf';
+      final Reference ref = FirebaseStorage.instance.ref().child('plantillas_globales/$fileName');
       await ref.putFile(_archivoSeleccionado!);
-      String url = await ref.getDownloadURL();
+      final String url = await ref.getDownloadURL();
       await FirebaseFirestore.instance.collection('document_templates').add({
         'titulo': _tituloController.text.trim(),
         'urlPdf': url,

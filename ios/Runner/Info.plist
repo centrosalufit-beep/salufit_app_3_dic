@@ -3,9 +3,9 @@
 <plist version="1.0">
 <dict>
 	<key>CFBundleDevelopmentRegion</key>
-	<string>$(DEVELOPMENT_LANGUAGE)</string>
+	<string>es</string>
 	<key>CFBundleDisplayName</key>
-	<string>Salufit App</string>
+	<string>Salufit</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -24,6 +24,29 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+
+    <key>CFBundleLocalizations</key>
+    <array>
+        <string>es</string>
+    </array>
+
+    <key>NSCameraUsageDescription</key>
+    <string>Salufit necesita acceso a tu cámara para que puedas subir vídeos de ejercicios, fotos de perfil o escanear documentos.</string>
+
+    <key>NSPhotoLibraryUsageDescription</key>
+    <string>Salufit necesita acceso a tu galería para que puedas seleccionar archivos, radiografías o imágenes para tu perfil.</string>
+
+    <key>NSMicrophoneUsageDescription</key>
+    <string>Salufit necesita acceso al micrófono para grabar audio en los vídeos explicativos de los ejercicios.</string>
+
+    <key>NSFaceIDUsageDescription</key>
+    <string>Salufit usa FaceID para que puedas iniciar sesión de forma segura y rápida.</string>
+
+    <key>LSSupportsOpeningDocumentsInPlace</key>
+    <true/>
+    <key>UIFileSharingEnabled</key>
+    <true/>
+
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>
@@ -31,8 +54,6 @@
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
-		<string>UIInterfaceOrientationLandscapeLeft</string>
-		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
 	<key>UISupportedInterfaceOrientations~ipad</key>
 	<array>
