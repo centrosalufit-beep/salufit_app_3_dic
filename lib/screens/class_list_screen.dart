@@ -41,6 +41,7 @@ class _ClassListScreenState extends State<ClassListScreen> {
       _selectedDate = widget.initialDate!;
     } else {
       _selectedDate = DateTime.now();
+      // Si es domingo (día que solemos cerrar) y hay días, pasamos al lunes
       if (_selectedDate.weekday == DateTime.sunday && _calendarDays.isNotEmpty) {
         _selectedDate = _calendarDays.first;
       }
@@ -66,7 +67,7 @@ class _ClassListScreenState extends State<ClassListScreen> {
   }
 
   Map<String, dynamic> _getClassVisuals(String nombreClase) {
-    final String nombre = nombreClase.toLowerCase();
+    String nombre = nombreClase.toLowerCase();
     
     if (nombre.contains('entrenamiento')) {
       return {'colors': [const Color(0xFFD32F2F), const Color(0xFFE57373)], 'icon': Icons.fitness_center, 'textColor': Colors.red.shade900};
@@ -81,7 +82,7 @@ class _ClassListScreenState extends State<ClassListScreen> {
   }
 
   Future<void> _borrarClaseAdmin(String classId) async {
-    final bool? confirmar = await showDialog(
+    bool? confirmar = await showDialog(
       context: context, 
       builder: (c) => AlertDialog(
         title: const Text('Borrar Clase (Admin)'), 
@@ -110,7 +111,7 @@ class _ClassListScreenState extends State<ClassListScreen> {
   Future<void> _reservarClase(String classId, String className) async {
     setState(() { _isLoadingAction = true; });
     try {
-      final String? token = await FirebaseAuth.instance.currentUser?.getIdToken();
+      String? token = await FirebaseAuth.instance.currentUser?.getIdToken();
       final response = await http.post(
         Uri.parse(_crearReservaUrl), 
         headers: {
@@ -143,7 +144,7 @@ class _ClassListScreenState extends State<ClassListScreen> {
     final int horasRestantes = fechaClase.difference(ahora).inHours;
     final bool esPenalizado = horasRestantes < 24;
     
-    final bool? confirmar = await showDialog(
+    bool? confirmar = await showDialog(
       context: context, 
       builder: (c) => AlertDialog(
         title: Text(esPenalizado ? '¡Atención!' : 'Cancelar Reserva', style: TextStyle(color: esPenalizado ? Colors.red : Colors.black, fontWeight: FontWeight.bold)), 
@@ -159,7 +160,7 @@ class _ClassListScreenState extends State<ClassListScreen> {
 
     setState(() { _isLoadingAction = true; });
     try {
-      final String? token = await FirebaseAuth.instance.currentUser?.getIdToken();
+      String? token = await FirebaseAuth.instance.currentUser?.getIdToken();
       final response = await http.post(
         Uri.parse(_cancelarReservaUrl), 
         headers: {
@@ -174,8 +175,8 @@ class _ClassListScreenState extends State<ClassListScreen> {
       if (!mounted) return;
       
       if (response.statusCode == 200) {
-        final bool tokenDevuelto = data['tokenDevuelto'] ?? false;
-        final Color colorSnack = tokenDevuelto ? Colors.green : Colors.orange;
+        bool tokenDevuelto = data['tokenDevuelto'] ?? false;
+        Color colorSnack = tokenDevuelto ? Colors.green : Colors.orange;
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(data['message']), backgroundColor: colorSnack, duration: const Duration(seconds: 4)));
       } else {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(data['error'] ?? 'Error'), backgroundColor: Colors.red));
@@ -203,8 +204,8 @@ class _ClassListScreenState extends State<ClassListScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final String idConCeros = widget.userId.padLeft(6, '0');
-    final bool isAdmin = _adminIds.contains(idConCeros);
+    String idConCeros = widget.userId.padLeft(6, '0');
+    bool isAdmin = _adminIds.contains(idConCeros);
     
     final String? userEmail = FirebaseAuth.instance.currentUser?.email;
     if (userEmail == null) return const Center(child: Text('Error de sesión'));
@@ -266,10 +267,10 @@ class _ClassListScreenState extends State<ClassListScreen> {
                     .where('userEmail', isEqualTo: userEmail)
                     .snapshots(),
                 builder: (context, bookingSnapshot) {
-                  final Map<String, String> misReservas = {};
+                  Map<String, String> misReservas = {};
                   if (bookingSnapshot.hasData) {
                     for (var doc in bookingSnapshot.data!.docs) {
-                      final data = doc.data() as Map<String, dynamic>;
+                      var data = doc.data() as Map<String, dynamic>;
                       misReservas[data['groupClassId']] = doc.id;
                     }
                   }
@@ -288,7 +289,7 @@ class _ClassListScreenState extends State<ClassListScreen> {
                             final date = _calendarDays[index]; 
                             final isSelected = isSameDay(date, _selectedDate);
                             final List<String> diasSemana = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
-                            final String nombreDia = diasSemana[date.weekday - 1];
+                            String nombreDia = diasSemana[date.weekday - 1];
 
                             return GestureDetector(
                               onTap: () => setState(() => _selectedDate = date),
@@ -338,16 +339,18 @@ class _ClassListScreenState extends State<ClassListScreen> {
                             final todasLasClases = snapshot.data!.docs.map((doc) => GroupClass.fromFirestore(doc)).toList();
 
                             final clasesDelDia = todasLasClases.where((clase) {
-                              final docSnapshot = snapshot.data!.docs.firstWhere((d) => d.id == clase.id);
-                              final Timestamp? ts = (docSnapshot.data() as Map<String, dynamic>)['fechaHoraInicio'];
+                              var docSnapshot = snapshot.data!.docs.firstWhere((d) => d.id == clase.id);
+                              Timestamp? ts = (docSnapshot.data() as Map<String, dynamic>)['fechaHoraInicio'];
                               if (ts == null) return false;
-                              final DateTime fechaClase = ts.toDate();
-                              final bool coincideDia = isSameDay(fechaClase, _selectedDate);
-                              if (isAdmin) return coincideDia; 
+                              DateTime fechaClase = ts.toDate();
+                              bool coincideDia = isSameDay(fechaClase, _selectedDate);
+                              
+                              // CORRECCIÓN: Ahora filtramos por hora PARA TODOS, incluidos admins
                               bool esFutura = true;
                               if (isSameDay(DateTime.now(), _selectedDate)) {
                                 esFutura = fechaClase.isAfter(DateTime.now());
                               }
+                              
                               return coincideDia && esFutura;
                             }).toList();
 
@@ -358,28 +361,28 @@ class _ClassListScreenState extends State<ClassListScreen> {
                               itemCount: clasesDelDia.length,
                               separatorBuilder: (c, i) => const SizedBox(height: 15),
                               itemBuilder: (context, index) {
-                                final doc = clasesDelDia[index];
-                                final claseData = snapshot.data!.docs.firstWhere((d) => d.id == doc.id).data() as Map<String, dynamic>;
+                                var doc = clasesDelDia[index];
+                                var claseData = snapshot.data!.docs.firstWhere((d) => d.id == doc.id).data() as Map<String, dynamic>;
                                 
-                                final String classId = doc.id;
-                                final String nombre = claseData['nombre'] ?? 'Clase';
-                                final String monitor = claseData['monitor'] ?? '';
-                                final int aforoActual = claseData['aforoActual'] ?? 0;
-                                final int aforoMax = claseData['aforoMaximo'] ?? 12;
-                                final Timestamp ts = claseData['fechaHoraInicio'];
-                                final DateTime fechaClase = ts.toDate();
+                                String classId = doc.id;
+                                String nombre = claseData['nombre'] ?? 'Clase';
+                                String monitor = claseData['monitor'] ?? '';
+                                int aforoActual = claseData['aforoActual'] ?? 0;
+                                int aforoMax = claseData['aforoMaximo'] ?? 12;
+                                Timestamp ts = claseData['fechaHoraInicio'];
+                                DateTime fechaClase = ts.toDate();
                                 
-                                final String horario = "${DateFormat('HH:mm').format(fechaClase)} - ${DateFormat('HH:mm').format(fechaClase.add(const Duration(hours: 1)))}";
+                                String horario = "${DateFormat('HH:mm').format(fechaClase)} - ${DateFormat('HH:mm').format(fechaClase.add(const Duration(hours: 1)))}";
                                 
                                 final bool estaLlena = aforoActual >= aforoMax;
                                 final bool yaReservada = misReservas.containsKey(classId);
                                 String? bookingId;
                                 if(yaReservada) bookingId = misReservas[classId];
 
-                                final Map<String, dynamic> visual = _getClassVisuals(nombre);
-                                final List<Color> gradientColors = visual['colors'];
-                                final IconData iconData = visual['icon'];
-                                final Color textBtnColor = visual['textColor'];
+                                Map<String, dynamic> visual = _getClassVisuals(nombre);
+                                List<Color> gradientColors = visual['colors'];
+                                IconData iconData = visual['icon'];
+                                Color textBtnColor = visual['textColor'];
 
                                 return Container(
                                   constraints: const BoxConstraints(minHeight: 125), 
@@ -549,7 +552,7 @@ class _CreateClassModalState extends State<_CreateClassModal> {
       },
     );
     if (picked != null) {
-      final bool existe = _selectedTimes.any((t) => t.hour == picked.hour && t.minute == picked.minute);
+      bool existe = _selectedTimes.any((t) => t.hour == picked.hour && t.minute == picked.minute);
       if (!existe) {
         setState(() {
           _selectedTimes.add(picked);
@@ -567,14 +570,14 @@ class _CreateClassModalState extends State<_CreateClassModal> {
       return;
     }
     setState(() { _isLoading = true; });
-    final DateTime now = DateTime.now();
-    final DateTime targetDate = DateTime(now.year, now.month + _selectedMonthOffset, 1);
+    DateTime now = DateTime.now();
+    DateTime targetDate = DateTime(now.year, now.month + _selectedMonthOffset, 1);
     int totalCreated = 0;
     int errors = 0;
-    final String? token = await FirebaseAuth.instance.currentUser?.getIdToken();
+    String? token = await FirebaseAuth.instance.currentUser?.getIdToken();
 
     for (int i = 0; i < _selectedTimes.length; i++) {
-      final TimeOfDay time = _selectedTimes[i];
+      TimeOfDay time = _selectedTimes[i];
       if (mounted) setState(() => _loadingStatus = "Creando horario ${time.hour}:${time.minute.toString().padLeft(2,'0')}...");
       try {
         final response = await http.post(
@@ -612,60 +615,63 @@ class _CreateClassModalState extends State<_CreateClassModal> {
 
   @override
   Widget build(BuildContext context) {
-    final DateTime now = DateTime.now();
-    final String mesActual = DateFormat('MMMM', 'es').format(now).toUpperCase();
-    final String mesSiguiente = DateFormat('MMMM', 'es').format(DateTime(now.year, now.month + 1)).toUpperCase();
+    DateTime now = DateTime.now();
+    String mesActual = DateFormat('MMMM', 'es').format(now).toUpperCase();
+    String mesSiguiente = DateFormat('MMMM', 'es').format(DateTime(now.year, now.month + 1)).toUpperCase();
 
-    return Container(
-      padding: const EdgeInsets.all(20),
-      height: 700, 
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('Generar Clases Mensuales', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.teal)),
-          const SizedBox(height: 20),
-          DropdownButtonFormField<String>(
-            decoration: const InputDecoration(labelText: 'Tipo de Actividad', border: OutlineInputBorder()),
-            // CORREGIDO: Cambiado de value a initialValue
-            initialValue: _selectedClassType, 
-            items: _tiposYProfesionales.keys.map((tipo) => DropdownMenuItem(value: tipo, child: Text(tipo, style: const TextStyle(fontSize: 14)))).toList(),
-            onChanged: (val) {
-              setState(() {
-                _selectedClassType = val;
-                if (val != null) _profesionalController.text = _tiposYProfesionales[val]!;
-              });
-            },
-          ),
-          const SizedBox(height: 10),
-          TextField(controller: _profesionalController, decoration: const InputDecoration(labelText: 'Monitor/es', border: OutlineInputBorder())),
-          const SizedBox(height: 20),
-          const Text('Días de la semana:', style: TextStyle(fontWeight: FontWeight.bold)),
-          const SizedBox(height: 10),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween, 
-            children: [
-              _dayBtn('L', 1), 
-              _dayBtn('M', 2), 
-              _dayBtn('X', 3), 
-              _dayBtn('J', 4), 
-              _dayBtn('V', 5), 
-              _dayBtn('S', 6)
-            ]
-          ),
-          const SizedBox(height: 20),
-          Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text('Horarios de inicio:', style: TextStyle(fontWeight: FontWeight.bold)), TextButton.icon(onPressed: _selectTime, icon: const Icon(Icons.access_time, size: 18), label: const Text('AÑADIR HORA'))]),
-          if (_selectedTimes.isEmpty) const Text('Ninguna hora seleccionada', style: TextStyle(color: Colors.grey, fontSize: 12)) else Wrap(spacing: 8.0, children: _selectedTimes.map((time) => Chip(label: Text('${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}'), deleteIcon: const Icon(Icons.close, size: 18), onDeleted: () => _removeTime(time), backgroundColor: Colors.teal.shade50, labelStyle: TextStyle(color: Colors.teal.shade900, fontWeight: FontWeight.bold))).toList()),
-          const SizedBox(height: 20),
-          InputDecorator(decoration: const InputDecoration(labelText: 'Mes a generar', border: OutlineInputBorder()), child: DropdownButton<int>(value: _selectedMonthOffset, isExpanded: true, underline: const SizedBox(), items: [DropdownMenuItem(value: 0, child: Text(mesActual)), DropdownMenuItem(value: 1, child: Text(mesSiguiente))], onChanged: (val) => setState(() => _selectedMonthOffset = val!))),
-          const Spacer(),
-          SizedBox(width: double.infinity, height: 50, child: ElevatedButton(onPressed: _isLoading ? null : _generar, style: ElevatedButton.styleFrom(backgroundColor: Colors.teal, foregroundColor: Colors.white), child: _isLoading ? Row(mainAxisAlignment: MainAxisAlignment.center, children: [const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)), const SizedBox(width: 15), Text(_loadingStatus)]) : const Text('GENERAR CALENDARIO'))),
-        ],
+    // CORRECCIÓN: Botón "Generar" protegido por SafeArea
+    return SafeArea(
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        // Eliminamos altura fija para que se adapte al contenido seguro
+        child: Column(
+          mainAxisSize: MainAxisSize.min, // Se adapta al contenido
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Generar Clases Mensuales', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.teal)),
+            const SizedBox(height: 20),
+            DropdownButtonFormField<String>(
+              decoration: const InputDecoration(labelText: 'Tipo de Actividad', border: OutlineInputBorder()),
+              initialValue: _selectedClassType, 
+              items: _tiposYProfesionales.keys.map((tipo) => DropdownMenuItem(value: tipo, child: Text(tipo, style: const TextStyle(fontSize: 14)))).toList(),
+              onChanged: (val) {
+                setState(() {
+                  _selectedClassType = val;
+                  if (val != null) _profesionalController.text = _tiposYProfesionales[val]!;
+                });
+              },
+            ),
+            const SizedBox(height: 10),
+            TextField(controller: _profesionalController, decoration: const InputDecoration(labelText: 'Monitor/es', border: OutlineInputBorder())),
+            const SizedBox(height: 20),
+            const Text('Días de la semana:', style: TextStyle(fontWeight: FontWeight.bold)),
+            const SizedBox(height: 10),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween, 
+              children: [
+                _dayBtn('L', 1), 
+                _dayBtn('M', 2), 
+                _dayBtn('X', 3), 
+                _dayBtn('J', 4), 
+                _dayBtn('V', 5), 
+                _dayBtn('S', 6)
+              ]
+            ),
+            const SizedBox(height: 20),
+            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text('Horarios de inicio:', style: TextStyle(fontWeight: FontWeight.bold)), TextButton.icon(onPressed: _selectTime, icon: const Icon(Icons.access_time, size: 18), label: const Text('AÑADIR HORA'))]),
+            if (_selectedTimes.isEmpty) const Text('Ninguna hora seleccionada', style: TextStyle(color: Colors.grey, fontSize: 12)) else Wrap(spacing: 8.0, children: _selectedTimes.map((time) => Chip(label: Text('${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}'), deleteIcon: const Icon(Icons.close, size: 18), onDeleted: () => _removeTime(time), backgroundColor: Colors.teal.shade50, labelStyle: TextStyle(color: Colors.teal.shade900, fontWeight: FontWeight.bold))).toList()),
+            const SizedBox(height: 20),
+            InputDecorator(decoration: const InputDecoration(labelText: 'Mes a generar', border: OutlineInputBorder()), child: DropdownButton<int>(value: _selectedMonthOffset, isExpanded: true, underline: const SizedBox(), items: [DropdownMenuItem(value: 0, child: Text(mesActual)), DropdownMenuItem(value: 1, child: Text(mesSiguiente))], onChanged: (val) => setState(() => _selectedMonthOffset = val!))),
+            const SizedBox(height: 20), // Espacio antes del botón
+            SizedBox(width: double.infinity, height: 50, child: ElevatedButton(onPressed: _isLoading ? null : _generar, style: ElevatedButton.styleFrom(backgroundColor: Colors.teal, foregroundColor: Colors.white), child: _isLoading ? Row(mainAxisAlignment: MainAxisAlignment.center, children: [const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)), const SizedBox(width: 15), Text(_loadingStatus)]) : const Text('GENERAR CALENDARIO'))),
+          ],
+        ),
       ),
     );
   }
 
   Widget _dayBtn(String label, int value) {
-    final bool selected = _selectedDays.contains(value);
+    bool selected = _selectedDays.contains(value);
     return GestureDetector(onTap: () => setState(() => selected ? _selectedDays.remove(value) : _selectedDays.add(value)), child: CircleAvatar(backgroundColor: selected ? Colors.teal : Colors.grey.shade200, child: Text(label, style: TextStyle(color: selected ? Colors.white : Colors.black))));
   }
 }

@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
-import 'package:firebase_auth/firebase_auth.dart'; // <--- 1. IMPORT NECESARIO
+import 'package:firebase_auth/firebase_auth.dart';
 
 class AdminRenewalScreen extends StatefulWidget {
   const AdminRenewalScreen({super.key});
@@ -47,7 +47,6 @@ class _AdminRenewalScreenState extends State<AdminRenewalScreen> {
     setState(() { _isLoading = true; });
 
     try {
-      // 2. OBTENER TOKEN DE SEGURIDAD
       final String? token = await FirebaseAuth.instance.currentUser?.getIdToken();
 
       final List<Map<String, dynamic>> listaParaEnviar = _selectedUserIds.map((uid) {
@@ -61,7 +60,7 @@ class _AdminRenewalScreenState extends State<AdminRenewalScreen> {
         Uri.parse(_apiUrl),
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token' // <--- 3. ENVIAR TOKEN EN CABECERA
+          'Authorization': 'Bearer $token'
         },
         body: jsonEncode({
           'listaUsuarios': listaParaEnviar,
@@ -364,19 +363,26 @@ class _AdminRenewalScreenState extends State<AdminRenewalScreen> {
             ),
           ),
 
+          // CORRECCIÓN: Botón protegido por SafeArea
           if (_selectedUserIds.isNotEmpty)
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: const BoxDecoration(color: Colors.white, boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 10, offset: Offset(0, -5))]),
-              child: SizedBox(
-                width: double.infinity,
-                height: 55,
-                child: ElevatedButton(
-                  onPressed: _isLoading ? null : _ejecutarRenovacion,
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.teal, foregroundColor: Colors.white),
-                  child: _isLoading 
-                    ? const CircularProgressIndicator(color: Colors.white)
-                    : Text('ASIGNAR ${_tokensController.text} TOKENS A (${_selectedUserIds.length})', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            SafeArea(
+              top: false, // Solo protegemos abajo
+              child: Container(
+                padding: const EdgeInsets.all(20),
+                decoration: const BoxDecoration(
+                  color: Colors.white, 
+                  boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 10, offset: Offset(0, -5))]
+                ),
+                child: SizedBox(
+                  width: double.infinity,
+                  height: 55,
+                  child: ElevatedButton(
+                    onPressed: _isLoading ? null : _ejecutarRenovacion,
+                    style: ElevatedButton.styleFrom(backgroundColor: Colors.teal, foregroundColor: Colors.white),
+                    child: _isLoading 
+                      ? const CircularProgressIndicator(color: Colors.white)
+                      : Text('ASIGNAR ${_tokensController.text} TOKENS A (${_selectedUserIds.length})', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  ),
                 ),
               ),
             )

@@ -1,10 +1,8 @@
 import 'dart:io';
-import 'package:flutter/foundation.dart'; 
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:excel/excel.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:intl/intl.dart';
 
 class AdminUploadExcelScreen extends StatefulWidget {
   const AdminUploadExcelScreen({super.key});
@@ -14,219 +12,233 @@ class AdminUploadExcelScreen extends StatefulWidget {
 }
 
 class _AdminUploadExcelScreenState extends State<AdminUploadExcelScreen> {
+  // Estado para controlar qué tipo de importación estamos haciendo
+  // 'pacientes' o 'citas'
+  String _tipoImportacion = 'pacientes'; 
+  File? _archivoSeleccionado;
   bool _isLoading = false;
-  String _status = 'Esperando archivo...';
-  double _progress = 0.0;
 
-  Future<void> _procesarExcel() async {
-    try {
-      final FilePickerResult? result = await FilePicker.platform.pickFiles(
-        type: FileType.custom,
-        allowedExtensions: ['xlsx'],
-        withData: true, 
-      );
+  // Instrucciones dinámicas según el tipo
+  String get _instrucciones {
+    if (_tipoImportacion == 'pacientes') {
+      return 'El Excel debe tener las columnas:\nNombre, Email, Telefono, Rol';
+    } else {
+      return 'El Excel debe tener las columnas:\nFecha (DD/MM/AAAA), Hora (HH:MM), Email Paciente, Tipo Clase';
+    }
+  }
 
-      if (result == null) return;
+  Future<void> _seleccionarArchivo() async {
+    FilePickerResult? result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['xlsx', 'csv'], // Solo permitimos Excel
+    );
 
+    if (result != null) {
       setState(() {
-        _isLoading = true;
-        _status = 'Leyendo archivo y base de datos...';
-        _progress = 0.1;
-      });
-
-      List<int> bytes;
-      if (kIsWeb) {
-        if (result.files.single.bytes != null) {
-          bytes = result.files.single.bytes!;
-        } else {
-          throw 'No se pudieron leer los datos del archivo (Web)';
-        }
-      } else {
-        if (result.files.single.path != null) {
-          final File file = File(result.files.single.path!);
-          bytes = file.readAsBytesSync();
-        } else {
-          if (result.files.single.bytes != null) {
-             bytes = result.files.single.bytes!;
-          } else {
-             throw 'No se encontró la ruta del archivo';
-          }
-        }
-      }
-
-      final excel = Excel.decodeBytes(bytes);
-
-      setState(() { _status = 'Descargando lista de pacientes...'; });
-      
-      final usersSnap = await FirebaseFirestore.instance.collection('users').get();
-      
-      final Map<String, String> userMap = {};
-      final Map<String, String> userEmailMap = {}; 
-      
-      for (var doc in usersSnap.docs) {
-        final data = doc.data();
-        final String nombre = (data['nombreCompleto'] ?? '').toString().toLowerCase().trim();
-        if (nombre.isNotEmpty) {
-          userMap[nombre] = doc.id;
-          if (data['email'] != null) {
-            userEmailMap[doc.id] = data['email'];
-          }
-        }
-      }
-
-      final String sheetName = excel.tables.keys.firstWhere(
-        (k) => k.toUpperCase() == 'CITAS',
-        orElse: () => excel.tables.keys.first
-      );
-
-      final table = excel.tables[sheetName];
-      if (table == null) throw 'No se encontró la pestaña CITAS';
-
-      final int totalRows = table.maxRows;
-      int errors = 0;
-      int success = 0;
-      // CORRECCIÓN: Eliminada variable 'duplicatesUpdated' no usada
-
-      var batch = FirebaseFirestore.instance.batch();
-      int batchCount = 0;
-
-      for (int i = 1; i < totalRows; i++) {
-        final row = table.rows[i];
-        if (row.isEmpty) continue;
-
-        try {
-          final pacienteNombre = _getCellValue(row.length > 2 ? row[2] : null); 
-          final fechaStr = _getCellValue(row.length > 3 ? row[3] : null);       
-          final horaInicioStr = _getCellValue(row.length > 4 ? row[4] : null);  
-          final especialidad = _getCellValue(row.length > 10 ? row[10] : null);  
-          final profesional = _getCellValue(row.length > 1 ? row[1] : null);    
-
-          if (pacienteNombre.isEmpty || fechaStr.isEmpty) continue;
-
-          final String? userId = userMap[pacienteNombre.toLowerCase().trim()];
-          
-          if (userId != null) {
-            DateTime fechaBase;
-            try {
-               fechaBase = DateFormat('dd/MM/yyyy').parse(fechaStr);
-            } catch (e) {
-               fechaBase = DateTime.parse(fechaStr);
-            }
-
-            final TimeOfDay hora = _parseTime(horaInicioStr);
-            final DateTime fechaFinal = DateTime(fechaBase.year, fechaBase.month, fechaBase.day, hora.hour, hora.minute);
-
-            final String uniqueDocId = '${userId}_${fechaFinal.millisecondsSinceEpoch}';
-            
-            final docRef = FirebaseFirestore.instance.collection('appointments').doc(uniqueDocId);
-            final String? userEmail = userEmailMap[userId];
-
-            batch.set(docRef, {
-              'id': uniqueDocId, 
-              'userId': userId,
-              'userEmail': userEmail,
-              'pacienteNombre': pacienteNombre,
-              'profesional': profesional,
-              'especialidad': especialidad,
-              'fechaHoraInicio': Timestamp.fromDate(fechaFinal),
-              'estado': 'Pendiente',
-              'origen': 'Importación App'
-            }, SetOptions(merge: true));
-
-            batchCount++;
-            success++;
-          } else {
-            debugPrint('No encontrado usuario: $pacienteNombre');
-            errors++;
-          }
-
-        } catch (e) {
-          debugPrint('Error en fila $i: $e');
-          errors++;
-        }
-
-        if (batchCount >= 400) {
-          await batch.commit();
-          batch = FirebaseFirestore.instance.batch();
-          batchCount = 0;
-        }
-
-        setState(() {
-          _progress = i / totalRows;
-          _status = 'Procesando... ($success procesados / $errors errores)';
-        });
-      }
-
-      if (batchCount > 0) await batch.commit();
-
-      setState(() {
-        _isLoading = false;
-        _status = 'Finalizado: $success citas procesadas (nuevas o actualizadas). $errors errores.';
-        _progress = 1.0;
-      });
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Importación completada'), backgroundColor: Colors.green));
-      }
-
-    } catch (e) {
-      setState(() {
-        _isLoading = false;
-        _status = 'Error crítico: $e';
+        _archivoSeleccionado = File(result.files.single.path!);
       });
     }
   }
 
-  String _getCellValue(dynamic cell) {
-    if (cell == null) return '';
-    if (cell.value == null) return '';
-    return cell.value.toString().trim();
-  }
+  Future<void> _procesarSubida() async {
+    if (_archivoSeleccionado == null) return;
 
-  TimeOfDay _parseTime(String timeStr) {
+    setState(() => _isLoading = true);
+
     try {
-      final List<String> parts = timeStr.split(':');
-      return TimeOfDay(hour: int.parse(parts[0]), minute: int.parse(parts[1]));
+      // 1. Definir la ruta en Storage según el tipo
+      String carpeta = _tipoImportacion == 'pacientes' ? 'imports_pacientes' : 'imports_citas';
+      String fileName = '${_tipoImportacion}_${DateTime.now().millisecondsSinceEpoch}.${_archivoSeleccionado!.path.split('.').last}';
+      
+      // 2. Subir el archivo
+      Reference ref = FirebaseStorage.instance.ref().child('$carpeta/$fileName');
+      await ref.putFile(_archivoSeleccionado!);
+      String downloadUrl = await ref.getDownloadURL();
+
+      // 3. Crear registro en Firestore para que una Cloud Function lo procese
+      // NOTA: Normalmente aquí se activa una Cloud Function. Creamos un registro de "solicitud".
+      await FirebaseFirestore.instance.collection('import_requests').add({
+        'tipo': _tipoImportacion, // 'pacientes' o 'citas'
+        'urlArchivo': downloadUrl,
+        'estado': 'pendiente', // La Cloud Function cambiaría esto a 'procesando' -> 'completado'
+        'creadoEn': FieldValue.serverTimestamp(),
+        'nombreArchivoOriginal': fileName,
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Archivo de $_tipoImportacion subido. El servidor lo procesará en breve.'),
+            backgroundColor: Colors.green,
+          )
+        );
+        Navigator.pop(context);
+      }
+
     } catch (e) {
-      return const TimeOfDay(hour: 0, minute: 0);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error al subir: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Importar Citas Excel')),
-      body: Padding(
-        padding: const EdgeInsets.all(30),
+      appBar: AppBar(
+        title: const Text('Importación Masiva'),
+        backgroundColor: Colors.purple,
+        foregroundColor: Colors.white,
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(20),
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Icon(Icons.upload_file, size: 80, color: Colors.green),
-            const SizedBox(height: 20),
-            const Text('Sube el Excel de Citas', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 10),
-            const Text('El sistema detectará automáticamente si la cita ya existe para no duplicarla.', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey)),
-            const SizedBox(height: 40),
+            // SECCIÓN 1: SELECTOR DE TIPO
+            const Text('¿Qué datos vas a importar?', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            const SizedBox(height: 15),
+            Row(
+              children: [
+                Expanded(
+                  child: _buildSelectorCard(
+                    label: 'PACIENTES', 
+                    icon: Icons.group_add, 
+                    value: 'pacientes',
+                    color: Colors.blue
+                  ),
+                ),
+                const SizedBox(width: 15),
+                Expanded(
+                  child: _buildSelectorCard(
+                    label: 'CITAS', 
+                    icon: Icons.calendar_month, 
+                    value: 'citas',
+                    color: Colors.orange
+                  ),
+                ),
+              ],
+            ),
             
-            if (_isLoading) ...[
-              LinearProgressIndicator(value: _progress, color: Colors.green),
-              const SizedBox(height: 10),
-              Text(_status),
-            ] else ...[
-              SizedBox(
+            const SizedBox(height: 30),
+            const Divider(),
+            const SizedBox(height: 10),
+
+            // SECCIÓN 2: INSTRUCCIONES
+            Container(
+              padding: const EdgeInsets.all(15),
+              width: double.infinity,
+              decoration: BoxDecoration(
+                color: Colors.grey.shade100,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: Colors.grey.shade300)
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.info_outline, color: Colors.grey.shade700),
+                      const SizedBox(width: 10),
+                      Text('Formato Requerido ($_tipoImportacion)', style: const TextStyle(fontWeight: FontWeight.bold)),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Text(_instrucciones, style: TextStyle(color: Colors.grey.shade800)),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 30),
+
+            // SECCIÓN 3: SELECCIÓN DE ARCHIVO
+            InkWell(
+              onTap: _seleccionarArchivo,
+              borderRadius: BorderRadius.circular(15),
+              child: Container(
+                height: 150,
                 width: double.infinity,
-                height: 55,
-                child: ElevatedButton.icon(
-                  onPressed: _procesarExcel,
-                  icon: const Icon(Icons.file_open),
-                  label: const Text('SELECCIONAR ARCHIVO'),
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white),
+                decoration: BoxDecoration(
+                  color: _archivoSeleccionado != null ? Colors.purple.shade50 : Colors.white,
+                  border: Border.all(
+                    color: _archivoSeleccionado != null ? Colors.purple : Colors.grey.shade400,
+                    width: 2,
+                    style: _archivoSeleccionado != null ? BorderStyle.solid : BorderStyle.solid // Podrías usar dash path aquí si quisieras
+                  ),
+                  borderRadius: BorderRadius.circular(15)
+                ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      _archivoSeleccionado != null ? Icons.description : Icons.upload_file, 
+                      size: 50, 
+                      color: _archivoSeleccionado != null ? Colors.purple : Colors.grey
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      _archivoSeleccionado != null 
+                        ? _archivoSeleccionado!.path.split('/').last 
+                        : 'Toca para buscar Excel (.xlsx, .csv)',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold, 
+                        color: _archivoSeleccionado != null ? Colors.purple : Colors.grey
+                      )
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(height: 20),
-              if (_status != 'Esperando archivo...')
-                Text(_status, style: const TextStyle(fontWeight: FontWeight.bold), textAlign: TextAlign.center),
-            ]
+            ),
+
+            const SizedBox(height: 40),
+
+            // BOTÓN DE ACCIÓN
+            SizedBox(
+              width: double.infinity,
+              height: 55,
+              child: ElevatedButton(
+                onPressed: _isLoading || _archivoSeleccionado == null ? null : _procesarSubida,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.purple,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))
+                ),
+                child: _isLoading 
+                  ? const CircularProgressIndicator(color: Colors.white)
+                  : Text('IMPORTAR ${_tipoImportacion.toUpperCase()}'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Widget auxiliar para las tarjetas de selección
+  Widget _buildSelectorCard({required String label, required IconData icon, required String value, required Color color}) {
+    bool isSelected = _tipoImportacion == value;
+    return GestureDetector(
+      onTap: () => setState(() { 
+        _tipoImportacion = value; 
+        _archivoSeleccionado = null; // Reseteamos archivo al cambiar de modo
+      }),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 20),
+        decoration: BoxDecoration(
+          color: isSelected ? color.withOpacity(0.1) : Colors.white,
+          border: Border.all(color: isSelected ? color : Colors.grey.shade300, width: 2),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Column(
+          children: [
+            Icon(icon, color: isSelected ? color : Colors.grey, size: 30),
+            const SizedBox(height: 8),
+            Text(label, style: TextStyle(
+              fontWeight: FontWeight.bold, 
+              color: isSelected ? color : Colors.grey
+            )),
           ],
         ),
       ),
