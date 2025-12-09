@@ -1,44 +1,92 @@
 import 'package:flutter/material.dart';
-import 'material_screen.dart'; // Reutilizamos la pantalla de vídeos
-import 'documents_screen.dart'; // Reutilizamos la pantalla de docs
+import '../widgets/salufit_scaffold.dart';
+import 'material_screen.dart'; // Pestaña Vídeos
+import 'documents_screen.dart'; // Pestaña Docs
 
 class ProfessionalResourcesScreen extends StatelessWidget {
   final String userId;
 
   const ProfessionalResourcesScreen({super.key, required this.userId});
 
+  // Color corporativo
+  final Color salufitTeal = const Color(0xFF009688);
+
   @override
   Widget build(BuildContext context) {
-    // Usamos DefaultTabController para gestionar las pestañas superiores
-    return DefaultTabController(
-      length: 2, // Dos pestañas: Docs y Material
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text('Mis Recursos', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
-          backgroundColor: Colors.white,
-          elevation: 0,
-          automaticallyImplyLeading: false,
-          bottom: const TabBar(
-            labelColor: Colors.teal,
-            unselectedLabelColor: Colors.grey,
-            indicatorColor: Colors.teal,
-            tabs: [
-              Tab(icon: Icon(Icons.folder_open), text: 'Documentos'),
-              Tab(icon: Icon(Icons.play_circle_outline), text: 'Material / Vídeos'),
-            ],
-          ),
-        ),
-        body: TabBarView(
+    return SalufitScaffold(
+      body: DefaultTabController(
+        length: 2, 
+        child: Column(
           children: [
-            // Pestaña 1: Documentos (Reutilizamos el widget que ya creamos)
-            // OJO: DocumentsScreen tiene su propio Scaffold/AppBar. 
-            // Al meterlo aquí, podría duplicarse la barra. 
-            // Lo ideal es refactorizar, pero para ir rápido, Flutter suele gestionarlo bien
-            // o podemos envolverlo en un Navigator, pero probemos directo.
-            DocumentsScreen(userId: userId),
-            
-            // Pestaña 2: Material (Vídeos)
-            MaterialScreen(userId: userId),
+            // --- 1. CABECERA PREMIUM UNIFICADA ---
+            SafeArea(
+              bottom: false,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 20, 20, 10),
+                child: Row(
+                  children: [
+                    Image.asset(
+                       'assets/logo_salufit.png', 
+                       width: 60, 
+                       fit: BoxFit.contain,
+                       errorBuilder: (c,e,s) => Icon(Icons.folder_special, size: 60, color: salufitTeal),
+                     ),
+                    const SizedBox(width: 15),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'MIS RECURSOS', 
+                            style: TextStyle(
+                              fontSize: 24, 
+                              fontWeight: FontWeight.w900, 
+                              color: salufitTeal,
+                              fontFamily: 'serif',
+                              letterSpacing: 2.0,
+                              height: 1.0,
+                              shadows: [Shadow(offset: const Offset(1, 1), color: Colors.black.withValues(alpha: 0.1), blurRadius: 0)]
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 4),
+                          const Text('Material y Documentación', style: TextStyle(color: Colors.grey, fontSize: 14)),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 10),
+
+            // --- 2. TABS ---
+            const TabBar(
+              labelColor: Color(0xFF009688),
+              unselectedLabelColor: Colors.grey,
+              indicatorColor: Color(0xFF009688),
+              indicatorWeight: 3,
+              labelStyle: TextStyle(fontWeight: FontWeight.bold),
+              tabs: [
+                Tab(icon: Icon(Icons.folder_open), text: 'Documentos'),
+                Tab(icon: Icon(Icons.play_circle_outline), text: 'Vídeos'),
+              ],
+            ),
+
+            // --- 3. CONTENIDO (Incrustado sin sus propias cabeceras) ---
+            Expanded(
+              child: TabBarView(
+                children: [
+                  // Pasamos embedMode: true para que NO muestre su propia cabecera
+                  DocumentsScreen(userId: userId, embedMode: true),
+                  
+                  // Pasamos embedMode: true para que NO muestre su propia cabecera
+                  MaterialScreen(userId: userId, embedMode: true),
+                ],
+              ),
+            ),
           ],
         ),
       ),

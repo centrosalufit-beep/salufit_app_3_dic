@@ -8,7 +8,13 @@ import '../widgets/salufit_scaffold.dart';
 
 class DocumentsScreen extends StatefulWidget {
   final String userId;
-  const DocumentsScreen({super.key, required this.userId});
+  final bool embedMode; 
+
+  const DocumentsScreen({
+    super.key, 
+    required this.userId, 
+    this.embedMode = false 
+  });
 
   @override
   State<DocumentsScreen> createState() => _DocumentsScreenState();
@@ -32,39 +38,38 @@ class _DocumentsScreenState extends State<DocumentsScreen> with SingleTickerProv
 
   @override
   Widget build(BuildContext context) {
-    // Obtenemos el email para pasarlo a todas las pestañas (CRÍTICO para tu seguridad)
     final String? userEmail = FirebaseAuth.instance.currentUser?.email;
     if (userEmail == null) return const Center(child: Text('Error de sesión'));
 
-    return SalufitScaffold(
-      body: SafeArea(
-        child: Column(
-          children: [
-             // --- CABECERA ---
-             Padding(
-               padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
-               child: Row(
-                 crossAxisAlignment: CrossAxisAlignment.center,
-                 children: [
-                   Image.asset('assets/logo_salufit.png', width: 50, fit: BoxFit.contain, errorBuilder: (c,e,s) => Icon(Icons.folder_shared, size: 50, color: salufitTeal)),
-                   const SizedBox(width: 15),
-                   Expanded(
-                     child: Column(
-                       crossAxisAlignment: CrossAxisAlignment.start,
-                       children: [
-                         Text('MI EXPEDIENTE', style: TextStyle(fontFamily: 'serif', fontSize: 22, fontWeight: FontWeight.w900, letterSpacing: 1.5, color: salufitTeal, height: 1.0)),
-                         const SizedBox(height: 4),
-                         const Text('Historial, Datos y Evolución', style: TextStyle(color: Colors.grey, fontSize: 13)),
-                     ],
-                   ),
-                   ),
-                 ],
+    final Widget content = SafeArea(
+      top: !widget.embedMode,
+      bottom: false,
+      child: Column(
+        children: [
+             if (!widget.embedMode)
+               Padding(
+                 padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+                 child: Row(
+                   crossAxisAlignment: CrossAxisAlignment.center,
+                   children: [
+                     Image.asset('assets/logo_salufit.png', width: 50, fit: BoxFit.contain, errorBuilder: (c,e,s) => Icon(Icons.folder_shared, size: 50, color: salufitTeal)),
+                     const SizedBox(width: 15),
+                     Expanded(
+                       child: Column(
+                         crossAxisAlignment: CrossAxisAlignment.start,
+                         children: [
+                           Text('MI EXPEDIENTE', style: TextStyle(fontFamily: 'serif', fontSize: 22, fontWeight: FontWeight.w900, letterSpacing: 1.5, color: salufitTeal, height: 1.0)),
+                           const SizedBox(height: 4),
+                           const Text('Historial, Datos y Evolución', style: TextStyle(color: Colors.grey, fontSize: 13)),
+                       ],
+                     ),
+                     ),
+                   ],
+                 ),
                ),
-             ),
 
-            const SizedBox(height: 15),
+            if (!widget.embedMode) const SizedBox(height: 15),
 
-            // --- TABS ---
             TabBar(
               controller: _tabController,
               labelColor: salufitTeal,
@@ -79,13 +84,11 @@ class _DocumentsScreenState extends State<DocumentsScreen> with SingleTickerProv
               ],
             ),
 
-            // --- CONTENIDO ---
             Expanded(
               child: TabBarView(
                 controller: _tabController,
                 children: [
                   _DocumentsTab(userEmail: userEmail, userId: widget.userId, themeColor: salufitTeal),
-                  // Pasamos userEmail a las nuevas pestañas
                   _MetricsTab(userEmail: userEmail, userId: widget.userId, themeColor: salufitTeal),
                   _JournalTab(userEmail: userEmail, userId: widget.userId, themeColor: salufitTeal),
                 ],
@@ -93,13 +96,18 @@ class _DocumentsScreenState extends State<DocumentsScreen> with SingleTickerProv
             ),
           ],
         ),
-      ), 
-    ); 
+      );
+
+      if (widget.embedMode) {
+        return content;
+      } else {
+        return SalufitScaffold(body: content);
+      }
   }
 }
 
 // ============================================================================
-// PESTAÑA 1: DOCUMENTOS (Sin cambios en lógica, ya funcionaba bien)
+// PESTAÑA 1: DOCUMENTOS (ACTUALIZADA CON LÓGICA DE CONSENTIMIENTOS)
 // ============================================================================
 class _DocumentsTab extends StatelessWidget {
   final String userEmail;
@@ -125,28 +133,50 @@ class _DocumentsTab extends StatelessWidget {
         if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
         if (snapshot.data!.docs.isEmpty) return const _EmptyState(icon: Icons.folder_open, text: 'No tienes documentos');
 
-        final docs = snapshot.data!.docs.map((doc) => PatientDocument.fromFirestore(doc)).toList();
-
         return ListView.separated(
           padding: const EdgeInsets.all(20),
-          itemCount: docs.length,
+          itemCount: snapshot.data!.docs.length,
           separatorBuilder: (context, index) => const SizedBox(height: 15),
           itemBuilder: (context, index) {
-            final doc = docs[index];
-            final visual = _getDocVisuals(doc.firmado);
+            // Accedemos al documento crudo para obtener campos nuevos que quizás no estén en tu modelo
+            final rawDoc = snapshot.data!.docs[index];
+            final data = rawDoc.data() as Map<String, dynamic>;
+            
+            // Usamos tu modelo para los datos comunes
+            final docModel = PatientDocument.fromFirestore(rawDoc); 
+
+            // --- LÓGICA NUEVA: Extraer customConsents ---
+            List<String> consentimientos = [];
+            if (data.containsKey('customConsents') && data['customConsents'] is List) {
+              consentimientos = List<String>.from(data['customConsents']);
+            }
+
+            final visual = _getDocVisuals(docModel.firmado);
             final List<Color> gradient = visual['colors'];
             
             return Container(
               height: 100,
-              decoration: BoxDecoration(gradient: LinearGradient(colors: gradient), borderRadius: BorderRadius.circular(15), boxShadow: [BoxShadow(color: gradient[0].withValues(alpha: 0.3), blurRadius: 5, offset: const Offset(0, 3))]),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(colors: gradient), 
+                borderRadius: BorderRadius.circular(15), 
+                boxShadow: [BoxShadow(color: gradient[0].withValues(alpha: 0.3), blurRadius: 5, offset: const Offset(0, 3))] // FIX: withValues
+              ),
               child: ListTile(
                 contentPadding: const EdgeInsets.symmetric(horizontal: 15, vertical: 10),
                 leading: Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(10)), child: Icon(visual['icon'], color: Colors.white)),
-                title: Text(doc.titulo, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                subtitle: Text(doc.firmado ? "Firmado el ${DateFormat('dd/MM/yy').format(doc.fechaFirma!)}" : 'Requiere firma', style: const TextStyle(color: Colors.white70, fontSize: 12)),
-                trailing: !doc.firmado 
+                title: Text(docModel.titulo, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                subtitle: Text(docModel.firmado ? "Firmado el ${DateFormat('dd/MM/yy').format(docModel.fechaFirma!)}" : 'Requiere firma', style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                trailing: !docModel.firmado 
                   ? ElevatedButton(
-                      onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => SignDocumentScreen(userId: userId, documentId: doc.id, documentTitle: doc.titulo))),
+                      onPressed: () => Navigator.push(
+                        context, 
+                        MaterialPageRoute(builder: (_) => SignDocumentScreen(
+                          userId: userId, 
+                          documentId: docModel.id, 
+                          documentTitle: docModel.titulo,
+                          consentOptions: consentimientos, 
+                        ))
+                      ),
                       style: ElevatedButton.styleFrom(backgroundColor: Colors.white, foregroundColor: visual['textColor'], padding: const EdgeInsets.symmetric(horizontal: 10), minimumSize: const Size(70, 30)),
                       child: const Text('FIRMAR', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)))
                   : const Icon(Icons.check, color: Colors.white),
@@ -160,14 +190,13 @@ class _DocumentsTab extends StatelessWidget {
 }
 
 // ============================================================================
-// PESTAÑA 2: MÉTRICAS (Corregido: Root Collection + Email Filter)
+// PESTAÑA 2: MÉTRICAS 
 // ============================================================================
 class _MetricsTab extends StatefulWidget {
-  final String userEmail; // Necesario para seguridad
+  final String userEmail;
   final String userId;
   final Color themeColor;
   const _MetricsTab({required this.userEmail, required this.userId, required this.themeColor});
-
   @override
   State<_MetricsTab> createState() => _MetricsTabState();
 }
@@ -225,13 +254,10 @@ class _MetricsTabState extends State<_MetricsTab> {
             style: ElevatedButton.styleFrom(backgroundColor: widget.themeColor, foregroundColor: Colors.white),
             onPressed: () async {
               if (typeController.text.isEmpty || valueController.text.isEmpty) return;
-              
               final double? val = double.tryParse(valueController.text.replaceAll(',', '.'));
               if (val == null) return;
-
-              // CORRECCIÓN: Guardamos en raíz 'metrics' con userEmail para validar reglas
               await FirebaseFirestore.instance.collection('metrics').add({
-                'userEmail': widget.userEmail, // <--- CLAVE DE SEGURIDAD
+                'userEmail': widget.userEmail,
                 'userId': widget.userId,
                 'type': typeController.text.trim(), 
                 'value': val,
@@ -239,9 +265,7 @@ class _MetricsTabState extends State<_MetricsTab> {
                 'date': FieldValue.serverTimestamp(),
                 'addedBy': 'client'
               });
-              
-              if (!mounted) return;
-              // ignore: use_build_context_synchronously
+              if (!context.mounted) return;
               Navigator.pop(context);
             }, 
             child: const Text('GUARDAR')
@@ -253,19 +277,14 @@ class _MetricsTabState extends State<_MetricsTab> {
 
   @override
   Widget build(BuildContext context) {
-    // Consulta base filtrada por email
     final Query baseQuery = FirebaseFirestore.instance.collection('metrics').where('userEmail', isEqualTo: widget.userEmail);
-
     return Scaffold(
       backgroundColor: Colors.transparent,
       floatingActionButton: FloatingActionButton(
         onPressed: () {
-          // Buscamos tipos existentes en sus métricas para sugerir
           baseQuery.get().then((snap) {
             final Set<String> types = {};
-            for (var doc in snap.docs) {
-               types.add(doc['type']);
-            }
+            for (var doc in snap.docs) { types.add(doc['type']); }
             _showAddMetricDialog(types.toList());
           });
         },
@@ -278,14 +297,10 @@ class _MetricsTabState extends State<_MetricsTab> {
             stream: baseQuery.snapshots(),
             builder: (context, snapshot) {
               if (!snapshot.hasData) return const SizedBox();
-              
               final Set<String> types = {'Todo'};
-              for (var doc in snapshot.data!.docs) {
-                types.add((doc['type'] as String));
-              }
+              for (var doc in snapshot.data!.docs) { types.add((doc['type'] as String)); }
               final List<String> typeList = types.toList();
               typeList.sort();
-  
               return Container(
                 height: 50,
                 margin: const EdgeInsets.only(top: 10),
@@ -301,13 +316,9 @@ class _MetricsTabState extends State<_MetricsTab> {
                       child: ChoiceChip(
                         label: Text(type),
                         selected: isSelected,
-                        selectedColor: widget.themeColor.withValues(alpha: 0.2),
+                        selectedColor: widget.themeColor.withValues(alpha: 0.2), // FIX: withValues
                         labelStyle: TextStyle(color: isSelected ? widget.themeColor : Colors.grey),
-                        onSelected: (bool selected) {
-                          setState(() {
-                            _selectedMetricType = type == 'Todo' ? null : type;
-                          });
-                        },
+                        onSelected: (bool selected) { setState(() { _selectedMetricType = type == 'Todo' ? null : type; }); },
                       ),
                     );
                   },
@@ -315,42 +326,32 @@ class _MetricsTabState extends State<_MetricsTab> {
               );
             },
           ),
-  
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
               stream: baseQuery.orderBy('date', descending: true).snapshots(),
               builder: (context, snapshot) {
                 if (snapshot.hasError) return Center(child: Text('Error: ${snapshot.error}'));
                 if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
-                
                 var docs = snapshot.data!.docs;
-                if (_selectedMetricType != null) {
-                  docs = docs.where((d) => d['type'] == _selectedMetricType).toList();
-                }
-  
+                if (_selectedMetricType != null) { docs = docs.where((d) => d['type'] == _selectedMetricType).toList(); }
                 if (docs.isEmpty) return const _EmptyState(icon: Icons.show_chart, text: 'Sin registros.\nAñade tus mediciones (Peso, RM...)');
-  
                 return ListView.builder(
                   padding: const EdgeInsets.all(20),
                   itemCount: docs.length,
                   itemBuilder: (context, index) {
                     final data = docs[index].data() as Map<String, dynamic>;
                     final DateTime date = (data['date'] as Timestamp?)?.toDate() ?? DateTime.now();
-                    
                     return Card(
                       elevation: 0,
                       color: Colors.grey.shade50,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: Colors.grey.shade200)),
                       child: ListTile(
                         leading: CircleAvatar(
-                          backgroundColor: widget.themeColor.withValues(alpha: 0.1),
-                          child: Icon(Icons.insights, color: widget.themeColor, size: 20),
+                          backgroundColor: widget.themeColor.withValues(alpha: 0.1), // FIX: withValues
+                          child: Icon(Icons.insights, color: widget.themeColor, size: 20)
                         ),
                         title: Text(data['type'], style: const TextStyle(fontWeight: FontWeight.bold)),
-                        trailing: Text(
-                          "${data['value']} ${data['unit'] ?? ''}", 
-                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: widget.themeColor)
-                        ),
+                        trailing: Text("${data['value']} ${data['unit'] ?? ''}", style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: widget.themeColor)),
                         subtitle: Text(DateFormat('dd MMM yyyy - HH:mm').format(date)),
                       ),
                     );
@@ -366,14 +367,13 @@ class _MetricsTabState extends State<_MetricsTab> {
 }
 
 // ============================================================================
-// PESTAÑA 3: DIARIO (Corregido: Root Collection + Email Filter)
+// PESTAÑA 3: DIARIO
 // ============================================================================
 class _JournalTab extends StatefulWidget {
-  final String userEmail; // Necesario para seguridad
+  final String userEmail;
   final String userId;
   final Color themeColor;
   const _JournalTab({required this.userEmail, required this.userId, required this.themeColor});
-
   @override
   State<_JournalTab> createState() => _JournalTabState();
 }
@@ -383,7 +383,6 @@ class _JournalTabState extends State<_JournalTab> {
     final titleController = TextEditingController();
     final contentController = TextEditingController();
     String category = 'Sensaciones';
-
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -401,11 +400,7 @@ class _JournalTabState extends State<_JournalTab> {
               const SizedBox(height: 10),
               TextField(controller: titleController, decoration: const InputDecoration(labelText: 'Título breve', border: OutlineInputBorder())),
               const SizedBox(height: 10),
-              TextField(
-                controller: contentController, 
-                maxLines: 4, 
-                decoration: const InputDecoration(labelText: '¿Qué quieres contar?', border: OutlineInputBorder(), alignLabelWithHint: true)
-              ),
+              TextField(controller: contentController, maxLines: 4, decoration: const InputDecoration(labelText: '¿Qué quieres contar?', border: OutlineInputBorder(), alignLabelWithHint: true)),
             ],
           ),
         ),
@@ -415,10 +410,8 @@ class _JournalTabState extends State<_JournalTab> {
             style: ElevatedButton.styleFrom(backgroundColor: widget.themeColor, foregroundColor: Colors.white),
             onPressed: () async {
               if (contentController.text.isEmpty) return;
-              
-              // CORRECCIÓN: Guardamos en raíz 'journal' con userEmail
               await FirebaseFirestore.instance.collection('journal').add({
-                'userEmail': widget.userEmail, // <--- CLAVE DE SEGURIDAD
+                'userEmail': widget.userEmail,
                 'userId': widget.userId,
                 'title': titleController.text.isEmpty ? 'Sin título' : titleController.text,
                 'content': contentController.text,
@@ -426,9 +419,7 @@ class _JournalTabState extends State<_JournalTab> {
                 'date': FieldValue.serverTimestamp(),
                 'isStaffRead': false, 
               });
-
-              if (!mounted) return;
-              // ignore: use_build_context_synchronously
+              if (!context.mounted) return;
               Navigator.pop(context);
             }, 
             child: const Text('GUARDAR')
@@ -440,9 +431,7 @@ class _JournalTabState extends State<_JournalTab> {
 
   @override
   Widget build(BuildContext context) {
-    // Consulta base filtrada por email
     final Query baseQuery = FirebaseFirestore.instance.collection('journal').where('userEmail', isEqualTo: widget.userEmail);
-
     return Scaffold(
       backgroundColor: Colors.transparent,
       floatingActionButton: FloatingActionButton(
@@ -464,7 +453,6 @@ class _JournalTabState extends State<_JournalTab> {
               final data = snapshot.data!.docs[index].data() as Map<String, dynamic>;
               final DateTime date = (data['date'] as Timestamp?)?.toDate() ?? DateTime.now();
               final bool isRead = data['isStaffRead'] ?? false;
-
               return Card(
                 elevation: 2,
                 margin: const EdgeInsets.only(bottom: 15),
@@ -479,11 +467,10 @@ class _JournalTabState extends State<_JournalTab> {
                         children: [
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                            decoration: BoxDecoration(color: widget.themeColor.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
+                            decoration: BoxDecoration(color: widget.themeColor.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)), // FIX: withValues
                             child: Text(data['category'] ?? 'General', style: TextStyle(color: widget.themeColor, fontSize: 11, fontWeight: FontWeight.bold)),
                           ),
-                          if (isRead) 
-                            const Tooltip(message: 'Visto por el profesional', child: Icon(Icons.done_all, size: 16, color: Colors.blue)),
+                          if (isRead) const Tooltip(message: 'Visto por el profesional', child: Icon(Icons.done_all, size: 16, color: Colors.blue)),
                         ],
                       ),
                       const SizedBox(height: 8),
@@ -508,18 +495,8 @@ class _EmptyState extends StatelessWidget {
   final IconData icon;
   final String text;
   const _EmptyState({required this.icon, required this.text});
-
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(icon, size: 60, color: Colors.grey.shade300),
-          const SizedBox(height: 15),
-          Text(text, textAlign: TextAlign.center, style: const TextStyle(color: Colors.grey)),
-        ],
-      ),
-    );
+    return Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(icon, size: 60, color: Colors.grey.shade300), const SizedBox(height: 15), Text(text, textAlign: TextAlign.center, style: const TextStyle(color: Colors.grey))]));
   }
 }

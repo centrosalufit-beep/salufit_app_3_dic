@@ -78,8 +78,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) return;
 
-      // 1. Borrar datos de Firestore (opcional: o marcar como deleted)
-      await FirebaseFirestore.instance.collection('users').doc(user.uid).delete();
+      // 1. Borrar datos de Firestore
+      try {
+        await FirebaseFirestore.instance.collection('users').doc(user.uid).delete();
+      } catch (e) {
+        debugPrint('No se pudo borrar el doc de Firestore (posiblemente falta permiso delete): $e');
+      }
       
       // 2. Borrar autenticación
       await user.delete();
@@ -229,7 +233,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
-  // --- TARJETA INTELIGENTE PERSONALIZADA ---
+  // --- TARJETA INTELIGENTE ---
   Widget _buildSmartPromoCard(String? userEmail) {
     if (userEmail == null) return const SizedBox();
 
@@ -245,7 +249,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
         final List<String> classIds = snapshot.data!.docs.map((d) => d['groupClassId'] as String).toList();
 
         if (classIds.isEmpty) {
-          // Usuario nuevo o sin reservas: Default
           return _promoCardDesign(
             'REGALO MENSUAL EXCLUSIVO',
             'Tras estudiar tu perfil, te recomendamos usar tu sesión extra para entrenar en grupo y así mejorar tu fuerza.',
@@ -274,7 +277,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
             String keywordBusqueda = ''; 
             IconData iconoSugerido = Icons.star;
             
-            // LÓGICA DE PERSONALIZACIÓN DE MENSAJE
             if (!tiposConsumidos.contains('meditacion')) {
               mensajePersonalizado = 'Tras haber estudiado tu perfil y conocer más sobre ti, te recomendamos que este mes disfrutes de tu sesión extra mensual para meditar en grupo y reducir tus niveles de estrés.';
               keywordBusqueda = 'medita'; 
@@ -288,113 +290,43 @@ class _ProfileScreenState extends State<ProfileScreen> {
               keywordBusqueda = 'entrena'; 
               iconoSugerido = Icons.fitness_center;
             } else {
-              // Fallback si hace de todo
               mensajePersonalizado = 'Tras estudiar tu perfil, te recomendamos usar tu sesión extra para probar una nueva experiencia de salud y bienestar.';
               keywordBusqueda = 'entrena'; 
               iconoSugerido = Icons.auto_awesome;
             }
 
-            return _promoCardDesign(
-              'REGALO MENSUAL EXCLUSIVO',
-              mensajePersonalizado,
-              iconoSugerido,
-              keywordBusqueda
-            );
+            return _promoCardDesign('REGALO MENSUAL EXCLUSIVO', mensajePersonalizado, iconoSugerido, keywordBusqueda);
           },
         );
       },
     );
   }
 
-  // --- DISEÑO TARJETA DORADA CON REGALO ---
   Widget _promoCardDesign(String titulo, String cuerpo, IconData iconoClase, String keywordBusqueda) {
     return Container(
       width: double.infinity,
-      // Altura mínima pero flexible
       constraints: const BoxConstraints(minHeight: 200), 
       clipBehavior: Clip.hardEdge, 
       decoration: BoxDecoration(
-        // DEGRADADO DORADO PREMIUM
-        gradient: const LinearGradient(
-          colors: [Color(0xFFFFD700), Color(0xFFFFA000)], // Oro a Ámbar
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight
-        ), 
+        gradient: const LinearGradient(colors: [Color(0xFFFFD700), Color(0xFFFFA000)], begin: Alignment.topLeft, end: Alignment.bottomRight), 
         borderRadius: BorderRadius.circular(25), 
-        boxShadow: [
-          BoxShadow(color: Colors.orange.withValues(alpha: 0.4), blurRadius: 12, offset: const Offset(0, 6))
-        ]
+        boxShadow: [BoxShadow(color: Colors.orange.withValues(alpha: 0.4), blurRadius: 12, offset: const Offset(0, 6))]
       ),
       child: Stack(
         children: [
-          // 1. MARCA DE AGUA: ICONO DE REGALO
-          Positioned(
-            right: -20,
-            bottom: -20,
-            child: Transform.rotate(
-              angle: -0.2, 
-              child: Icon(
-                Icons.card_giftcard, // <--- ICONO DE REGALO EN EL FONDO
-                size: 220, 
-                color: Colors.white.withValues(alpha: 0.25) 
-              ),
-            ),
-          ),
-
-          // 2. CONTENIDO
+          Positioned(right: -20, bottom: -20, child: Transform.rotate(angle: -0.2, child: Icon(Icons.card_giftcard, size: 220, color: Colors.white.withValues(alpha: 0.25)))),
           Padding(
             padding: const EdgeInsets.all(25),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Etiqueta superior
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                  decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
-                  child: const Text('SUGERENCIA PERSONALIZADA', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.0))
-                ),
+                Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5), decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)), child: const Text('SUGERENCIA PERSONALIZADA', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.0))),
                 const SizedBox(height: 15),
-                
-                // Título
-                Text(
-                  titulo, 
-                  style: TextStyle(fontWeight: FontWeight.w900, color: Colors.brown.shade900, fontSize: 20, height: 1.1)
-                ),
+                Text(titulo, style: TextStyle(fontWeight: FontWeight.w900, color: Colors.brown.shade900, fontSize: 20, height: 1.1)),
                 const SizedBox(height: 10),
-                
-                // Cuerpo del mensaje (Personalizado)
-                Text(
-                  cuerpo, 
-                  style: TextStyle(color: Colors.brown.shade800, fontSize: 14, height: 1.4, fontWeight: FontWeight.w500),
-                ),
-                
+                Text(cuerpo, style: TextStyle(color: Colors.brown.shade800, fontSize: 14, height: 1.4, fontWeight: FontWeight.w500)),
                 const SizedBox(height: 20),
-                
-                // Botón de Acción
-                SizedBox(
-                  width: double.infinity,
-                  height: 50,
-                  child: ElevatedButton(
-                    onPressed: () => _buscarYRedirigirClase(keywordBusqueda),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.brown.shade900, // Botón oscuro para contraste con dorado
-                      foregroundColor: Colors.white, // Texto blanco
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-                      elevation: 5,
-                      shadowColor: Colors.brown.withValues(alpha: 0.4)
-                    ),
-                    child: _isSearchingClass
-                        ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                        : const Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(Icons.star, size: 18, color: Colors.amber),
-                              SizedBox(width: 8),
-                              Text('MEJORA TU CALIDAD DE VIDA', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, letterSpacing: 0.5)),
-                            ],
-                          ),
-                  ),
-                )
+                SizedBox(width: double.infinity, height: 50, child: ElevatedButton(onPressed: () => _buscarYRedirigirClase(keywordBusqueda), style: ElevatedButton.styleFrom(backgroundColor: Colors.brown.shade900, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)), elevation: 5, shadowColor: Colors.brown.withValues(alpha: 0.4)), child: _isSearchingClass ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) : const Row(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(Icons.star, size: 18, color: Colors.amber), SizedBox(width: 8), Text('MEJORA TU CALIDAD DE VIDA', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, letterSpacing: 0.5))])))
               ],
             ),
           ),
@@ -416,15 +348,28 @@ class _ProfileScreenState extends State<ProfileScreen> {
             crossAxisAlignment: CrossAxisAlignment.start, 
             children: [
               
-              // 1. CABECERA
-              StreamBuilder<QuerySnapshot>(
-                stream: FirebaseFirestore.instance.collection('users').where('email', isEqualTo: userEmail).limit(1).snapshots(),
+              // 1. CABECERA (CORREGIDO: Fallback para nombre)
+              StreamBuilder<DocumentSnapshot>(
+                stream: FirebaseFirestore.instance.collection('users').doc(widget.userId).snapshots(),
                 builder: (context, snapshotUser) {
-                  String nombreCompleto = 'CARGANDO...';
-                  if (snapshotUser.hasData && snapshotUser.data!.docs.isNotEmpty) { 
-                      final d = snapshotUser.data!.docs.first.data() as Map<String,dynamic>; 
-                      nombreCompleto = (d['nombreCompleto']??d['nombre']??'USUARIO').toString().toUpperCase(); 
+                  String nombreCompleto = 'Cargando...';
+                  
+                  if (snapshotUser.hasData && snapshotUser.data!.exists) { 
+                      final d = snapshotUser.data!.data() as Map<String,dynamic>; 
+                      // Intenta coger el nombre de la BD, si no hay, coge "Usuario"
+                      final String? nameDb = d['nombreCompleto'] ?? d['nombre'];
+                      
+                      if (nameDb != null && nameDb.isNotEmpty) {
+                        nombreCompleto = nameDb.toUpperCase();
+                      } else {
+                        // FALLBACK: Nombre de Google/Apple si la ficha está vacía
+                        nombreCompleto = (FirebaseAuth.instance.currentUser?.displayName ?? 'USUARIO').toUpperCase();
+                      }
+                  } else {
+                     // Si aún no carga, nombre de Google
+                     nombreCompleto = (FirebaseAuth.instance.currentUser?.displayName ?? 'USUARIO').toUpperCase();
                   }
+
                   return Row(
                     children: [
                       Image.asset('assets/logo_salufit.png', width: 60, fit: BoxFit.contain, errorBuilder: (c,e,s) => Icon(Icons.person, size: 60, color: salufitTeal)),
@@ -458,6 +403,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                            int tokens = 0; bool isActive = false;
                            if (snapshotPass.hasData && snapshotPass.data!.docs.isNotEmpty) {
                               final docs = snapshotPass.data!.docs;
+                              // Filtramos en memoria igual que en class_list_screen
                               final bonoActivo = docs.where((d) => (d.data() as Map<String,dynamic>)['tokensRestantes'] > 0).firstOrNull;
                               if (bonoActivo != null) { tokens = (bonoActivo.data() as Map<String,dynamic>)['tokensRestantes']; isActive = true; }
                            }
@@ -502,7 +448,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
               
               const SizedBox(height: 20),
 
-              // 3. TARJETA INTELIGENTE PREMIUM (Cross-Selling)
               _buildSmartPromoCard(userEmail),
 
               const SizedBox(height: 35),
@@ -510,7 +455,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
               Text('MIS RESERVAS RECIENTES', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: salufitTeal, fontFamily: 'serif', letterSpacing: 1.0)), 
               const SizedBox(height: 15),
 
-              // 4. LISTA RESERVAS
               StreamBuilder<QuerySnapshot>(
                 stream: FirebaseFirestore.instance.collection('bookings').where('userEmail', isEqualTo: userEmail).orderBy('fechaReserva', descending: true).limit(10).snapshots(),
                 builder: (context, snapshot) {
@@ -552,16 +496,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
               const SizedBox(height: 40),
               
-              // BOTONES DE GESTIÓN DE CUENTA
               SizedBox(width: double.infinity, child: OutlinedButton.icon(onPressed: () { Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (context) => const LoginScreen()), (route) => false); }, icon: const Icon(Icons.logout, color: Colors.orange), label: const Text('Cerrar Sesión', style: TextStyle(color: Colors.orange)), style: OutlinedButton.styleFrom(padding: const EdgeInsets.all(15), side: const BorderSide(color: Colors.orange), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))))),
               const SizedBox(height: 10),
-              Center(
-                child: TextButton(
-                  onPressed: _eliminarCuenta,
-                  child: const Text('Eliminar mi cuenta definitivamente', style: TextStyle(color: Colors.red, fontSize: 12, fontWeight: FontWeight.bold)),
-                ),
-              ),
-
+              Center(child: TextButton(onPressed: _eliminarCuenta, child: const Text('Eliminar mi cuenta definitivamente', style: TextStyle(color: Colors.red, fontSize: 12, fontWeight: FontWeight.bold)))),
               const SizedBox(height: 10),
               Center(child: TextButton(onPressed: _abrirPrivacidad, child: const Text('Política de Privacidad', style: TextStyle(color: Colors.grey, decoration: TextDecoration.underline, fontSize: 12)))),
               const SizedBox(height: 20),

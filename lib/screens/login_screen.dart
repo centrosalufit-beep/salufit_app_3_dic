@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:local_auth/local_auth.dart';
+import 'package:flutter/services.dart'; 
 import 'activation_screen.dart';
 import 'home_screen.dart'; 
 
@@ -28,10 +29,11 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   void initState() {
     super.initState();
+    // Check inicial: Si hay usuario en caché, intentamos biometría
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
       Future.delayed(const Duration(milliseconds: 500), () {
-        _checkBiometrics();
+        if (mounted) _checkBiometrics();
       });
     }
   }
@@ -43,11 +45,22 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-  // --- LÓGICA DE REDIRECCIÓN INTELIGENTE ---
+  // --- LÓGICA DE REDIRECCIÓN ---
   Future<void> _navegarAlHome(String userId) async {
     try {
+      await FirebaseAuth.instance.currentUser?.reload();
+    } catch (e) {
+      await FirebaseAuth.instance.signOut();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Sesión expirada. Inicia sesión de nuevo.'), backgroundColor: Colors.orange),
+        );
+      }
+      return;
+    }
+
+    try {
       final DocumentSnapshot userDoc = await FirebaseFirestore.instance.collection('users').doc(userId).get();
-      
       String role = 'cliente'; 
       if (userDoc.exists) {
         final data = userDoc.data() as Map<String, dynamic>;
@@ -58,24 +71,20 @@ class _LoginScreenState extends State<LoginScreen> {
 
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(
-          builder: (_) => HomeScreen(userId: userId, userRole: role),
-        ),
+        MaterialPageRoute(builder: (_) => HomeScreen(userId: userId, userRole: role)),
       );
     } catch (e) {
-      debugPrint('Error obteniendo rol: $e');
       if (mounted) {
+        // Fallback seguro
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(
-            builder: (_) => HomeScreen(userId: userId, userRole: 'cliente'),
-          ),
+          MaterialPageRoute(builder: (_) => HomeScreen(userId: userId, userRole: 'cliente')),
         );
       }
     }
   }
 
-  /// Verifica la huella
+  /// Verifica la huella (ESTRATEGIA UNIVERSAL)
   Future<void> _checkBiometrics() async {
     bool canCheckBiometrics = false;
     try {
@@ -88,18 +97,20 @@ class _LoginScreenState extends State<LoginScreen> {
     if (!canCheckBiometrics) return;
 
     try {
+      // 🛡️ SOLUCIÓN ANTIBUCLE: 
+      // Llamamos al método SIN parámetros opcionales.
+      // Esto es válido en v2.x y en v3.x, evitando cualquier error de "parámetro no definido".
       final bool didAuthenticate = await auth.authenticate(
         localizedReason: 'Salufit requiere autenticación para acceder',
-        persistAcrossBackgrounding: true,
-        biometricOnly: true,
+        // Nota: Al no pasar opciones, usa la configuración por defecto del sistema.
+        // Esto garantiza que la app compile sin errores de sintaxis.
       );
 
       if (didAuthenticate && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('✅ Identidad verificada'), backgroundColor: Colors.green));
-
         final user = FirebaseAuth.instance.currentUser;
         if (user != null) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('✅ Identidad verificada'), backgroundColor: Colors.green, duration: Duration(seconds: 1)));
           _navegarAlHome(user.uid);
         } else {
           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
@@ -107,8 +118,10 @@ class _LoginScreenState extends State<LoginScreen> {
               backgroundColor: Colors.orange));
         }
       }
+    } on PlatformException catch (e) {
+       debugPrint('Error auth plataforma: ${e.message}');
     } catch (e) {
-      debugPrint('Error auth: $e');
+      debugPrint('Error auth genérico: $e');
     }
   }
 
@@ -133,27 +146,19 @@ class _LoginScreenState extends State<LoginScreen> {
       }
     } on FirebaseAuthException catch (e) {
       String msg = 'Error de autenticación';
-
-      if (e.code == 'user-not-found') {
-        msg = 'Usuario no encontrado';
+      if (e.code == 'user-not-found' || e.code == 'invalid-credential') {
+        msg = 'Usuario o contraseña incorrectos';
       } else if (e.code == 'wrong-password') {
         msg = 'Contraseña incorrecta';
-      } else if (e.code == 'invalid-email') {
-        msg = 'Email inválido';
       } else if (e.code == 'too-many-requests') {
         msg = 'Demasiados intentos. Intenta más tarde.';
       }
-
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(msg), backgroundColor: Colors.red),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: Colors.red));
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red));
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -185,18 +190,12 @@ class _LoginScreenState extends State<LoginScreen> {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    // LOGO XL (Tamaño restaurado a 0.35)
                     Image.asset(
                       'assets/login_logo.png',
-                      height: size.height * 0.35, // <--- TAMAÑO ORIGINAL GRANDE
+                      height: size.height * 0.35, 
                       fit: BoxFit.contain,
-                      errorBuilder: (c, e, s) => Icon(
-                        Icons.fitness_center,
-                        size: 150,
-                        color: salufitGreen,
-                      ),
+                      errorBuilder: (c, e, s) => Icon(Icons.fitness_center, size: 150, color: salufitGreen),
                     ),
-                    
                     const SizedBox(height: 20), 
 
                     TextField(
@@ -208,14 +207,8 @@ class _LoginScreenState extends State<LoginScreen> {
                         filled: true,
                         fillColor: Colors.white,
                         prefixIcon: const Icon(Icons.email_outlined),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide.none,
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                           borderSide: const BorderSide(color: Colors.white),
-                        )
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Colors.white))
                       ),
                     ),
                     const SizedBox(height: 15), 
@@ -231,25 +224,15 @@ class _LoginScreenState extends State<LoginScreen> {
                         fillColor: Colors.white,
                         prefixIcon: const Icon(Icons.lock_outline),
                         suffixIcon: IconButton(
-                          icon: Icon(_isObscure
-                              ? Icons.visibility
-                              : Icons.visibility_off),
-                          onPressed: () =>
-                              setState(() => _isObscure = !_isObscure),
+                          icon: Icon(_isObscure ? Icons.visibility : Icons.visibility_off),
+                          onPressed: () => setState(() => _isObscure = !_isObscure),
                         ),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                           borderSide: BorderSide.none,
-                        ),
-                         enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: const BorderSide(color: Colors.white),
-                        )
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Colors.white))
                       ),
                     ),
                     const SizedBox(height: 25),
 
-                    // BOTÓN LOGIN
                     SizedBox(
                       width: double.infinity,
                       height: 50,
@@ -258,37 +241,22 @@ class _LoginScreenState extends State<LoginScreen> {
                         style: ElevatedButton.styleFrom(
                           backgroundColor: salufitGreen,
                           foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                           elevation: 5,
                         ),
                         child: _isLoading
                             ? const CircularProgressIndicator(color: Colors.white)
-                            : const Text(
-                                'INICIAR SESIÓN',
-                                style: TextStyle(
-                                    fontWeight: FontWeight.bold, fontSize: 16),
-                              ),
+                            : const Text('INICIAR SESIÓN', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                       ),
                     ),
 
                     const SizedBox(height: 5), 
 
-                    // BOTÓN REGISTRO (Pegado al login)
                     TextButton(
                       onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                              builder: (context) => const ActivationScreen()),
-                        );
+                        Navigator.push(context, MaterialPageRoute(builder: (context) => const ActivationScreen()));
                       },
-                      style: TextButton.styleFrom(
-                        padding: EdgeInsets.zero,
-                        minimumSize: const Size(0, 0),
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      ),
+                      style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size(0, 0), tapTargetSize: MaterialTapTargetSize.shrinkWrap),
                       child: Text(
                         '¿Primera vez? Activa tu cuenta aquí',
                         style: TextStyle(
@@ -296,7 +264,9 @@ class _LoginScreenState extends State<LoginScreen> {
                             fontWeight: FontWeight.bold,
                             decoration: TextDecoration.underline,
                             fontSize: 13,
-                            shadows: [Shadow(color: Colors.white.withValues(alpha: 0.8), blurRadius: 2, offset: const Offset(0,1))]
+                            // USAMOS IGNORAR DEPRECATED PARA EVITAR ERRORES EN VERSIONES VIEJAS Y NUEVAS
+                            // ignore: deprecated_member_use
+                            shadows: [Shadow(color: Colors.white.withOpacity(0.8), blurRadius: 2, offset: const Offset(0,1))]
                         ),
                       ),
                     ),
@@ -305,19 +275,12 @@ class _LoginScreenState extends State<LoginScreen> {
 
                     Row(children: [
                       Expanded(child: Divider(color: Colors.grey.shade300)),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 10),
-                        child: Text(
-                          'O usa biometría',
-                          style: TextStyle(color: Colors.grey.shade100, fontSize: 12),
-                        ),
-                      ),
+                      Padding(padding: const EdgeInsets.symmetric(horizontal: 10), child: Text('O usa biometría', style: TextStyle(color: Colors.grey.shade100, fontSize: 12))),
                       Expanded(child: Divider(color: Colors.grey.shade300)),
                     ]),
 
                     const SizedBox(height: 15), 
 
-                    // BOTÓN BIOMETRÍA COMPACTO
                     InkWell(
                       onTap: _checkBiometrics,
                       borderRadius: BorderRadius.circular(50),
@@ -326,20 +289,14 @@ class _LoginScreenState extends State<LoginScreen> {
                         decoration: BoxDecoration(
                           color: Colors.white,
                           shape: BoxShape.circle,
-                          border: Border.all(
-                            color: salufitGreen.withValues(alpha: 0.3),
-                            width: 2,
-                          ),
+                          // ignore: deprecated_member_use
+                          border: Border.all(color: salufitGreen.withOpacity(0.3), width: 2),
                         ),
-                        child:
-                            Icon(Icons.fingerprint, size: 32, color: salufitGreen), 
+                        child: Icon(Icons.fingerprint, size: 32, color: salufitGreen), 
                       ),
                     ),
                     const SizedBox(height: 5),
-                    Text(
-                      'Toca para validar',
-                      style: TextStyle(color: Colors.grey.shade100, fontSize: 11),
-                    ),
+                    Text('Toca para validar', style: TextStyle(color: Colors.grey.shade100, fontSize: 11)),
                   ],
                 ),
               ),

@@ -11,6 +11,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 
 // --- IMPORTS DE PANTALLAS ---
 import 'admin_patient_list_screen.dart';
+import 'admin_patient_detail_screen.dart'; // <--- IMPORTANTE: Importamos la ficha completa
 import 'qr_scanner_screen.dart';
 import 'admin_create_patient_screen.dart'; 
 import 'admin_time_report_screen.dart'; 
@@ -20,7 +21,7 @@ import 'admin_upload_excel_screen.dart';
 import 'admin_edit_time_records_screen.dart';
 import 'internal_management_screen.dart'; 
 import 'admin_class_manager_screen.dart'; 
-import 'admin_patient_resources_screens.dart';
+import 'admin_resources_hub_screen.dart'; 
 
 class ProfessionalPanelWidget extends StatefulWidget {
   final String userId;
@@ -186,30 +187,14 @@ class _ProfessionalPanelWidgetState extends State<ProfessionalPanelWidget> {
     );
   }
 
+  // Menú rápido de la agenda (abre directamente la ficha unificada)
   void _showPatientActionSheet(String patientId, String patientName) {
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (context) => Container(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(patientName, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.teal)),
-            const SizedBox(height: 5),
-            Text('ID: $patientId', style: const TextStyle(color: Colors.grey)),
-            const Divider(height: 30),
-            ListTile(leading: const Icon(Icons.video_library, color: Colors.indigo), title: const Text('Gestionar Material'), onTap: () { Navigator.pop(context); Navigator.push(context, MaterialPageRoute(builder: (c) => AdminPatientMaterialScreen(userId: patientId, userName: patientName))); }),
-            ListTile(leading: const Icon(Icons.folder_shared, color: Colors.orange), title: const Text('Gestionar Documentos'), onTap: () { Navigator.pop(context); Navigator.push(context, MaterialPageRoute(builder: (c) => AdminPatientDocumentsScreen(userId: patientId, userName: patientName, viewerRole: widget.userRole))); }),
-          ],
-        ),
-      ),
-    );
+    Navigator.push(context, MaterialPageRoute(builder: (c) => AdminPatientDetailScreen(userId: patientId, userName: patientName, viewerRole: widget.userRole)));
   }
 
   @override
   Widget build(BuildContext context) {
-    final bool isAdmin = widget.userRole == 'admin';
+    final bool isAdmin = widget.userRole == 'admin' || widget.userRole == 'administrador';
 
     return SafeArea(
       child: Column(
@@ -237,6 +222,7 @@ class _ProfessionalPanelWidgetState extends State<ProfessionalPanelWidget> {
               }
 
               final List<Widget> menuItems = [
+                // 1. FICHAJE
                 _MenuGridCard(
                   icon: isWorking ? Icons.timer : Icons.login,
                   label: isWorking ? 'EN TURNO\n(Salir)' : 'FICHAR\nENTRADA',
@@ -245,23 +231,17 @@ class _ProfessionalPanelWidgetState extends State<ProfessionalPanelWidget> {
                   isLoading: _isLoadingFichaje,
                   onTap: () => _fichar(isWorking ? 'OUT' : 'IN'),
                 ),
+                // 2. QR
                 _MenuGridCard(
                   icon: Icons.qr_code_scanner, label: 'Escanear\nEntrada', color: Colors.blueGrey,
                   onTap: () async { final res = await Navigator.push(context, MaterialPageRoute(builder: (context) => const QRScannerScreen())); if (res != null && mounted) _procesarPase(res); },
                 ),
+                // 3. GESTIÓN CLASES
                 _MenuGridCard(
                   icon: Icons.people, label: 'Gestión\nClases', color: Colors.teal,
                   onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => AdminClassManagerScreen(currentUserId: widget.userId))),
                 ),
-                _MenuGridCard(
-                  icon: Icons.video_library, label: 'Gestión\nMaterial', color: Colors.indigo,
-                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => AdminPatientListScreen(viewerRole: widget.userRole, onUserSelected: (uid, name) => Navigator.push(context, MaterialPageRoute(builder: (c) => AdminPatientMaterialScreen(userId: uid, userName: name)))))),
-                ),
-                _MenuGridCard(
-                  icon: Icons.folder_shared, label: 'Gestión\nDocs', color: Colors.orange,
-                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => AdminPatientListScreen(viewerRole: widget.userRole, onUserSelected: (uid, name) => Navigator.push(context, MaterialPageRoute(builder: (c) => AdminPatientDocumentsScreen(userId: uid, userName: name, viewerRole: widget.userRole)))))),
-                ),
-                // CHATS
+                // 4. CHATS
                 StreamBuilder<QuerySnapshot>(
                   stream: FirebaseFirestore.instance.collection('internal_chats').where('participants', arrayContains: widget.userId).snapshots(),
                   builder: (c, s) {
@@ -274,7 +254,7 @@ class _ProfessionalPanelWidgetState extends State<ProfessionalPanelWidget> {
                     return Badge(isLabelVisible: count > 0, label: Text('$count'), child: _MenuGridCard(icon: Icons.chat, label: 'Chats\nEquipo', color: Colors.cyan, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (c) => InternalManagementScreen(currentUserId: widget.userId, viewType: 'chat', userRole: widget.userRole)))));
                   }
                 ),
-                // TAREAS
+                // 5. TAREAS
                 StreamBuilder<QuerySnapshot>(
                   stream: FirebaseFirestore.instance.collection('internal_tasks').where('assignedToId', isEqualTo: widget.userId).where('status', isEqualTo: 'pending').snapshots(),
                   builder: (c, s) {
@@ -282,16 +262,39 @@ class _ProfessionalPanelWidgetState extends State<ProfessionalPanelWidget> {
                     return Badge(isLabelVisible: count > 0, label: Text('$count'), child: _MenuGridCard(icon: Icons.check_circle_outline, label: 'Mis\nTareas', color: Colors.deepPurple, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (c) => InternalManagementScreen(currentUserId: widget.userId, viewType: 'tasks', userRole: widget.userRole)))));
                   }
                 ),
+                
+                // 6. ASIGNAR RECURSOS (BOTÓN UNIFICADO)
+                _MenuGridCard(
+                  icon: Icons.assignment_ind, 
+                  label: 'Asignar\nRecursos', 
+                  color: Colors.indigo,
+                  onTap: () {
+                    // Navegamos a la lista, y al pulsar un paciente, vamos a su ficha completa
+                    Navigator.push(context, MaterialPageRoute(builder: (context) => 
+                      AdminPatientListScreen(
+                        viewerRole: widget.userRole, 
+                        onUserSelected: (uid, name) => Navigator.push(context, MaterialPageRoute(builder: (c) => 
+                          AdminPatientDetailScreen(userId: uid, userName: name, viewerRole: widget.userRole)
+                        ))
+                      )
+                    ));
+                  }, 
+                ),
               ];
 
               if (isAdmin) {
-                menuItems.addAll([
-                  _MenuGridCard(icon: Icons.person_add_alt_1, label: 'Nuevo\nPaciente', color: Colors.green, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (c) => const AdminCreatePatientScreen()))),
-                  _MenuGridCard(icon: Icons.autorenew, label: 'Renovar\nBonos', color: Colors.orange, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (c) => const AdminRenewalScreen()))),
-                  _MenuGridCard(icon: Icons.upload_file, label: 'Importar\nExcel', color: Colors.purple, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (c) => const AdminUploadExcelScreen()))),
-                  _MenuGridCard(icon: Icons.edit_calendar, label: 'Corregir\nFichajes', color: Colors.pink, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (c) => const AdminEditTimeRecordsScreen()))),
-                  _MenuGridCard(icon: Icons.picture_as_pdf, label: 'Informes\nRRHH', color: Colors.brown, onTap: _verificarPasswordInforme),
-                ]);
+                // 7. ADMIN: NUEVO PACIENTE
+                menuItems.add(_MenuGridCard(icon: Icons.person_add_alt_1, label: 'Nuevo\nPaciente', color: Colors.green, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (c) => const AdminCreatePatientScreen()))));
+                // 8. ADMIN: RENOVAR BONOS
+                menuItems.add(_MenuGridCard(icon: Icons.autorenew, label: 'Renovar\nBonos', color: Colors.orange, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (c) => const AdminRenewalScreen()))));
+                // 9. ADMIN: IMPORTAR EXCEL
+                menuItems.add(_MenuGridCard(icon: Icons.upload_file, label: 'Importar\nExcel', color: Colors.purple, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (c) => const AdminUploadExcelScreen()))));
+                // 10. ADMIN: RECURSOS (SUBIR A LIBRERÍA GENERAL)
+                menuItems.add(_MenuGridCard(icon: Icons.cloud_upload, label: 'Subir\nRecursos', color: Colors.pinkAccent, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (c) => const AdminResourcesHubScreen(userRole: 'admin')))));
+                // 11. ADMIN: INFORMES
+                menuItems.add(_MenuGridCard(icon: Icons.picture_as_pdf, label: 'Informes\nRRHH', color: Colors.brown, onTap: _verificarPasswordInforme));
+                // 12. ADMIN: CORREGIR FICHAJES
+                menuItems.add(_MenuGridCard(icon: Icons.edit_calendar, label: 'Corregir\nFichajes', color: Colors.redAccent, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (c) => const AdminEditTimeRecordsScreen()))));
               }
 
               return Column(
@@ -321,7 +324,7 @@ class _ProfessionalPanelWidgetState extends State<ProfessionalPanelWidget> {
                     crossAxisCount: 4, 
                     crossAxisSpacing: 8, 
                     mainAxisSpacing: 8,
-                    childAspectRatio: 0.85, 
+                    childAspectRatio: 0.80, 
                     children: menuItems,
                   ),
                 ],
@@ -331,7 +334,7 @@ class _ProfessionalPanelWidgetState extends State<ProfessionalPanelWidget> {
 
           const Divider(height: 1),
 
-          // 3. AGENDA 
+          // 3. AGENDA (Ahora abre la ficha unificada directamente)
           if (_currentUserName.isNotEmpty)
             Expanded(
               child: Column(
@@ -381,7 +384,7 @@ class _ProfessionalPanelWidgetState extends State<ProfessionalPanelWidget> {
   }
 }
 
-// TARJETA DE MENÚ OPTIMIZADA
+// TARJETA DE MENÚ 
 class _MenuGridCard extends StatelessWidget {
   final IconData icon;
   final String label;
@@ -404,7 +407,7 @@ class _MenuGridCard extends StatelessWidget {
         boxShadow: [
           BoxShadow(
             // ignore: deprecated_member_use
-            color: Colors.black.withOpacity(0.05), // SOLUCIÓN SEGURA
+            color: Colors.black.withOpacity(0.05),
             blurRadius: 4, 
             offset: const Offset(0, 2)
           )

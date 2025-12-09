@@ -2,9 +2,8 @@ name: salufit_app
 description: Aplicación de gestión integral para Salufit.
 publish_to: 'none'
 
-# CAMBIO 1: Subimos versión. 
 # El +2 es vital para que la tienda detecte la actualización.
-version: 1.0.1+2
+version: 1.0.1+4
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
@@ -33,7 +32,6 @@ dependencies:
 
   # --- SEGURIDAD Y BIOMETRÍA ---
   local_auth: ^3.0.0
-  local_auth_platform_interface: ^1.1.0
   flutter_secure_storage: ^9.0.0
   shared_preferences: ^2.3.0
 
@@ -67,18 +65,23 @@ dev_dependencies:
     sdk: flutter
   flutter_lints: ^6.0.0
   
-  # CAMBIO 2: Movidos aquí para no ensuciar la app final
+  # Movidos aquí para no ensuciar la app final
   very_good_analysis: ^10.0.0
   change_app_package_name: ^1.5.0
   
   # Generador de Iconos
   flutter_launcher_icons: "^0.13.1"
 
+# === CONFIGURACIÓN DEL ICONO DE LA APP ===
 flutter_launcher_icons:
   android: "launcher_icon"
   ios: true
-  image_path: "assets/icon.png"
+  # IMPORTANTE: Asegúrate de haber renombrado 'logo app.png' a 'app_icon.png' en la carpeta assets
+  image_path: "assets/app_icon.png" 
   min_sdk_android: 21
+  # Configuración para Android moderno (Icono Adaptativo)
+  adaptive_icon_background: "#ffffff" # Fondo blanco
+  adaptive_icon_foreground: "assets/app_icon.png" # Tu logo
   windows:
     generate: true
     icon_size: 48
@@ -90,3 +93,5 @@ flutter:
     - assets/login_bg.jpg 
     - assets/login_logo.png
     - assets/watermark_bg.jpg
+    # Incluimos el icono también como asset por si lo usas dentro de la app
+    - assets/app_icon.png

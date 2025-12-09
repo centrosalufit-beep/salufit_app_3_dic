@@ -4,7 +4,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'package:firebase_auth/firebase_auth.dart'; 
-import '../models/group_class.dart';
 import '../widgets/salufit_scaffold.dart'; 
 
 class ClassListScreen extends StatefulWidget {
@@ -22,29 +21,49 @@ class ClassListScreen extends StatefulWidget {
 }
 
 class _ClassListScreenState extends State<ClassListScreen> {
+  // URLs de Cloud Functions
   final String _crearReservaUrl = 'https://us-central1-salufitnewapp.cloudfunctions.net/crearReserva';
   final String _cancelarReservaUrl = 'https://us-central1-salufitnewapp.cloudfunctions.net/cancelarReserva';
   
   bool _isLoadingAction = false;
   late DateTime _selectedDate;
+  
+  // Variable para saber si es admin
+  bool _isAdmin = false;
 
   final List<DateTime> _calendarDays = [];
   final Color salufitGreen = const Color(0xFF009688);
-  final List<String> _adminIds = ['000001', '000622'];
 
   @override
   void initState() {
     super.initState();
+    _checkUserRole(); // Comprobamos rol al iniciar
     _generateCalendarDays();
-    
     if (widget.initialDate != null) {
       _selectedDate = widget.initialDate!;
     } else {
       _selectedDate = DateTime.now();
-      // Si es domingo (día que solemos cerrar) y hay días, pasamos al lunes
       if (_selectedDate.weekday == DateTime.sunday && _calendarDays.isNotEmpty) {
         _selectedDate = _calendarDays.first;
       }
+    }
+  }
+
+  // Verificación de rol en base de datos
+  Future<void> _checkUserRole() async {
+    if (widget.userId.isEmpty) return;
+    try {
+      final doc = await FirebaseFirestore.instance.collection('users').doc(widget.userId).get();
+      if (doc.exists) {
+        final String rol = (doc.data()?['rol'] ?? 'cliente').toString().toLowerCase();
+        if (mounted) {
+          setState(() {
+            _isAdmin = ['admin', 'administrador', 'profesional', 'entrenador'].contains(rol);
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint('Error verificando rol: $e');
     }
   }
 
@@ -52,7 +71,6 @@ class _ClassListScreenState extends State<ClassListScreen> {
     _calendarDays.clear();
     DateTime current = DateTime.now();
     int daysAdded = 0;
-    
     while (daysAdded < 30) {
       if (current.weekday != DateTime.sunday) {
         _calendarDays.add(current);
@@ -68,7 +86,6 @@ class _ClassListScreenState extends State<ClassListScreen> {
 
   Map<String, dynamic> _getClassVisuals(String nombreClase) {
     final String nombre = nombreClase.toLowerCase();
-    
     if (nombre.contains('entrenamiento')) {
       return {'colors': [const Color(0xFFD32F2F), const Color(0xFFE57373)], 'icon': Icons.fitness_center, 'textColor': Colors.red.shade900};
     } 
@@ -81,44 +98,26 @@ class _ClassListScreenState extends State<ClassListScreen> {
     return {'colors': [const Color(0xFF1976D2), const Color(0xFF64B5F6)], 'icon': Icons.sports_gymnastics, 'textColor': Colors.blue.shade900};
   }
 
-  Future<void> _borrarClaseAdmin(String classId) async {
-    final bool? confirmar = await showDialog(
-      context: context, 
-      builder: (c) => AlertDialog(
-        title: const Text('Borrar Clase (Admin)'), 
-        content: const Text('Esta acción eliminará la clase permanentemente. ¿Seguro?'), 
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Cancelar')), 
-          TextButton(onPressed: () => Navigator.pop(c, true), child: const Text('Borrar', style: TextStyle(color: Colors.red)))
-        ]
-      )
-    );
-    
-    if (confirmar != true) return;
-    
-    try {
-      await FirebaseFirestore.instance.collection('groupClasses').doc(classId).delete();
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Clase eliminada')));
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red));
-      }
-    }
-  }
-
+  // --- MODIFICADO: Mejor gestión de errores del backend ---
   Future<void> _reservarClase(String classId, String className) async {
-    setState(() { _isLoadingAction = true; });
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null || user.email == null) return;
+
+    setState(() => _isLoadingAction = true);
+
     try {
-      final String? token = await FirebaseAuth.instance.currentUser?.getIdToken();
+      final String? token = await user.getIdToken();
       final response = await http.post(
         Uri.parse(_crearReservaUrl), 
         headers: {
           'Content-Type': 'application/json', 
           'Authorization': 'Bearer $token'
         }, 
-        body: jsonEncode({ 'userId': widget.userId, 'groupClassId': classId })
+        body: jsonEncode({ 
+          'userId': widget.userId, 
+          'userEmail': user.email, 
+          'groupClassId': classId 
+        })
       );
       
       final data = jsonDecode(response.body);
@@ -126,14 +125,24 @@ class _ClassListScreenState extends State<ClassListScreen> {
       if (!mounted) return;
       
       if (response.statusCode == 200) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Reservada: $className'), backgroundColor: Colors.green));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('¡Reservada! $className'), backgroundColor: Colors.green));
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(data['error'] ?? 'Error'), backgroundColor: Colors.red));
+        // Leemos el mensaje y el código de error si existe
+        String errorMsg = data['error'] ?? 'Error desconocido';
+        final String? errorCode = data['code']; // El backend ahora envía esto en algunos casos
+
+        // Personalizamos el mensaje para el usuario
+        if (errorCode == 'NO_TOKENS' || errorMsg.contains('Sin tokens')) {
+          errorMsg = 'Sin saldo mensual. ¡Por favor renueva tu plan!';
+        } else if (errorMsg.contains('Sin pase') || errorMsg.contains('NO_MONTHLY_PASS')) {
+           errorMsg = 'No tienes bonos activos. Contacta con recepción.';
+        }
+        
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(errorMsg), backgroundColor: Colors.red));
       }
+
     } catch (e) { 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red));
-      }
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error de conexión: $e'), backgroundColor: Colors.red));
     } finally { 
       if (mounted) setState(() { _isLoadingAction = false; }); 
     }
@@ -182,11 +191,36 @@ class _ClassListScreenState extends State<ClassListScreen> {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(data['error'] ?? 'Error'), backgroundColor: Colors.red));
       }
     } catch (e) { 
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red)); 
+    } finally { 
+      if (mounted) setState(() { _isLoadingAction = false; }); 
+    }
+  }
+
+  Future<void> _borrarClaseAdmin(String classId) async {
+    final bool? confirmar = await showDialog(
+      context: context, 
+      builder: (c) => AlertDialog(
+        title: const Text('Borrar Clase (Admin)'), 
+        content: const Text('Esta acción eliminará la clase permanentemente. ¿Seguro?'), 
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Cancelar')), 
+          TextButton(onPressed: () => Navigator.pop(c, true), child: const Text('Borrar', style: TextStyle(color: Colors.red)))
+        ]
+      )
+    );
+    
+    if (confirmar != true) return;
+    
+    try {
+      await FirebaseFirestore.instance.collection('groupClasses').doc(classId).delete();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Clase eliminada')));
+      }
+    } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red));
       }
-    } finally { 
-      if (mounted) setState(() { _isLoadingAction = false; }); 
     }
   }
 
@@ -204,9 +238,6 @@ class _ClassListScreenState extends State<ClassListScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final String idConCeros = widget.userId.padLeft(6, '0');
-    final bool isAdmin = _adminIds.contains(idConCeros);
-    
     final String? userEmail = FirebaseAuth.instance.currentUser?.email;
     if (userEmail == null) return const Center(child: Text('Error de sesión'));
 
@@ -249,7 +280,8 @@ class _ClassListScreenState extends State<ClassListScreen> {
                       ],
                     ),
                   ),
-                  if (isAdmin) 
+                  // BOTÓN SOLO PARA ADMINS
+                  if (_isAdmin) 
                     IconButton.filled(
                       onPressed: _mostrarModalCrearClase,
                       icon: const Icon(Icons.add),
@@ -277,7 +309,7 @@ class _ClassListScreenState extends State<ClassListScreen> {
 
                   return Column(
                     children: [
-                      // CALENDARIO HORIZONTAL
+                      // CALENDARIO
                       Container(
                         height: 90,
                         padding: const EdgeInsets.symmetric(vertical: 10),
@@ -289,7 +321,7 @@ class _ClassListScreenState extends State<ClassListScreen> {
                             final date = _calendarDays[index]; 
                             final isSelected = isSameDay(date, _selectedDate);
                             final List<String> diasSemana = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
-                            final String nombreDia = diasSemana[date.weekday - 1];
+                            final String nombreDia = diasSemana[(date.weekday - 1) % 7];
 
                             return GestureDetector(
                               onTap: () => setState(() => _selectedDate = date),
@@ -336,21 +368,18 @@ class _ClassListScreenState extends State<ClassListScreen> {
                             if (snapshot.hasError) return const Center(child: Text('Error cargando clases'));
                             if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
 
-                            final todasLasClases = snapshot.data!.docs.map((doc) => GroupClass.fromFirestore(doc)).toList();
-
-                            final clasesDelDia = todasLasClases.where((clase) {
-                              final docSnapshot = snapshot.data!.docs.firstWhere((d) => d.id == clase.id);
-                              final Timestamp? ts = (docSnapshot.data() as Map<String, dynamic>)['fechaHoraInicio'];
+                            final docs = snapshot.data!.docs;
+                            final clasesDelDia = docs.where((doc) {
+                              final data = doc.data() as Map<String, dynamic>;
+                              final Timestamp? ts = data['fechaHoraInicio'];
                               if (ts == null) return false;
                               final DateTime fechaClase = ts.toDate();
                               final bool coincideDia = isSameDay(fechaClase, _selectedDate);
                               
-                              // CORRECCIÓN: Ahora filtramos por hora PARA TODOS, incluidos admins
                               bool esFutura = true;
                               if (isSameDay(DateTime.now(), _selectedDate)) {
                                 esFutura = fechaClase.isAfter(DateTime.now());
                               }
-                              
                               return coincideDia && esFutura;
                             }).toList();
 
@@ -362,8 +391,7 @@ class _ClassListScreenState extends State<ClassListScreen> {
                               separatorBuilder: (c, i) => const SizedBox(height: 15),
                               itemBuilder: (context, index) {
                                 final doc = clasesDelDia[index];
-                                final claseData = snapshot.data!.docs.firstWhere((d) => d.id == doc.id).data() as Map<String, dynamic>;
-                                
+                                final claseData = doc.data() as Map<String, dynamic>;
                                 final String classId = doc.id;
                                 final String nombre = claseData['nombre'] ?? 'Clase';
                                 final String monitor = claseData['monitor'] ?? '';
@@ -371,9 +399,7 @@ class _ClassListScreenState extends State<ClassListScreen> {
                                 final int aforoMax = claseData['aforoMaximo'] ?? 12;
                                 final Timestamp ts = claseData['fechaHoraInicio'];
                                 final DateTime fechaClase = ts.toDate();
-                                
                                 final String horario = "${DateFormat('HH:mm').format(fechaClase)} - ${DateFormat('HH:mm').format(fechaClase.add(const Duration(hours: 1)))}";
-                                
                                 final bool estaLlena = aforoActual >= aforoMax;
                                 final bool yaReservada = misReservas.containsKey(classId);
                                 String? bookingId;
@@ -387,11 +413,7 @@ class _ClassListScreenState extends State<ClassListScreen> {
                                 return Container(
                                   constraints: const BoxConstraints(minHeight: 125), 
                                   decoration: BoxDecoration(
-                                    gradient: LinearGradient(
-                                      colors: gradientColors,
-                                      begin: Alignment.topLeft,
-                                      end: Alignment.bottomRight,
-                                    ),
+                                    gradient: LinearGradient(colors: gradientColors, begin: Alignment.topLeft, end: Alignment.bottomRight),
                                     borderRadius: BorderRadius.circular(20),
                                     boxShadow: [BoxShadow(color: gradientColors[0].withValues(alpha: 0.4), blurRadius: 8, offset: const Offset(0, 4))],
                                   ),
@@ -399,11 +421,9 @@ class _ClassListScreenState extends State<ClassListScreen> {
                                     clipBehavior: Clip.hardEdge,
                                     children: [
                                       Positioned(
-                                        right: 60, 
-                                        bottom: -35,
+                                        right: 60, bottom: -35,
                                         child: Icon(iconData, size: 140, color: Colors.white.withValues(alpha: 0.15)),
                                       ),
-                                      
                                       Padding(
                                         padding: const EdgeInsets.all(15.0),
                                         child: Row(
@@ -421,22 +441,13 @@ class _ClassListScreenState extends State<ClassListScreen> {
                                                 ],
                                               ),
                                             ),
-                                            
                                             const SizedBox(width: 15),
-                                            
                                             Expanded(
                                               child: Column(
                                                 crossAxisAlignment: CrossAxisAlignment.start,
                                                 children: [
-                                                  Text(
-                                                    nombre, 
-                                                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white, height: 1.1), 
-                                                    maxLines: 2, 
-                                                    overflow: TextOverflow.ellipsis
-                                                  ),
-                                                  
+                                                  Text(nombre, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white, height: 1.1), maxLines: 2, overflow: TextOverflow.ellipsis),
                                                   const SizedBox(height: 8), 
-
                                                   Row(
                                                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                                     crossAxisAlignment: CrossAxisAlignment.end, 
@@ -462,9 +473,7 @@ class _ClassListScreenState extends State<ClassListScreen> {
                                                           ],
                                                         ),
                                                       ),
-
                                                       const SizedBox(width: 8), 
-
                                                       Padding(
                                                         padding: const EdgeInsets.only(top: 10.0), 
                                                         child: yaReservada
@@ -474,7 +483,9 @@ class _ClassListScreenState extends State<ClassListScreen> {
                                                               child: const Text('CANCELAR', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
                                                             )
                                                           : ElevatedButton(
-                                                              onPressed: (estaLlena || _isLoadingAction) ? null : () => _reservarClase(classId, nombre),
+                                                              onPressed: (estaLlena || _isLoadingAction) 
+                                                                  ? null 
+                                                                  : () => _reservarClase(classId, nombre),
                                                               style: ElevatedButton.styleFrom(backgroundColor: Colors.white, foregroundColor: textBtnColor, disabledBackgroundColor: Colors.white24, padding: const EdgeInsets.symmetric(horizontal: 10), minimumSize: const Size(80, 30)),
                                                               child: _isLoadingAction 
                                                                 ? const SizedBox(width: 10, height: 10, child: CircularProgressIndicator(strokeWidth: 2)) 
@@ -489,11 +500,10 @@ class _ClassListScreenState extends State<ClassListScreen> {
                                           ],
                                         ),
                                       ),
-
-                                      if (isAdmin)
+                                      // ICONO BASURA
+                                      if (_isAdmin)
                                         Positioned(
-                                          top: 5,
-                                          right: 5,
+                                          top: 5, right: 5,
                                           child: InkWell(
                                             onTap: () => _borrarClaseAdmin(classId),
                                             child: Padding(padding: const EdgeInsets.all(4.0), child: Icon(Icons.delete, color: Colors.white.withValues(alpha: 0.7), size: 18)),
@@ -619,13 +629,11 @@ class _CreateClassModalState extends State<_CreateClassModal> {
     final String mesActual = DateFormat('MMMM', 'es').format(now).toUpperCase();
     final String mesSiguiente = DateFormat('MMMM', 'es').format(DateTime(now.year, now.month + 1)).toUpperCase();
 
-    // CORRECCIÓN: Botón "Generar" protegido por SafeArea
     return SafeArea(
       child: Container(
         padding: const EdgeInsets.all(20),
-        // Eliminamos altura fija para que se adapte al contenido seguro
         child: Column(
-          mainAxisSize: MainAxisSize.min, // Se adapta al contenido
+          mainAxisSize: MainAxisSize.min, 
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text('Generar Clases Mensuales', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.teal)),
@@ -646,23 +654,13 @@ class _CreateClassModalState extends State<_CreateClassModal> {
             const SizedBox(height: 20),
             const Text('Días de la semana:', style: TextStyle(fontWeight: FontWeight.bold)),
             const SizedBox(height: 10),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween, 
-              children: [
-                _dayBtn('L', 1), 
-                _dayBtn('M', 2), 
-                _dayBtn('X', 3), 
-                _dayBtn('J', 4), 
-                _dayBtn('V', 5), 
-                _dayBtn('S', 6)
-              ]
-            ),
+            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [_dayBtn('L', 1), _dayBtn('M', 2), _dayBtn('X', 3), _dayBtn('J', 4), _dayBtn('V', 5), _dayBtn('S', 6)]),
             const SizedBox(height: 20),
             Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text('Horarios de inicio:', style: TextStyle(fontWeight: FontWeight.bold)), TextButton.icon(onPressed: _selectTime, icon: const Icon(Icons.access_time, size: 18), label: const Text('AÑADIR HORA'))]),
             if (_selectedTimes.isEmpty) const Text('Ninguna hora seleccionada', style: TextStyle(color: Colors.grey, fontSize: 12)) else Wrap(spacing: 8.0, children: _selectedTimes.map((time) => Chip(label: Text('${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}'), deleteIcon: const Icon(Icons.close, size: 18), onDeleted: () => _removeTime(time), backgroundColor: Colors.teal.shade50, labelStyle: TextStyle(color: Colors.teal.shade900, fontWeight: FontWeight.bold))).toList()),
             const SizedBox(height: 20),
             InputDecorator(decoration: const InputDecoration(labelText: 'Mes a generar', border: OutlineInputBorder()), child: DropdownButton<int>(value: _selectedMonthOffset, isExpanded: true, underline: const SizedBox(), items: [DropdownMenuItem(value: 0, child: Text(mesActual)), DropdownMenuItem(value: 1, child: Text(mesSiguiente))], onChanged: (val) => setState(() => _selectedMonthOffset = val!))),
-            const SizedBox(height: 20), // Espacio antes del botón
+            const SizedBox(height: 20), 
             SizedBox(width: double.infinity, height: 50, child: ElevatedButton(onPressed: _isLoading ? null : _generar, style: ElevatedButton.styleFrom(backgroundColor: Colors.teal, foregroundColor: Colors.white), child: _isLoading ? Row(mainAxisAlignment: MainAxisAlignment.center, children: [const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)), const SizedBox(width: 15), Text(_loadingStatus)]) : const Text('GENERAR CALENDARIO'))),
           ],
         ),

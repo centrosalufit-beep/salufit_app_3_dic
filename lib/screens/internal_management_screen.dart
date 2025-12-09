@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
+// Ya no necesitamos importar el hub aquí porque el botón estará fuera
 
 class InternalManagementScreen extends StatelessWidget {
   final String currentUserId;
@@ -564,13 +565,25 @@ class _TaskList extends StatelessWidget {
                     ),
                 title: Text(data['title'], style: TextStyle(decoration: esCompletada ? TextDecoration.lineThrough : null, fontWeight: FontWeight.bold)),
                 subtitle: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    // Solución: Usar ternario en lugar de if para satisfacer al linter
                     data['description'] != null 
                         ? Text(data['description'], maxLines: 2, overflow: TextOverflow.ellipsis)
                         : const SizedBox.shrink(),
                         
                     const SizedBox(height: 5),
-                    Row(children: [Icon(Icons.calendar_today, size: 12, color: fechaColor), const SizedBox(width: 4), Text(DateFormat('dd/MM/yyyy').format(limite), style: TextStyle(color: fechaColor, fontSize: 12, fontWeight: FontWeight.bold)), const Spacer(), Text(soyElCreador ? "Para: ${data['assignedToName'] ?? 'Desconocido'}" : "De: ${data['creatorName'] ?? 'Admin'}", style: const TextStyle(fontSize: 10, fontStyle: FontStyle.italic, color: Colors.deepPurple))]),
+                    Row(children: [
+                      Icon(Icons.calendar_today, size: 12, color: fechaColor),
+                      const SizedBox(width: 4),
+                      Text(DateFormat('dd/MM/yyyy').format(limite), style: TextStyle(color: fechaColor, fontSize: 12, fontWeight: FontWeight.bold)),
+                      const Spacer(),
+                      // FIX: Flexible para evitar overflow en nombres largos
+                      Flexible(
+                        child: Text(
+                          soyElCreador ? "Para: ${data['assignedToName'] ?? 'Desconocido'}" : "De: ${data['creatorName'] ?? 'Admin'}",
+                          style: const TextStyle(fontSize: 10, fontStyle: FontStyle.italic, color: Colors.deepPurple),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      )
+                    ]),
                 ]),
                 trailing: (esCompletada || soyElCreador) ? IconButton(icon: const Icon(Icons.delete_outline, size: 20, color: Colors.grey), onPressed: () => FirebaseFirestore.instance.collection('internal_tasks').doc(docs[index].id).delete()) : null,
               ),
