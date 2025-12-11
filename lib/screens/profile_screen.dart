@@ -348,25 +348,39 @@ class _ProfileScreenState extends State<ProfileScreen> {
             crossAxisAlignment: CrossAxisAlignment.start, 
             children: [
               
-              // 1. CABECERA (CORREGIDO: Fallback para nombre)
+              // 1. CABECERA CON DEPURACIÓN (MODIFICADO AQUÍ)
               StreamBuilder<DocumentSnapshot>(
                 stream: FirebaseFirestore.instance.collection('users').doc(widget.userId).snapshots(),
                 builder: (context, snapshotUser) {
+                  
+                  // --- BLOQUE DE DEBUG: ESTO TE DIRÁ EL ERROR EN CONSOLA ---
+                  if (snapshotUser.hasError) {
+                    print("🚨 ERROR CRÍTICO FIRESTORE: ${snapshotUser.error}");
+                  }
+                  if (snapshotUser.connectionState == ConnectionState.waiting) {
+                    print("⏳ Buscando usuario con ID: ${widget.userId}...");
+                  }
+                  if (snapshotUser.hasData && !snapshotUser.data!.exists) {
+                    print("⚠️ CONECTADO A FIREBASE PERO EL DOCUMENTO NO EXISTE (Revisa Reglas/ID).");
+                    print("   -> ID buscado: ${widget.userId}");
+                  } else if (snapshotUser.hasData && snapshotUser.data!.exists) {
+                    print("✅ ¡DATOS ENCONTRADOS Y LEÍDOS!: ${snapshotUser.data!.data()}");
+                  }
+                  // -------------------------------------------------------
+
                   String nombreCompleto = 'Cargando...';
                   
                   if (snapshotUser.hasData && snapshotUser.data!.exists) { 
                       final d = snapshotUser.data!.data() as Map<String,dynamic>; 
-                      // Intenta coger el nombre de la BD, si no hay, coge "Usuario"
                       final String? nameDb = d['nombreCompleto'] ?? d['nombre'];
                       
                       if (nameDb != null && nameDb.isNotEmpty) {
                         nombreCompleto = nameDb.toUpperCase();
                       } else {
-                        // FALLBACK: Nombre de Google/Apple si la ficha está vacía
                         nombreCompleto = (FirebaseAuth.instance.currentUser?.displayName ?? 'USUARIO').toUpperCase();
                       }
                   } else {
-                     // Si aún no carga, nombre de Google
+                     // Fallback mientras carga o si falla
                      nombreCompleto = (FirebaseAuth.instance.currentUser?.displayName ?? 'USUARIO').toUpperCase();
                   }
 
