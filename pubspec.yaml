@@ -43,7 +43,7 @@ dependencies:
   
   # --- CÓDIGOS QR ---
   qr_flutter: ^4.1.0
-  mobile_scanner: ^5.1.0
+  mobile_scanner: ^6.0.2
 
   # --- ARCHIVOS Y PDF ---
   file_picker: ^8.0.0
