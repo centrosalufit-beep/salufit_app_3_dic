@@ -32,13 +32,10 @@
 
     <key>NSCameraUsageDescription</key>
     <string>Salufit necesita acceso a tu cámara para que puedas subir vídeos de ejercicios, fotos de perfil o escanear documentos.</string>
-
     <key>NSPhotoLibraryUsageDescription</key>
     <string>Salufit necesita acceso a tu galería para que puedas seleccionar archivos, radiografías o imágenes para tu perfil.</string>
-
     <key>NSMicrophoneUsageDescription</key>
-    <string>Salufit necesita acceso al micrófono para grabar audio en los vídeos explicativos de los ejercicios.</string>
-
+    <string>Salufit necesita acceso al micrófono para grabar audio en los vídeos explicativos.</string>
     <key>NSFaceIDUsageDescription</key>
     <string>Salufit usa FaceID para que puedas iniciar sesión de forma segura y rápida.</string>
 

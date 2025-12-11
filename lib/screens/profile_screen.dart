@@ -355,16 +355,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   
                   // --- BLOQUE DE DEBUG: ESTO TE DIRÁ EL ERROR EN CONSOLA ---
                   if (snapshotUser.hasError) {
-                    print("🚨 ERROR CRÍTICO FIRESTORE: ${snapshotUser.error}");
+                    print('🚨 ERROR CRÍTICO FIRESTORE: ${snapshotUser.error}');
                   }
                   if (snapshotUser.connectionState == ConnectionState.waiting) {
-                    print("⏳ Buscando usuario con ID: ${widget.userId}...");
+                    print('⏳ Buscando usuario con ID: ${widget.userId}...');
                   }
                   if (snapshotUser.hasData && !snapshotUser.data!.exists) {
-                    print("⚠️ CONECTADO A FIREBASE PERO EL DOCUMENTO NO EXISTE (Revisa Reglas/ID).");
-                    print("   -> ID buscado: ${widget.userId}");
+                    print('⚠️ CONECTADO A FIREBASE PERO EL DOCUMENTO NO EXISTE (Revisa Reglas/ID).');
+                    print('   -> ID buscado: ${widget.userId}');
                   } else if (snapshotUser.hasData && snapshotUser.data!.exists) {
-                    print("✅ ¡DATOS ENCONTRADOS Y LEÍDOS!: ${snapshotUser.data!.data()}");
+                    print('✅ ¡DATOS ENCONTRADOS Y LEÍDOS!: ${snapshotUser.data!.data()}');
                   }
                   // -------------------------------------------------------
 
