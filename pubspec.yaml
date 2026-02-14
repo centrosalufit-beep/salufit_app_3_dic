@@ -1,97 +1,68 @@
 name: salufit_app
-description: Aplicación de gestión integral para Salufit.
+description: Aplicación de gestión para Centro Salufit.
 publish_to: 'none'
-
-# El +2 es vital para que la tienda detecte la actualización.
-version: 1.0.1+4
+version: 2.0.2+130
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
 
 dependencies:
+  chewie: ^1.8.5
+  cloud_firestore: ^5.0.0
+  cloud_functions: ^5.0.0
+  csv: ^6.0.0
+  cupertino_icons: ^1.0.6
+  device_info_plus: ^10.0.0
+  excel: ^4.0.6
+  file_picker: ^8.1.0
+  firebase_app_check: ^0.3.1
+  firebase_auth: ^5.0.0
+  firebase_core: ^3.0.0
+  firebase_messaging: ^15.0.0
+  firebase_storage: ^12.0.0
   flutter:
     sdk: flutter
-  
-  # --- IDIOMA Y FORMATOS ---
+  flutter_local_notifications: ^17.0.0
   flutter_localizations:
     sdk: flutter
-  intl: ^0.20.0
-
-  # --- FIREBASE ---
-  firebase_core: ^3.0.0
-  firebase_auth: ^5.0.0
-  cloud_firestore: ^5.0.0
-  firebase_storage: ^12.0.0
-  cloud_functions: ^5.0.0
-  firebase_messaging: ^15.0.0 
-  firebase_app_check: ^0.3.2+10
-
-  # --- CONEXIÓN INTERNET ---
-  http: ^1.2.0
-  url_launcher: ^6.2.0
-
-  # --- SEGURIDAD Y BIOMETRÍA ---
-  local_auth: ^3.0.0
+  flutter_riverpod: ^2.5.1
   flutter_secure_storage: ^9.0.0
-  shared_preferences: ^2.3.0
-
-  # --- HARDWARE Y SENSORES ---
-  permission_handler: ^11.3.0
-  network_info_plus: ^6.1.0
-  device_info_plus: ^11.0.0
+  freezed_annotation: ^3.1.0
+  http: ^1.6.0
+  image_picker: ^1.1.2
+  intl: ^0.20.0
+  json_annotation: ^4.9.0
+  local_auth: ^2.2.0
+  mobile_scanner: ^7.1.4
+  network_info_plus: ^5.0.0
   package_info_plus: ^8.0.0
-  
-  # --- CÓDIGOS QR ---
-  qr_flutter: ^4.1.0
-  mobile_scanner: ^6.0.2
-
-  # --- ARCHIVOS Y PDF ---
-  file_picker: ^8.0.0
+  path: ^1.9.0
   pdf: ^3.10.0
+  permission_handler: ^11.3.0
   printing: ^5.13.0
-  path_provider: ^2.1.2
-  excel: ^4.0.6
-
-  # --- MULTIMEDIA ---
-  video_player: ^2.8.0
-  chewie: ^1.8.0
-  image_picker: ^1.2.1
-
-  # --- UI ---
-  cupertino_icons: ^1.0.2
+  qr_flutter: ^4.1.0
+  riverpod_annotation: ^2.6.1
+  shared_preferences: ^2.2.0
+  skeletonizer: ^2.1.2
+  url_launcher: ^6.3.2
+  video_player: ^2.9.2
 
 dev_dependencies:
+  build_runner: ^2.5.4
   flutter_test:
     sdk: flutter
-  flutter_lints: ^6.0.0
-  
-  # Movidos aquí para no ensuciar la app final
-  very_good_analysis: ^10.0.0
-  change_app_package_name: ^1.5.0
-  
-  # Generador de Iconos
-  flutter_launcher_icons: "^0.13.1"
-
-# === CONFIGURACIÓN DEL ICONO DE LA APP ===
-flutter_launcher_icons:
-  android: "launcher_icon"
-  ios: true
-  # IMPORTANTE: Asegúrate de haber renombrado 'logo app.png' a 'app_icon.png' en la carpeta assets
-  image_path: "assets/app_icon.png" 
-  min_sdk_android: 21
-  # Configuración para Android moderno (Icono Adaptativo)
-  adaptive_icon_background: "#ffffff" # Fondo blanco
-  adaptive_icon_foreground: "assets/app_icon.png" # Tu logo
-  windows:
-    generate: true
-    icon_size: 48
+  freezed: ^3.1.0
+  json_serializable: ^6.9.5
+  riverpod_generator: ^2.6.5
+  very_good_analysis: ^5.1.0
 
 flutter:
   uses-material-design: true
+  
   assets:
     - assets/logo_salufit.png
-    - assets/login_bg.jpg 
+    - assets/login_bg.jpg
     - assets/login_logo.png
     - assets/watermark_bg.jpg
-    # Incluimos el icono también como asset por si lo usas dentro de la app
     - assets/app_icon.png
+    

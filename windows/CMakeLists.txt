@@ -1,20 +1,21 @@
-# Project-level configuration.
-cmake_minimum_required(VERSION 3.20)
+# FILE: windows/CMakeLists.txt
 
-# --- LA SOLUCIÓN LITERAL DEL ERROR ---
-# Forzamos a que la política mínima sea la 3.5 para que acepte librerías viejas
+# Project-level configuration.
+cmake_minimum_required(VERSION 3.14)
+
+# --- FIX CRÍTICO PARA FIREBASE WINDOWS ---
+# Esto soluciona el error "Compatibility with CMake < 3.5 has been removed"
+# Obliga a CMake a aceptar las políticas antiguas de la librería de Firebase.
 set(CMAKE_POLICY_VERSION_MINIMUM "3.5")
-# -------------------------------------
+# -----------------------------------------
 
 project(salufit_app LANGUAGES CXX)
 
-# The name of the executable created for the application. Change this to change
-# the on-disk name of your application.
+# The name of the executable created for the application.
 set(BINARY_NAME "salufit_app")
 
-# Explicitly opt in to modern CMake behaviors to avoid warnings with recent
-# versions of CMake.
-cmake_policy(VERSION 3.20)
+# Explicitly opt in to modern CMake behaviors to avoid warnings with recent versions.
+cmake_policy(SET CMP0063 NEW)
 
 # Define build configuration option.
 get_property(IS_MULTICONFIG GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)
@@ -29,6 +30,7 @@ else()
       "Debug" "Profile" "Release")
   endif()
 endif()
+
 # Define settings for the Profile build mode.
 set(CMAKE_EXE_LINKER_FLAGS_PROFILE "${CMAKE_EXE_LINKER_FLAGS_RELEASE}")
 set(CMAKE_SHARED_LINKER_FLAGS_PROFILE "${CMAKE_SHARED_LINKER_FLAGS_RELEASE}")
@@ -39,6 +41,7 @@ set(CMAKE_CXX_FLAGS_PROFILE "${CMAKE_CXX_FLAGS_RELEASE}")
 add_definitions(-DUNICODE -D_UNICODE)
 
 # Compilation settings that should be applied to most targets.
+# Standardizing C++17 for Firebase compatibility
 function(APPLY_STANDARD_SETTINGS TARGET)
   target_compile_features(${TARGET} PUBLIC cxx_std_17)
   target_compile_options(${TARGET} PRIVATE /W4 /WX /wd"4100")

@@ -1,14 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class GroupClass {
-  final String id;
-  final String nombre;
-  final String monitor;
-  final String horario;
-  final int aforoActual;
-  final int aforoMaximo;
-
-  GroupClass({
+  const GroupClass({
     required this.id,
     required this.nombre,
     required this.monitor,
@@ -18,31 +11,36 @@ class GroupClass {
   });
 
   factory GroupClass.fromFirestore(DocumentSnapshot doc) {
-    final Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
+    final data = doc.data()! as Map<String, dynamic>;
 
     // --- 1. LÓGICA PARA FORMATEAR LA HORA ---
-    // Convertimos el Timestamp de Firebase (fecha y hora) a un texto bonito "10:00"
-    String horarioFormateado = 'Sin hora';
-    
+    var horarioFormateado = 'Sin hora';
+
     if (data['fechaHoraInicio'] != null) {
-      final Timestamp timestamp = data['fechaHoraInicio'];
-      final DateTime date = timestamp.toDate();
-      // Truco para que salga "10:00" en vez de "10:0" (añade ceros si hace falta)
-      final String hour = date.hour.toString().padLeft(2, '0');
-      final String minute = date.minute.toString().padLeft(2, '0');
+      // Zero-Dynamic: Casting explícito de Timestamp
+      final timestamp = data['fechaHoraInicio'] as Timestamp;
+      final date = timestamp.toDate();
+      final hour = date.hour.toString().padLeft(2, '0');
+      final minute = date.minute.toString().padLeft(2, '0');
       horarioFormateado = '$hour:$minute';
     }
 
-    // --- 2. MAPEO DE TUS CAMPOS REALES ---
+    // --- 2. MAPEO SEGURO ---
     return GroupClass(
       id: doc.id,
-      // Aquí conectamos TUS nombres de Firebase con los de la App:
-      nombre: data['nombreClase'] ?? 'Clase sin nombre', 
-      monitor: data['profesionalId'] ?? 'Monitor por asignar', 
-      aforoActual: data['aforoActual'] ?? 0,
-      // Fíjate que tú usas 'aforoMax' en vez de 'aforoMaximo'
-      aforoMaximo: data['aforoMax'] ?? 10, 
+      // Zero-Dynamic: Casting explícito
+      nombre: (data['nombreClase'] as String?) ?? 'Clase sin nombre',
+      monitor: (data['profesionalId'] as String?) ?? 'Monitor por asignar',
+      aforoActual: (data['aforoActual'] as int?) ?? 0,
+      aforoMaximo: (data['aforoMax'] as int?) ?? 10,
       horario: horarioFormateado,
     );
   }
+
+  final String id;
+  final String nombre;
+  final String monitor;
+  final String horario;
+  final int aforoActual;
+  final int aforoMaximo;
 }

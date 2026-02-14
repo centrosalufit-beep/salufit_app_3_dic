@@ -60,11 +60,11 @@ class DefaultFirebaseOptions {
 
   static const FirebaseOptions ios = FirebaseOptions(
     apiKey: 'AIzaSyCw4IHGoLh4o5QWb5VAzeSSrWeGC6aQ--Y',
-    appId: '1:682610782118:ios:804e25fab43b572500e967',
+    appId: '1:682610782118:ios:ccaa108d6f0dc23800e967',
     messagingSenderId: '682610782118',
     projectId: 'salufitnewapp',
     storageBucket: 'salufitnewapp.firebasestorage.app',
-    iosBundleId: 'com.example.salufitApp',
+    iosBundleId: 'com.salufit.app',
   );
 
   static const FirebaseOptions macos = FirebaseOptions(

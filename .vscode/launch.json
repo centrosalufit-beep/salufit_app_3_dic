@@ -1,0 +1,25 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        
+        {
+            "name": "Salufit (Windows)",
+            "request": "launch",
+            "type": "dart",
+            "program": "lib/main.dart",
+            "args": ["-d", "windows"]
+        },
+        {
+            "name": "Salufit (Móvil)",
+            "request": "launch",
+            "type": "dart",
+            "program": "lib/main.dart"
+        }
+    ],
+    "compounds": [
+        {
+            "name": "🚀 TODO A LA VEZ",
+            "configurations": ["Salufit (Móvil)", "Salufit (Windows)"]
+        }
+    ]
+}

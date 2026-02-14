@@ -1,0 +1,52 @@
+// ARCHIVO: android/build.gradle
+
+allprojects {
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+
+rootProject.buildDir = '../build'
+
+subprojects {
+    project.buildDir = "${rootProject.buildDir}/${project.name}"
+}
+
+// ========================================================================
+// 🛠️ PARCHE MAESTRO: Arregla Namespace y fuerza Java 17 en TODAS las librerías
+// ========================================================================
+subprojects {
+    afterEvaluate { project ->
+        if (project.hasProperty('android')) {
+            project.android {
+                // 1. Arreglar error de Namespace en librerías viejas
+                if (namespace == null) {
+                    namespace project.group
+                }
+                
+                // 2. FORZAR Java 17 para evitar el error "Inconsistent JVM Target"
+                compileOptions {
+                    sourceCompatibility JavaVersion.VERSION_17
+                    targetCompatibility JavaVersion.VERSION_17
+                }
+            }
+            
+            // 3. Forzar Kotlin a Java 17 también
+            tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
+                kotlinOptions {
+                    jvmTarget = "17"
+                }
+            }
+        }
+    }
+}
+// ========================================================================
+
+subprojects {
+    project.evaluationDependsOn(':app')
+}
+
+tasks.register("clean", Delete) {
+    delete rootProject.buildDir
+}

@@ -1,14 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class PatientDocument {
-  final String id;
-  final String titulo;
-  final String tipo;
-  final String urlPdf;
-  final bool firmado;
-  final DateTime? fechaFirma;
-
-  PatientDocument({
+  const PatientDocument({
     required this.id,
     required this.titulo,
     required this.tipo,
@@ -18,20 +11,29 @@ class PatientDocument {
   });
 
   factory PatientDocument.fromFirestore(DocumentSnapshot doc) {
-    final Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
-    
+    final data = doc.data()! as Map<String, dynamic>;
+
     DateTime? fecha;
     if (data['fechaFirma'] != null) {
+      // Zero-Dynamic: Casting explícito de Timestamp
       fecha = (data['fechaFirma'] as Timestamp).toDate();
     }
 
     return PatientDocument(
       id: doc.id,
-      titulo: data['titulo'] ?? 'Documento sin título',
-      tipo: data['tipo'] ?? 'General',
-      urlPdf: data['urlPdf'] ?? '',
-      firmado: data['firmado'] ?? false,
+      // Zero-Dynamic: Casting explícito
+      titulo: (data['titulo'] as String?) ?? 'Documento sin título',
+      tipo: (data['tipo'] as String?) ?? 'General',
+      urlPdf: (data['urlPdf'] as String?) ?? '',
+      firmado: (data['firmado'] as bool?) ?? false,
       fechaFirma: fecha,
     );
   }
+
+  final String id;
+  final String titulo;
+  final String tipo;
+  final String urlPdf;
+  final bool firmado;
+  final DateTime? fechaFirma;
 }
