@@ -1,3 +1,10 @@
+#!/bin/zsh
+FILE="src/index.ts"
+
+echo "🧠 Inyectando lógica híbrida e infalible en $FILE..."
+
+# Creamos el nuevo contenido del archivo para asegurar que sea perfecto
+cat <<'INNER_EOF' > $FILE
 import * as functions from "firebase-functions";
 import * as admin from "firebase-admin";
 
@@ -55,3 +62,6 @@ export const checkAccountStatus = functions.https.onCall(async (data, context) =
     throw new functions.https.HttpsError("internal", "Error al verificar la cuenta");
   }
 });
+INNER_EOF
+
+echo "✅ Archivo index.ts actualizado con lógica de detección de tipos."
