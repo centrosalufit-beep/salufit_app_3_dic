@@ -1,32 +1,30 @@
+#!/bin/zsh
+
+HELPER_PATH="lib/features/auth/presentation/activation_screen_helper.dart"
+
+echo "🛠️ Generando implementación robusta en: $HELPER_PATH"
+
+cat <<INNER_EOF > $HELPER_PATH
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:salufit_app/features/auth/providers/auth_providers.dart';
 
 class ActivationUIHelper {
-  static void showAlreadyRegisteredDialog(
-    BuildContext context,
-    WidgetRef ref,
-    String email,
-  ) {
-    // Agregamos <void> para corregir inference_failure_on_function_invocation
-    showDialog<void>(
+  static void showAlreadyRegisteredDialog(BuildContext context, WidgetRef ref, String email) {
+    showDialog(
       context: context,
       barrierDismissible: false,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
         title: const Row(
           children: [
-            Icon(Icons.account_circle, color: Color(0xFF009688)),
+            Icon(Icons.info_outline, color: Color(0xFF009688)),
             SizedBox(width: 10),
-            Text(
-              'Cuenta Detectada',
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
+            Text('Cuenta ya activa'),
           ],
         ),
         content: Text(
-          'Parece que ya tienes una cuenta activa con el correo $email.\n\nSi no recuerdas tu contraseña, pulsa el botón de abajo y te enviaremos un enlace.',
-          style: const TextStyle(fontSize: 15),
+          'El correo $email ya está registrado en Salufit.\n\nSi no recuerdas tu contraseña, haz clic abajo para recibir un enlace de recuperación.',
         ),
         actions: [
           TextButton(
@@ -36,12 +34,10 @@ class ActivationUIHelper {
           ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF009688),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
             ),
             onPressed: () async {
-              Navigator.pop(ctx);
+              Navigator.pop(ctx); // Cerrar diálogo
               try {
                 await ref.read(authServiceProvider).sendPasswordResetEmail(email);
                 if (!context.mounted) return;
@@ -49,26 +45,26 @@ class ActivationUIHelper {
                   SnackBar(
                     content: Text('Enlace enviado a $email'),
                     backgroundColor: Colors.green,
-                    duration: const Duration(seconds: 5),
                   ),
                 );
               } catch (e) {
                 if (!context.mounted) return;
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
-                    content: Text('Error al enviar el enlace.'),
+                    content: Text('Error al enviar el enlace. Inténtalo de nuevo.'),
                     backgroundColor: Colors.redAccent,
                   ),
                 );
               }
             },
-            child: const Text(
-              'RESTABLECER CONTRASEÑA',
-              style: TextStyle(color: Colors.white),
-            ),
+            child: const Text('RECUPERAR CONTRASEÑA', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
     );
   }
 }
+INNER_EOF
+
+echo "✅ Helper actualizado correctamente."
+echo "🚀 Ahora ejecuta: flutter clean && flutter run"

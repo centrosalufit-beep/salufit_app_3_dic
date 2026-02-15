@@ -33,7 +33,8 @@ class AuthService {
   Future<void> sendPasswordResetEmail(String email) async {
     try {
       await _auth.setLanguageCode('es');
-      await _auth.sendPasswordResetEmail(email: email);
+      final actionCodeSettings = ActionCodeSettings(url: 'https://salufitnewapp.firebaseapp.com', handleCodeInApp: true, androidPackageName: 'com.salufit.app', iOSBundleId: 'com.salufit.app');
+      await _auth.sendPasswordResetEmail(email: email, actionCodeSettings: actionCodeSettings);
     } on FirebaseAuthException catch (e) {
       throw AuthException(_mapFirebaseError(e.code));
     }

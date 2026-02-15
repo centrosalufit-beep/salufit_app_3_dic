@@ -1,3 +1,10 @@
+#!/bin/zsh
+
+FILE_PATH="lib/features/auth/presentation/activation_screen.dart"
+
+echo "🚀 Aplicando parche de nivel Staff+ en $FILE_PATH..."
+
+cat <<INNER_EOF > $FILE_PATH
 import 'dart:developer' as dev;
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
@@ -27,17 +34,17 @@ class _ActivationScreenState extends ConsumerState<ActivationScreen> {
     final idH = _historyController.text.trim().padLeft(6, '0');
 
     try {
-      dev.log('>>> [ACTIVACION] Verificando estado via Cloud Function para: $email');
+      dev.log('>>> [ACTIVACION] Verificando estado via Cloud Function para: \$email');
 
-      // Tipado explícito <Map<String, dynamic>> para evitar avoid_dynamic_calls
+      // 🛡️ LLAMADA SEGURA: Usamos la función desplegada, no Firestore directo
       final result = await FirebaseFunctions.instance
           .httpsCallable('checkAccountStatus')
-          .call<Map<String, dynamic>>({
+          .call({
         'email': email,
         'historyId': idH,
       });
 
-      final status = result.data['status'] as String?;
+      final status = result.data['status'];
 
       if (status == 'ALREADY_REGISTERED') {
         dev.log('>>> [ACTIVACION] Usuario ya registrado. Disparando Smart-Popup.');
@@ -51,20 +58,20 @@ class _ActivationScreenState extends ConsumerState<ActivationScreen> {
         throw Exception('Los datos no coinciden con nuestra base de datos.');
       }
 
+      // Si llegamos aquí, el status es 'ACTIVATION_PENDING'
+      dev.log('>>> [ACTIVACION] Ficha validada. Enviando email de acceso.');
       await ref.read(authServiceProvider).sendPasswordResetEmail(email);
 
       if (!mounted) return;
       _showSuccessDialog(email);
     } catch (e) {
-      dev.log('>>> [ERROR ACTIVACION] $e');
+      dev.log('>>> [ERROR ACTIVACION] \$e');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-            e.toString().contains('permission-denied')
-                ? 'Error de comunicación con el servidor.'
-                : e.toString().replaceAll('Exception: ', ''),
-          ),
+          content: Text(e.toString().contains('permission-denied') 
+            ? 'Error de comunicación con el servidor. Reintente en unos segundos.' 
+            : e.toString().replaceAll('Exception: ', '')),
           backgroundColor: Colors.redAccent,
         ),
       );
@@ -80,22 +87,15 @@ class _ActivationScreenState extends ConsumerState<ActivationScreen> {
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
         title: const Text('¡Identidad Verificada!'),
-        content: Text(
-          'Hemos enviado un enlace a $email para crear tu contraseña.',
-        ),
+        content: Text('Hemos enviado un enlace a \$email.\n\nÚsalo para crear tu contraseña y acceder por primera vez.'),
         actions: [
           ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF009688),
-            ),
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF009688)),
             onPressed: () {
               Navigator.pop(ctx);
               Navigator.pop(context);
             },
-            child: const Text(
-              'ENTENDIDO',
-              style: TextStyle(color: Colors.white),
-            ),
+            child: const Text('ENTENDIDO', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -109,10 +109,7 @@ class _ActivationScreenState extends ConsumerState<ActivationScreen> {
     return SalufitScaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-        title: const Text(
-          'Activar Cuenta',
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
+        title: const Text('Activar Cuenta', style: TextStyle(fontWeight: FontWeight.bold)),
         backgroundColor: Colors.white,
         foregroundColor: salufitTeal,
         elevation: 0,
@@ -135,16 +132,10 @@ class _ActivationScreenState extends ConsumerState<ActivationScreen> {
               keyboardType: TextInputType.number,
               decoration: InputDecoration(
                 labelText: 'Nº Historia',
-                prefixIcon: const Icon(
-                  Icons.assignment_ind_outlined,
-                  color: salufitTeal,
-                ),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
+                prefixIcon: const Icon(Icons.assignment_ind_outlined, color: salufitTeal),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
               ),
-              validator: (value) =>
-                  (value == null || value.isEmpty) ? 'Campo obligatorio' : null,
+              validator: (value) => (value == null || value.isEmpty) ? 'Campo obligatorio' : null,
             ),
             const SizedBox(height: 20),
             TextFormField(
@@ -153,12 +144,9 @@ class _ActivationScreenState extends ConsumerState<ActivationScreen> {
               decoration: InputDecoration(
                 labelText: 'Email',
                 prefixIcon: const Icon(Icons.email_outlined, color: salufitTeal),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
               ),
-              validator: (value) =>
-                  (value == null || !value.contains('@')) ? 'Email inválido' : null,
+              validator: (value) => (value == null || !value.contains('@')) ? 'Email inválido' : null,
             ),
             const SizedBox(height: 40),
             SizedBox(
@@ -167,9 +155,7 @@ class _ActivationScreenState extends ConsumerState<ActivationScreen> {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: salufitTeal,
                   foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   elevation: 2,
                 ),
                 onPressed: _isLoading ? null : _procesoActivacion,
@@ -177,10 +163,7 @@ class _ActivationScreenState extends ConsumerState<ActivationScreen> {
                     ? const CircularProgressIndicator(color: Colors.white)
                     : const Text(
                         'VERIFICAR MI IDENTIDAD',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                       ),
               ),
             ),
@@ -190,3 +173,6 @@ class _ActivationScreenState extends ConsumerState<ActivationScreen> {
     );
   }
 }
+INNER_EOF
+
+echo "✅ Archivo actualizado con éxito."

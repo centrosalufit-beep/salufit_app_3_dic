@@ -1,15 +1,17 @@
+#!/bin/zsh
+
+HELPER_PATH="lib/features/auth/presentation/activation_screen_helper.dart"
+
+echo "🛠️ Personalizando Pop-up de rescate para usuarios registrados..."
+
+cat <<INNER_EOF > $HELPER_PATH
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:salufit_app/features/auth/providers/auth_providers.dart';
 
 class ActivationUIHelper {
-  static void showAlreadyRegisteredDialog(
-    BuildContext context,
-    WidgetRef ref,
-    String email,
-  ) {
-    // Agregamos <void> para corregir inference_failure_on_function_invocation
-    showDialog<void>(
+  static void showAlreadyRegisteredDialog(BuildContext context, WidgetRef ref, String email) {
+    showDialog(
       context: context,
       barrierDismissible: false,
       builder: (ctx) => AlertDialog(
@@ -18,15 +20,12 @@ class ActivationUIHelper {
           children: [
             Icon(Icons.account_circle, color: Color(0xFF009688)),
             SizedBox(width: 10),
-            Text(
-              'Cuenta Detectada',
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
+            Text('Cuenta Detectada', style: TextStyle(fontWeight: FontWeight.bold)),
           ],
         ),
         content: Text(
-          'Parece que ya tienes una cuenta activa con el correo $email.\n\nSi no recuerdas tu contraseña, pulsa el botón de abajo y te enviaremos un enlace.',
-          style: const TextStyle(fontSize: 15),
+          'Parece que ya tienes una cuenta activa con el correo \$email.\n\nSi no recuerdas tu contraseña, no te preocupes. Pulsa el botón de abajo y te enviaremos un enlace para crear una nueva y entrar directamente.',
+          style: TextStyle(fontSize: 15),
         ),
         actions: [
           TextButton(
@@ -36,18 +35,18 @@ class ActivationUIHelper {
           ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF009688),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
             ),
             onPressed: () async {
-              Navigator.pop(ctx);
+              Navigator.pop(ctx); // Cierra el diálogo
               try {
+                // Inicia el proceso de envío de email
                 await ref.read(authServiceProvider).sendPasswordResetEmail(email);
+                
                 if (!context.mounted) return;
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content: Text('Enlace enviado a $email'),
+                    content: Text('¡Enlace enviado! Revisa tu bandeja de entrada en \$email'),
                     backgroundColor: Colors.green,
                     duration: const Duration(seconds: 5),
                   ),
@@ -56,19 +55,19 @@ class ActivationUIHelper {
                 if (!context.mounted) return;
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
-                    content: Text('Error al enviar el enlace.'),
+                    content: Text('Hubo un problema al enviar el enlace. Inténtalo de nuevo.'),
                     backgroundColor: Colors.redAccent,
                   ),
                 );
               }
             },
-            child: const Text(
-              'RESTABLECER CONTRASEÑA',
-              style: TextStyle(color: Colors.white),
-            ),
+            child: const Text('RESTABLECER CONTRASEÑA', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
     );
   }
 }
+INNER_EOF
+
+echo "✅ Pop-up personalizado con éxito en: $HELPER_PATH"

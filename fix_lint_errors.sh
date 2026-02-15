@@ -1,3 +1,10 @@
+#!/bin/zsh
+
+# 1. Corregir lib/features/auth/presentation/activation_screen.dart
+FILE_SCREEN="lib/features/auth/presentation/activation_screen.dart"
+echo "🔧 Corrigiendo lints en $FILE_SCREEN..."
+
+cat <<INNER_EOF > $FILE_SCREEN
 import 'dart:developer' as dev;
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
@@ -27,7 +34,7 @@ class _ActivationScreenState extends ConsumerState<ActivationScreen> {
     final idH = _historyController.text.trim().padLeft(6, '0');
 
     try {
-      dev.log('>>> [ACTIVACION] Verificando estado via Cloud Function para: $email');
+      dev.log('>>> [ACTIVACION] Verificando estado via Cloud Function para: \$email');
 
       // Tipado explícito <Map<String, dynamic>> para evitar avoid_dynamic_calls
       final result = await FirebaseFunctions.instance
@@ -56,7 +63,7 @@ class _ActivationScreenState extends ConsumerState<ActivationScreen> {
       if (!mounted) return;
       _showSuccessDialog(email);
     } catch (e) {
-      dev.log('>>> [ERROR ACTIVACION] $e');
+      dev.log('>>> [ERROR ACTIVACION] \$e');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -81,7 +88,7 @@ class _ActivationScreenState extends ConsumerState<ActivationScreen> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
         title: const Text('¡Identidad Verificada!'),
         content: Text(
-          'Hemos enviado un enlace a $email para crear tu contraseña.',
+          'Hemos enviado un enlace a \$email para crear tu contraseña.',
         ),
         actions: [
           ElevatedButton(
@@ -190,3 +197,87 @@ class _ActivationScreenState extends ConsumerState<ActivationScreen> {
     );
   }
 }
+INNER_EOF
+
+# 2. Corregir lib/features/auth/presentation/activation_screen_helper.dart
+FILE_HELPER="lib/features/auth/presentation/activation_screen_helper.dart"
+echo "🔧 Corrigiendo lints en $FILE_HELPER..."
+
+cat <<INNER_EOF > $FILE_HELPER
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:salufit_app/features/auth/providers/auth_providers.dart';
+
+class ActivationUIHelper {
+  static void showAlreadyRegisteredDialog(
+    BuildContext context,
+    WidgetRef ref,
+    String email,
+  ) {
+    // Agregamos <void> para corregir inference_failure_on_function_invocation
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+        title: const Row(
+          children: [
+            Icon(Icons.account_circle, color: Color(0xFF009688)),
+            SizedBox(width: 10),
+            Text(
+              'Cuenta Detectada',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+          ],
+        ),
+        content: Text(
+          'Parece que ya tienes una cuenta activa con el correo \$email.\n\nSi no recuerdas tu contraseña, pulsa el botón de abajo y te enviaremos un enlace.',
+          style: const TextStyle(fontSize: 15),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('CANCELAR', style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF009688),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            onPressed: () async {
+              Navigator.pop(ctx);
+              try {
+                await ref.read(authServiceProvider).sendPasswordResetEmail(email);
+                if (!context.mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Enlace enviado a \$email'),
+                    backgroundColor: Colors.green,
+                    duration: const Duration(seconds: 5),
+                  ),
+                );
+              } catch (e) {
+                if (!context.mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Error al enviar el enlace.'),
+                    backgroundColor: Colors.redAccent,
+                  ),
+                );
+              }
+            },
+            child: const Text(
+              'RESTABLECER CONTRASEÑA',
+              style: TextStyle(color: Colors.white),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+INNER_EOF
+
+echo "🚀 Todos los archivos sincronizados y lints corregidos."
