@@ -6,22 +6,48 @@ part of 'activation_provider.dart';
 // RiverpodGenerator
 // **************************************************************************
 
+@ProviderFor(ActivationController)
+const activationControllerProvider = ActivationControllerProvider._();
+
+final class ActivationControllerProvider
+    extends $AsyncNotifierProvider<ActivationController, void> {
+  const ActivationControllerProvider._()
+      : super(
+          from: null,
+          argument: null,
+          retry: null,
+          name: r'activationControllerProvider',
+          isAutoDispose: true,
+          dependencies: null,
+          $allTransitiveDependencies: null,
+        );
+
+  @override
+  String debugGetCreateSourceHash() => _$activationControllerHash();
+
+  @$internal
+  @override
+  ActivationController create() => ActivationController();
+}
+
 String _$activationControllerHash() =>
     r'c172351cc086d88843777d9803d087b90d382703';
 
-/// See also [ActivationController].
-@ProviderFor(ActivationController)
-final activationControllerProvider =
-    AutoDisposeAsyncNotifierProvider<ActivationController, void>.internal(
-  ActivationController.new,
-  name: r'activationControllerProvider',
-  debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
-      ? null
-      : _$activationControllerHash,
-  dependencies: null,
-  allTransitiveDependencies: null,
-);
+abstract class _$ActivationController extends $AsyncNotifier<void> {
+  FutureOr<void> build();
+  @$mustCallSuper
+  @override
+  void runBuild() {
+    build();
+    final ref = this.ref as $Ref<AsyncValue<void>, void>;
+    final element = ref.element as $ClassProviderElement<
+        AnyNotifier<AsyncValue<void>, void>,
+        AsyncValue<void>,
+        Object?,
+        Object?>;
+    element.handleValue(ref, null);
+  }
+}
 
-typedef _$ActivationController = AutoDisposeAsyncNotifier<void>;
 // ignore_for_file: type=lint
 // ignore_for_file: subtype_of_sealed_class, invalid_use_of_internal_member, invalid_use_of_visible_for_testing_member, deprecated_member_use_from_same_package

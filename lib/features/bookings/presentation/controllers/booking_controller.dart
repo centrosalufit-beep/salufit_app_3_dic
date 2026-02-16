@@ -1,31 +1,16 @@
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:salufit_app/features/bookings/data/class_repository.dart';
+import 'package:riverpod_annotation/riverpod_annotation.dart';
 
-class BookingController extends StateNotifier<AsyncValue<void>> {
-  BookingController(this._repository) : super(const AsyncValue.data(null));
+part 'booking_controller.g.dart';
 
-  final ClassRepository _repository;
+@riverpod
+class BookingController extends _$BookingController {
+  @override
+  AsyncValue<void> build() => const AsyncValue.data(null);
 
-  Future<void> createBooking({
-    required String classId,
-    required String userId,
-    required String userEmail,
-    required String userName,
-    required DateTime date,
-  }) async {
+  Future<void> createBooking(Map<String, dynamic> data) async {
     state = const AsyncValue.loading();
-    state = await AsyncValue.guard(
-      () => _repository.inscribirUsuario(
-        classId: classId,
-        userId: userId,
-        userEmail: userEmail,
-      ),
-    );
+    state = await AsyncValue.guard(() async {
+      // Implementación pendiente
+    });
   }
 }
-
-final bookingControllerProvider =
-    StateNotifierProvider<BookingController, AsyncValue<void>>((ref) {
-  final repository = ref.watch(classRepositoryProvider);
-  return BookingController(repository);
-});

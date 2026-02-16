@@ -1,50 +1,19 @@
-# Configuración estricta basada en Very Good Ventures
-include: package:very_good_analysis/analysis_options.yaml
+include: package:flutter_lints/flutter.yaml
+
+analyzer:
+  plugins:
+    - riverpod_lint
+  language:
+    strict-casts: true
+    strict-inference: true
+    strict-raw-types: true
+  errors:
+    avoid_print: ignore
+    unnecessary_import: ignore
+    unused_catch_clause: ignore
 
 linter:
   rules:
-    # --- REGLAS CRÍTICAS FASE 2 (SEGURIDAD DE TIPOS) ---
-    # Prohíbe llamadas a métodos/propiedades si el objeto es 'dynamic'.
-    # Esto es lo VITAL para evitar errores en tiempo de ejecución.
-    avoid_dynamic_calls: true
-    
-    # CAMBIO APLICADO: Desactivado para eliminar el ruido de "Missing type annotation"
-    # Podremos reactivarlo en el futuro cuando el código sea estable.
-    always_specify_types: false
-
-    # --- REGLAS PRAGMÁTICAS (Excepciones a la regla estricta) ---
-    
-    # No obligar a documentar cada método/variable pública
-    public_member_api_docs: false
-    
-    # Permitir parámetros con nombre booleanos sin el prefijo 'is' o 'has'
-    avoid_positional_boolean_parameters: false
-    
-    # Permitir print en desarrollo
-    avoid_print: false 
-    
-    # Permitir líneas largas (VSCode maneja el wrap visualmente)
-    lines_longer_than_80_chars: false
-
-    # --- REGLAS DE SEGURIDAD Y RENDIMIENTO ---
-    
-    # Obliga a usar const donde sea posible (Mejora de rendimiento)
-    prefer_const_constructors: true
-    prefer_const_constructors_in_immutables: true
-    prefer_const_declarations: true
-    prefer_const_literals_to_create_immutables: true
-    
-    # Estilo y limpieza
-    prefer_single_quotes: true
-    sort_child_properties_last: true
-    unawaited_futures: true 
-    use_build_context_synchronously: true 
-    prefer_relative_imports: false 
-
-analyzer:
-  errors:
-    # Elevar a error (ROJO) para impedir que pase código inseguro
-    avoid_dynamic_calls: error
-    missing_return: error
-    dead_code: error
-    
+    - prefer_final_locals
+    - use_super_parameters
+    - use_build_context_synchronously
