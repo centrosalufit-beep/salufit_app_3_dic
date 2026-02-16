@@ -38,7 +38,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         email: _emailController.text.trim(),
         password: _passwordController.text.trim(),
       );
-    } catch (e) {
+    } on Exception catch (e) {
       if (mounted) {
         setState(() => _isLoading = false);
         var message = 'Error al iniciar sesión';
@@ -137,7 +137,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             duration: Duration(seconds: 5),
           ),
         );
-      } catch (e) {
+      } on Exception catch (e) {
         dev.log('>>> [ERROR AUTH] Error al enviar reset: $e');
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(

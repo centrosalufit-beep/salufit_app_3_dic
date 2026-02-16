@@ -40,7 +40,7 @@ class _TermsAcceptanceScreenState extends State<TermsAcceptanceScreen> {
           );
         }
       }
-    } catch (e) {
+    } on Exception catch (e) {
       debugPrint('Error lanzando URL: $e');
     }
   }
@@ -94,7 +94,7 @@ class _TermsAcceptanceScreenState extends State<TermsAcceptanceScreen> {
       // NO NAVEGAMOS MANUALMENTE.
       // Al actualizarse Firestore, el stream de 'main.dart' detectará el cambio
       // y cambiará esta pantalla por HomeScreen automáticamente.
-    } catch (e) {
+    } on Exception catch (e) {
       if (mounted) {
         var msg = 'Error al guardar. Contacta con soporte.';
         if (e.toString().contains('permission-denied')) {

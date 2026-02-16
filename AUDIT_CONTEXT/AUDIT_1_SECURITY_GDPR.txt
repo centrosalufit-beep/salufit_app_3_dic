@@ -1,0 +1,372 @@
+--- INICIO DE CONTEXTO ---
+
+
+--- FILE: ./firestore.rules ---
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ==========================================
+    // 🛡️ HELPERS DE SEGURIDAD
+    // ==========================================
+    function isAuthenticated() { return request.auth != null; }
+    function isOwner(userId) { return isAuthenticated() && request.auth.uid == userId; }
+    function getUserData() { return get(/databases/$(database)/documents/users/$(request.auth.uid)).data; }
+    
+    function isStaff() {
+      let role = getUserData().rol;
+      return isAuthenticated() && (role == 'admin' || role == 'administrador' || role == 'profesional');
+    }
+    function isAdmin() {
+      let role = getUserData().rol;
+      return isAuthenticated() && (role == 'admin' || role == 'administrador');
+    }
+
+    // ==========================================
+    // 📋 REGLAS POR COLECCIÓN
+    // ==========================================
+
+    // ✅ REGLA CRÍTICA PARA ACTIVACIÓN (Nuevos Usuarios)
+    match /patient_data/{historyId} {
+      // Permite verificar si el Nº de Historia existe antes de loguearse
+      // Se permite 'get' (documento individual) pero NO 'list' (ver todos)
+      allow get: if true; 
+      allow list: if isStaff(); // Solo el staff puede ver la lista completa
+      allow write: if isStaff();
+    }
+
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isStaff();
+      allow create: if isOwner(userId); 
+      allow update: if (isOwner(userId) 
+                        && request.resource.data.diff(resource.data).affectedKeys()
+                           .hasOnly(['nombre', 'apellidos', 'telefono', 'fechaNacimiento', 'codigoPostal', 'fotoUrl', 'fcmToken', 'termsAccepted', 'privacyAccepted', 'sesionesRestantes', 'consentDate', 'consentVersion', 'rol'])) 
+                    || isStaff();
+      allow delete: if isAdmin();
+    }
+
+    match /bookings/{bookingId} {
+      allow read: if isOwner(resource.data.userId) || isStaff();
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      allow delete: if isAuthenticated() && (resource.data.userId == request.auth.uid || isStaff());
+      allow update: if isStaff();
+    }
+
+    match /appointments/{appointmentId} {
+      allow read: if isOwner(resource.data.userId) || isStaff();
+      allow write: if isStaff();
+    }
+    
+    match /groupClasses/{classId} {
+      allow read: if isAuthenticated();
+      allow update: if isAuthenticated() && (
+        isStaff() || 
+        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['aforoActual']) && 
+         (request.resource.data.aforoActual == resource.data.aforoActual + 1 || 
+          request.resource.data.aforoActual == resource.data.aforoActual - 1))
+      );
+      allow create, delete: if isStaff();
+    }
+
+    match /passes/{passId} {
+      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isStaff());
+      allow update: if isAuthenticated() && (
+        isStaff() || 
+        (resource.data.userId == request.auth.uid && 
+         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['tokensRestantes']))
+      );
+      allow create, delete: if isStaff();
+    }
+
+    match /exercises/{exerciseId} { allow read: if isAuthenticated(); allow write: if isStaff(); }
+    match /exercise_assignments/{assignId} {
+      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isStaff());
+      allow create, delete: if isStaff();
+      allow update: if isStaff() || (isOwner(resource.data.userId) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['completado']));
+    }
+
+    match /documents/{docId} {
+      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isStaff());
+      allow create, update: if isStaff(); 
+      allow delete: if isAdmin();
+    }
+
+    match /consent_templates/{templateId} { allow read: if isAuthenticated(); allow write: if isAdmin(); }
+    match /legacy_import/{docId} { allow read: if isAuthenticated() && (resource.data.email == request.auth.token.email || isStaff()); allow write: if isStaff(); }
+
+    match /timeClockRecords/{recordId} { allow read, write: if isStaff(); }
+    match /internal_chats/{chatId} { 
+      allow read, write: if isStaff(); 
+      match /messages/{msgId} { allow read, write: if isStaff(); } 
+    }
+    match /internal_tasks/{taskId} { allow read, write: if isStaff(); }
+    match /broadcasts/{broadcastId} { allow read: if isAuthenticated(); allow write: if isAdmin(); }
+    match /journal/{entryId} { allow read: if isOwner(resource.data.userId) || isStaff(); allow create: if isOwner(request.resource.data.userId); allow update: if isStaff(); }
+    match /metrics/{metricId} { allow read: if isOwner(resource.data.userId) || isStaff(); allow create: if isOwner(request.resource.data.userId); }
+    match /audit_logs/{logId} { allow create: if isAuthenticated(); allow read: if isAdmin(); allow update, delete: if false; }
+    match /system_config/{docId} { allow read: if isAuthenticated(); allow write: if isAdmin(); }
+    match /config/{docId} { allow read: if true; allow write: if isAdmin(); }
+  }
+}
+
+--- FILE: ./functions/src/index.ts ---
+import * as functions from "firebase-functions";
+import * as admin from "firebase-admin";
+
+admin.initializeApp();
+const db = admin.firestore();
+
+export const checkAccountStatus = functions.https.onCall(async (data, context) => {
+  const email = (data.email as string).trim().toLowerCase();
+  const historyIdRaw = data.historyId.toString().trim();
+  
+  // 1. Normalización para comparación
+  const idString = historyIdRaw.padStart(6, "0"); // "000001"
+  const idNumber = parseInt(historyIdRaw, 10);   // 1
+  
+  try {
+    // 2. Primero verificamos si ya existe en 'users'
+    const userSnapshot = await db.collection("users")
+      .where("email", "==", email)
+      .limit(1)
+      .get();
+      
+    if (!userSnapshot.empty) {
+      return { status: "ALREADY_REGISTERED" };
+    }
+    
+    // 3. Si no existe, buscamos en 'legacy_import' por EMAIL
+    // Buscamos todos los registros con ese email (suele ser solo 1)
+    const legacySnapshot = await db.collection("legacy_import")
+      .where("email", "==", email)
+      .get();
+      
+    if (legacySnapshot.empty) {
+      return { status: "NOT_FOUND" };
+    }
+    
+    // 4. Verificación HÍBRIDA de ID de historia
+    // Buscamos en los documentos encontrados si alguno coincide con el ID (como string o como número)
+    const match = legacySnapshot.docs.find(doc => {
+      const d = doc.data();
+      // Buscamos en los nombres de campo más probables
+      const dbId = d.historyId || d.idH || d.numero;
+      
+      // Comparamos sin importar el tipo (== hace cast automático en JS/TS para esto)
+      return dbId == idString || dbId == idNumber || dbId == historyIdRaw;
+    });
+    
+    if (match) {
+      return { status: "ACTIVATION_PENDING" };
+    } else {
+      return { status: "NOT_FOUND" };
+    }
+    
+  } catch (error) {
+    console.error("Error en checkAccountStatus:", error);
+    throw new functions.https.HttpsError("internal", "Error al verificar la cuenta");
+  }
+});
+
+
+--- FILE: ./macos/Runner/Info.plist ---
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>$(DEVELOPMENT_LANGUAGE)</string>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleIconFile</key>
+	<string></string>
+	<key>CFBundleIdentifier</key>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>$(PRODUCT_NAME)</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>$(FLUTTER_BUILD_NAME)</string>
+	<key>CFBundleVersion</key>
+	<string>$(FLUTTER_BUILD_NUMBER)</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>$(MACOSX_DEPLOYMENT_TARGET)</string>
+	<key>NSHumanReadableCopyright</key>
+	<string>$(PRODUCT_COPYRIGHT)</string>
+	<key>NSMainNibFile</key>
+	<string>MainMenu</string>
+	<key>NSPrincipalClass</key>
+	<string>NSApplication</string>
+</dict>
+</plist>
+
+
+--- FILE: ./ios/macos/Runner/Info.plist ---
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>$(DEVELOPMENT_LANGUAGE)</string>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleIconFile</key>
+	<string></string>
+	<key>CFBundleIdentifier</key>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>$(PRODUCT_NAME)</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>$(FLUTTER_BUILD_NAME)</string>
+	<key>CFBundleVersion</key>
+	<string>$(FLUTTER_BUILD_NUMBER)</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>$(MACOSX_DEPLOYMENT_TARGET)</string>
+	<key>NSHumanReadableCopyright</key>
+	<string>$(PRODUCT_COPYRIGHT)</string>
+	<key>NSMainNibFile</key>
+	<string>MainMenu</string>
+	<key>NSPrincipalClass</key>
+	<string>NSApplication</string>
+</dict>
+</plist>
+
+
+--- FILE: ./ios/Runner/Info.plist ---
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>es</string>
+	<key>CFBundleDisplayName</key>
+	<string>Salufit</string>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleIdentifier</key>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>salufit_app</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>$(FLUTTER_BUILD_NAME)</string>
+	<key>CFBundleSignature</key>
+	<string>????</string>
+	<key>CFBundleVersion</key>
+	<string>$(FLUTTER_BUILD_NUMBER)</string>
+	<key>LSRequiresIPhoneOS</key>
+	<true/>
+
+    <key>CFBundleLocalizations</key>
+    <array>
+        <string>es</string>
+    </array>
+
+    <key>NSCameraUsageDescription</key>
+    <string>Salufit necesita acceso a tu cÃ¡mara para que puedas subir vÃ­deos de ejercicios, fotos de perfil o escanear documentos.</string>
+    <key>NSPhotoLibraryUsageDescription</key>
+    <string>Salufit necesita acceso a tu galerÃ­a para que puedas seleccionar archivos, radiografÃ­as o imÃ¡genes para tu perfil.</string>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>Salufit necesita acceso al micrÃ³fono para grabar audio en los vÃ­deos explicativos.</string>
+    <key>NSFaceIDUsageDescription</key>
+    <string>Salufit usa FaceID para que puedas iniciar sesiÃ³n de forma segura y rÃ¡pida.</string>
+
+    <key>LSSupportsOpeningDocumentsInPlace</key>
+    <true/>
+    <key>UIFileSharingEnabled</key>
+    <true/>
+
+    <key>UIBackgroundModes</key>
+    <array>
+        <string>fetch</string>
+        <string>remote-notification</string>
+    </array>
+
+    <key>UILaunchStoryboardName</key>
+	<string>LaunchScreen</string>
+	<key>UIMainStoryboardFile</key>
+	<string>Main</string>
+	<key>UISupportedInterfaceOrientations</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+	</array>
+	<key>UISupportedInterfaceOrientations~ipad</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationPortraitUpsideDown</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+	<key>CADisableMinimumFrameDurationOnPhone</key>
+	<true/>
+	<key>UIApplicationSupportsIndirectInputEvents</key>
+	<true/>
+	    <key>NSLocationWhenInUseUsageDescription</key>
+    <string>Salufit necesita tu ubicación para validar el fichaje cuando la WiFi del centro no está disponible.</string>
+    <key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+    <string>Salufit necesita tu ubicación para validar el fichaje cuando la WiFi del centro no está disponible.</string>
+</dict>
+</plist>
+
+
+--- FILE: ./ios/ios/Runner/Info.plist ---
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>$(DEVELOPMENT_LANGUAGE)</string>
+	<key>CFBundleDisplayName</key>
+	<string>Ios</string>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleIdentifier</key>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>ios</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>$(FLUTTER_BUILD_NAME)</string>
+	<key>CFBundleSignature</key>
+	<string>????</string>
+	<key>CFBundleVersion</key>
+	<string>$(FLUTTER_BUILD_NUMBER)</string>
+	<key>LSRequiresIPhoneOS</key>
+	<true/>
+	<key>UILaunchStoryboardName</key>
+	<string>LaunchScreen</string>
+	<key>UIMainStoryboardFile</key>
+	<string>Main</string>
+	<key>UISupportedInterfaceOrientations</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+	<key>UISupportedInterfaceOrientations~ipad</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationPortraitUpsideDown</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+	<key>CADisableMinimumFrameDurationOnPhone</key>
+	<true/>
+	<key>UIApplicationSupportsIndirectInputEvents</key>
+	<true/>
+</dict>
+</plist>

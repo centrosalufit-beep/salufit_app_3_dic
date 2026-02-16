@@ -34,7 +34,7 @@ class _AdminCreatePatientScreenState extends State<AdminCreatePatientScreen> {
 
       if (!mounted) return;
       Navigator.pop(context);
-    } catch (e) {
+    } on Exception catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error al guardar: $e')),

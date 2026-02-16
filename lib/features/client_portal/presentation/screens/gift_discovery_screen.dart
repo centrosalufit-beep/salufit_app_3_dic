@@ -74,7 +74,7 @@ class _GiftDiscoveryScreenState extends ConsumerState<GiftDiscoveryScreen> {
             1; // Cambiar a pestaña Clases
         Navigator.pop(context); // Cerrar pantalla de carga
       }
-    } catch (e) {
+    } on Exception catch (e) {
       debugPrint('Error en GiftDiscovery: $e');
       if (mounted) Navigator.pop(context);
     }

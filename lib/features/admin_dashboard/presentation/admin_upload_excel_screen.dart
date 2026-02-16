@@ -92,7 +92,7 @@ class _AdminUploadExcelScreenState extends State<AdminUploadExcelScreen> {
       } else {
         await _importarCitas(sheet, totalRows);
       }
-    } catch (e) {
+    } on Exception catch (e) {
       debugPrint('Error ImportaciÃƒÂ³n: $e');
       if (mounted) {
         setState(() {
@@ -293,7 +293,7 @@ class _AdminUploadExcelScreenState extends State<AdminUploadExcelScreen> {
           batchCount = 0;
           if (mounted) setState(() => _status = 'Subiendo... $procesados');
         }
-      } catch (e) {
+      } on Exception catch (e) {
         print(
           'Ã¢ÂÅ’ ERROR Fila ${i + 1} ($pacienteRaw): Error fecha. D: "$fechaVal", E: "$horaVal". Error: $e',
         );

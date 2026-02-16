@@ -52,7 +52,7 @@ class ActivationUIHelper {
                     duration: const Duration(seconds: 5),
                   ),
                 );
-              } catch (e) {
+              } on Exception {
                 if (!context.mounted) return;
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(

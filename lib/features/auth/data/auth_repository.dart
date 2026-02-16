@@ -27,7 +27,7 @@ class AuthRepository {
       );
 
       _validateResponse(response);
-    } catch (e) {
+    } on Exception catch (e) {
       throw Exception('Error al enviar código: $e');
     }
   }
@@ -49,7 +49,7 @@ class AuthRepository {
       );
 
       _validateResponse(response);
-    } catch (e) {
+    } on Exception catch (e) {
       throw Exception('Error de activación: $e');
     }
   }

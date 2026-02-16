@@ -202,7 +202,7 @@ class _AdminExerciseLibraryScreenState
           const SnackBar(content: Text('Base de datos limpiada')),
         );
       }
-    } catch (e) {
+    } on Exception catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
@@ -272,7 +272,7 @@ class _AdminExerciseLibraryScreenState
           return _ProgressDialog(files: result.files, familia: familiaLote);
         },
       );
-    } catch (e) {
+    } on Exception catch (e) {
       debugPrint('Error en subida masiva: $e');
     }
   }
@@ -332,7 +332,7 @@ class _AdminExerciseLibraryScreenState
           ),
         );
       }
-    } catch (e) {
+    } on Exception catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
@@ -754,7 +754,7 @@ class _ProgressDialogState extends State<_ProgressDialog> {
           'orden': ordenBase + i + 1,
           'fechaCreacion': FieldValue.serverTimestamp(),
         });
-      } catch (e) {
+      } on Exception catch (e) {
         _errors.add('Error en ${file.name}: $e');
       }
     }

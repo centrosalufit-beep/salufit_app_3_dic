@@ -91,7 +91,7 @@ class _AdminClassManagerScreenState extends State<AdminClassManagerScreen> {
       } else {
         throw Exception('Error: ${response.statusCode}');
       }
-    } catch (e) {
+    } on Exception catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('❌ Error: $e'), backgroundColor: Colors.red),

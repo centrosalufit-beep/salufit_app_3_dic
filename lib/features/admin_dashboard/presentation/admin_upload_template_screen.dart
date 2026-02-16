@@ -48,7 +48,7 @@ class _AdminUploadTemplateScreenState extends State<AdminUploadTemplateScreen> {
           });
         }
       }
-    } catch (e) {
+    } on Exception catch (e) {
       debugPrint('Error seleccionando PDF: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -94,7 +94,7 @@ class _AdminUploadTemplateScreenState extends State<AdminUploadTemplateScreen> {
         );
         Navigator.pop(context);
       }
-    } catch (e) {
+    } on Exception catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(

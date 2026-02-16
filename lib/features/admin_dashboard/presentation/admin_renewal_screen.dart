@@ -64,7 +64,7 @@ class _AdminRenewalScreenState extends State<AdminRenewalScreen> {
       } else {
         throw Exception('Status: ${response.statusCode}');
       }
-    } catch (e) {
+    } on Exception catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('❌ Error: $e'), backgroundColor: Colors.red),

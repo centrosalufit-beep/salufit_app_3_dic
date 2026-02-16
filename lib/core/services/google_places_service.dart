@@ -24,7 +24,7 @@ class GooglePlacesService {
         }
       }
       return {};
-    } catch (e) {
+    } on Exception {
       return {};
     }
   }

@@ -55,7 +55,7 @@ class _ActivationScreenState extends ConsumerState<ActivationScreen> {
 
       if (!mounted) return;
       _showSuccessDialog(email);
-    } catch (e) {
+    } on Exception catch (e) {
       dev.log('>>> [ERROR ACTIVACION] $e');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

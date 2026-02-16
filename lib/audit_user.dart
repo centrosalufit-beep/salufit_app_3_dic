@@ -48,7 +48,7 @@ void main() async {
     } else {
       print('❌ Error de Firebase: ${e.message}');
     }
-  } catch (e) {
+  } on FirebaseException catch (e) {
     print('❌ Error inesperado: $e');
   }
   print('\n--- 🏁 FIN DE LA AUDITORÍA ---\n');

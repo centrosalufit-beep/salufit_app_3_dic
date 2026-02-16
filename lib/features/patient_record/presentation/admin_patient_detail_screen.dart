@@ -58,7 +58,7 @@ class _AdminPatientDetailScreenState extends State<AdminPatientDetailScreen>
           'detalles': 'Apertura de ficha completa',
         });
       }
-    } catch (e) {
+    } on Exception catch (e) {
       if (kDebugMode) print('Error auditoría: $e');
     }
   }

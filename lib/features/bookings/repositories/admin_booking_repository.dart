@@ -62,7 +62,7 @@ class AdminBookingRepository {
       }
     } on SocketException {
       return AdminGenResult(success: false, error: 'Sin conexión');
-    } catch (e) {
+    } on Exception catch (e) {
       return AdminGenResult(success: false, error: e.toString());
     }
   }

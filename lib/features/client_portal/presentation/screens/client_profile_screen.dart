@@ -99,7 +99,7 @@ class _ClientProfileScreenState extends ConsumerState<ClientProfileScreen> {
             ),
           );
         }
-      } catch (e) {
+      } on Exception catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text('Error al cancelar: $e')),
@@ -149,7 +149,7 @@ class _ClientProfileScreenState extends ConsumerState<ClientProfileScreen> {
           (route) => false,
         );
       }
-    } catch (e) {
+    } on Exception catch (e) {
       if (mounted) {
         setState(() => _isDeleting = false);
         final msg = e.toString();

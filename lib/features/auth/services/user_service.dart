@@ -52,7 +52,7 @@ class UserService {
   Future<void> saveSecureToken(String token) async {
     try {
       await _storage.write(key: 'auth_token', value: token);
-    } catch (e) {
+    } on Exception catch (e) {
       await _handleStorageError(e);
     }
   }
@@ -60,7 +60,7 @@ class UserService {
   Future<String?> getSecureToken() async {
     try {
       return await _storage.read(key: 'auth_token');
-    } catch (e) {
+    } on Exception catch (e) {
       await _handleStorageError(e);
       return null;
     }
@@ -69,7 +69,7 @@ class UserService {
   Future<void> deleteSecureToken() async {
     try {
       await _storage.delete(key: 'auth_token');
-    } catch (e) {
+    } on Exception catch (e) {
       debugPrint('Error al borrar token: $e');
     }
   }

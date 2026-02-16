@@ -139,7 +139,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
         );
         _isLoadingVideo = false;
       });
-    } catch (e) {
+    } on Exception catch (e) {
       debugPrint('🔴 Error FATAL inicializando video: $e');
       if (mounted) {
         setState(() {

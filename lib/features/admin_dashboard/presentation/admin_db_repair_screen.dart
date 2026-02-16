@@ -79,7 +79,7 @@ class _AdminDatabaseRepairScreenState extends State<AdminDatabaseRepairScreen> {
           _status = 'Completado ($total registros)';
         });
       }
-    } catch (e) {
+    } on Exception catch (e) {
       if (mounted) {
         setState(() {
           _isLoading = false;

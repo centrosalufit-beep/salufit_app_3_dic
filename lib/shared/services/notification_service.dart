@@ -153,7 +153,7 @@ class NotificationService {
           },
           SetOptions(merge: true),
         );
-      } catch (e) {
+      } on Exception catch (e) {
         if (kDebugMode) print('Error guardando token: $e');
       }
     }

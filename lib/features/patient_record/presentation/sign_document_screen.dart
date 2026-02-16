@@ -88,7 +88,7 @@ class _SignDocumentScreenState extends State<SignDocumentScreen> {
           _pdfUrl = docData['urlPdf'] as String?;
         });
       }
-    } catch (e) {
+    } on Exception catch (e) {
       debugPrint('Error cargando datos: $e');
     } finally {
       if (mounted) {
@@ -173,7 +173,7 @@ class _SignDocumentScreenState extends State<SignDocumentScreen> {
           (data['error'] as String?) ?? 'Error desconocido del servidor',
         );
       }
-    } catch (e) {
+    } on Exception catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
@@ -266,7 +266,7 @@ class _SignDocumentScreenState extends State<SignDocumentScreen> {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
         throw Exception((data['error'] as String?) ?? 'Código incorrecto');
       }
-    } catch (e) {
+    } on Exception catch (e) {
       if (mounted) {
         setState(() {
           _isLoading = false;
@@ -298,7 +298,7 @@ class _SignDocumentScreenState extends State<SignDocumentScreen> {
       } else {
         throw Exception('No se pudo lanzar la URL');
       }
-    } catch (e) {
+    } on Exception catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('No se pudo abrir el PDF: $e')),

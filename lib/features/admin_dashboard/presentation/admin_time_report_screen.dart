@@ -216,7 +216,7 @@ class _AdminTimeReportScreenState extends State<AdminTimeReportScreen> {
           final dateA = DateFormat('dd/MM/yyyy').parse(a[0]);
           final dateB = DateFormat('dd/MM/yyyy').parse(b[0]);
           return dateA.compareTo(dateB);
-        } catch (e) {
+        } on Exception {
           return 0;
         }
       });
@@ -306,7 +306,7 @@ class _AdminTimeReportScreenState extends State<AdminTimeReportScreen> {
         bytes: await pdf.save(),
         filename: 'informe_jornada_detallado.pdf',
       );
-    } catch (e) {
+    } on Exception catch (e) {
       debugPrint('ERROR PDF: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

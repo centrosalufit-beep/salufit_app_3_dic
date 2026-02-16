@@ -105,7 +105,7 @@ class _MobileScaffoldState extends ConsumerState<MobileScaffold> {
               data.safeString('nombreCompleto', defaultValue: 'Profesional');
         });
       }
-    } catch (e) {
+    } on Exception catch (e) {
       debugPrint('Error cargando nombre: $e');
     }
   }
@@ -150,7 +150,7 @@ class _MobileScaffoldState extends ConsumerState<MobileScaffold> {
           ),
         );
       }
-    } catch (e) {
+    } on Exception catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -199,7 +199,7 @@ class _MobileScaffoldState extends ConsumerState<MobileScaffold> {
           (route) => false,
         );
       }
-    } catch (e) {
+    } on Exception catch (e) {
       debugPrint('Error logout: $e');
     }
   }

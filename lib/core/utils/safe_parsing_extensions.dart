@@ -121,7 +121,7 @@ extension SafeParsing on Map<String, dynamic>? {
     if (value is List) {
       try {
         return value.map((e) => mapper(e)).toList();
-      } catch (e) {
+      } on Exception catch (e) {
         // En caso de error en el mapeo de un elemento, retornamos default para seguridad
         // Opcionalmente se podría filtrar el elemento corrupto.
         return defaultValue;

@@ -91,7 +91,7 @@ class _AdminScreenState extends State<AdminScreen> {
             'Ã‚Â¡REPARACIÃƒâ€œN COMPLETADA! ($total usuarios actualizados)';
         _isRepairing = false;
       });
-    } catch (e) {
+    } on Exception catch (e) {
       setState(() {
         _status = 'Error crÃƒÂ­tico: $e';
         _isRepairing = false;

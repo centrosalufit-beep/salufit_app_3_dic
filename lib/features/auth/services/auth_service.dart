@@ -22,9 +22,9 @@ class AuthService {
       if (user == null) throw AuthException('Error al obtener usuario.');
 
       await _checkAndClaimLegacyData(user);
-    } on FirebaseAuthException catch (e) {
+    } on FirebaseAuthException {} on FirebaseException catch (e) {
       throw AuthException(_mapFirebaseError(e.code));
-    } catch (e) {
+    } on FirebaseException catch (e) {
       if (e is AuthException) rethrow;
       throw AuthException('Error de conexión: $e');
     }
@@ -35,7 +35,7 @@ class AuthService {
       await _auth.setLanguageCode('es');
       final actionCodeSettings = ActionCodeSettings(url: 'https://salufitnewapp.firebaseapp.com', handleCodeInApp: true, androidPackageName: 'com.salufit.app', iOSBundleId: 'com.salufit.app');
       await _auth.sendPasswordResetEmail(email: email, actionCodeSettings: actionCodeSettings);
-    } on FirebaseAuthException catch (e) {
+    } on FirebaseAuthException {} on FirebaseException catch (e) {
       throw AuthException(_mapFirebaseError(e.code));
     }
   }
@@ -79,7 +79,7 @@ class AuthService {
     try {
       await _firestore.collection('users').doc(user.uid).delete();
       await user.delete();
-    } on FirebaseAuthException catch (e) {
+    } on FirebaseAuthException {} on FirebaseException catch (e) {
       if (e.code == 'requires-recent-login') {
         throw AuthException('requires-recent-login');
       }

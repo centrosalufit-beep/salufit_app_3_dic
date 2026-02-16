@@ -138,7 +138,7 @@ class _ClassListScreenState extends ConsumerState<ClassListScreen> {
           ),
         );
       }
-    } catch (e) {
+    } on Exception catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(

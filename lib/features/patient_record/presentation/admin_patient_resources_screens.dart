@@ -103,7 +103,7 @@ class _AdminPatientDocumentsScreenState
           final data = userDoc.data();
           userEmail = data.safeString('email');
         }
-      } catch (e) {
+      } on Exception catch (e) {
         debugPrint('No se pudo obtener el email del usuario.');
       }
 
@@ -127,7 +127,7 @@ class _AdminPatientDocumentsScreenState
           ),
         );
       }
-    } catch (e) {
+    } on Exception catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
@@ -219,7 +219,7 @@ class _AdminPatientMaterialScreenState
         final data = userDoc.data();
         userEmail = data.safeString('email');
       }
-    } catch (e) {
+    } on Exception catch (e) {
       debugPrint('Error buscando email: $e');
     }
 

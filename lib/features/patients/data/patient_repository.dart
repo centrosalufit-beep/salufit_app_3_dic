@@ -25,7 +25,7 @@ class PatientRepository {
 
       // CORRECCIÓN: Usamos <Patient> explícitamente y la extensión .toPatient()
       return snapshot.docs.map<Patient>((doc) => doc.toPatient()).toList();
-    } catch (e) {
+    } on Exception catch (e) {
       throw Exception('Error al cargar pacientes: $e');
     }
   }
@@ -42,7 +42,7 @@ class PatientRepository {
 
       // CORRECCIÓN: Tipado explícito aquí también
       return snapshot.docs.map<Patient>((doc) => doc.toPatient()).toList();
-    } catch (e) {
+    } on Exception catch (e) {
       return [];
     }
   }

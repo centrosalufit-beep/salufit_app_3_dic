@@ -51,7 +51,7 @@ class InitHelper {
         persistenceEnabled: enablePersistence,
         cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED,
       );
-    } catch (e) {
+    } on Exception catch (e) {
       if (kDebugMode) print('⚠️ Nota Firestore Init: $e');
     }
 
