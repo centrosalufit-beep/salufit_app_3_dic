@@ -1,120 +1,60 @@
-/**
- * ==============================================================================
- * 🚀 SALUFIT BACKEND - PRODUCTION READY (TRANSACTIONS & RENEWALS)
- * ==============================================================================
- */
 const { onRequest } = require("firebase-functions/v2/https");
-const { onDocumentWritten } = require("firebase-functions/v2/firestore");
-const { setGlobalOptions } = require("firebase-functions/v2");
-const { defineSecret } = require("firebase-functions/params");
 const admin = require("firebase-admin");
-const nodemailer = require("nodemailer");
-const crypto = require("crypto");
 const cors = require("cors")({ origin: true });
 
-admin.initializeApp();
+if (admin.apps.length === 0) { admin.initializeApp(); }
 const db = admin.firestore();
 
-setGlobalOptions({ maxInstances: 10, memory: "512MiB", timeoutSeconds: 60, region: "us-central1" });
-const gmailPassword = defineSecret("GMAIL_PASSWORD");
-
-const getTransporter = () => nodemailer.createTransport({
-    service: "gmail",
-    auth: { user: "centrosalufit@gmail.com", pass: gmailPassword.value() }
-});
-
-async function validarUsuario(req, res) {
+exports.cancelarReserva = onRequest((req, res) => cors(req, res, async () => {
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-        res.status(401).json({ error: "⛔ Acceso denegado." });
-        return null;
+        return res.status(401).json({ error: "No autorizado" });
     }
-    const token = authHeader.split('Bearer ')[1];
-    try {
-        return await admin.auth().verifyIdToken(token);
-    } catch (e) {
-        res.status(403).json({ error: "⛔ Credencial caducada." });
-        return null;
-    }
-}
-
-// CANCELAR RESERVA (Fix: Transaction order)
-exports.cancelarReserva = onRequest((req, res) => cors(req, res, async () => {
-    const auth = await validarUsuario(req, res); if (!auth) return;
+    
     const { bookingId } = req.body;
+    if (!bookingId) return res.status(400).json({ error: "Falta bookingId" });
+
     try {
         await db.runTransaction(async (t) => {
             const bRef = db.collection("bookings").doc(bookingId);
             const bSnap = await t.get(bRef);
-            if (!bSnap.exists) throw new Error("RESERVA_NO_EXISTE");
+            if (!bSnap.exists) throw new Error("La reserva ya no existe.");
             const bData = bSnap.data();
 
             const cRef = db.collection("groupClasses").doc(bData.groupClassId);
             const cSnap = await t.get(cRef);
-            if (!cSnap.exists) throw new Error("CLASE_NO_EXISTE");
+            if (!cSnap.exists) throw new Error("La clase no existe.");
             const cData = cSnap.data();
 
             const ahora = new Date();
             const fechaClase = cData.fechaHoraInicio.toDate();
             const diffHoras = (fechaClase - ahora) / (1000 * 60 * 60);
-            const debeDevolverToken = bData.estado === "reservada" && diffHoras >= 24;
-
-            let passDocToUpdate = null;
-            if (debeDevolverToken) {
-                const mes = fechaClase.getMonth() + 1;
-                const anio = fechaClase.getFullYear();
+            
+            // DEVOLUCIÓN: Más de 24h de antelación
+            if (diffHoras >= 24) {
+                // Buscamos CUALQUIER bono activo del usuario (el más reciente)
                 const passesSnap = await t.get(db.collection("passes")
                     .where("userId", "==", bData.userId)
                     .where("activo", "==", true)
-                    .where("mes", "==", mes)
-                    .where("anio", "==", anio)
+                    .orderBy("fechaCreacion", "desc")
                     .limit(1));
-                if (!passesSnap.empty) passDocToUpdate = passesSnap.docs[0];
-            }
 
-            if (bData.estado === "reservada") {
-                const nuevoAforo = Math.max(0, (cData.aforoActual || 1) - 1);
-                t.update(cRef, { aforoActual: nuevoAforo });
-                if (passDocToUpdate) {
-                    t.update(passDocToUpdate.ref, { 
-                        tokensRestantes: (passDocToUpdate.data().tokensRestantes || 0) + 1 
-                    });
+                if (!passesSnap.empty) {
+                    const passRef = passesSnap.docs[0].ref;
+                    const tokensActuales = passesSnap.docs[0].data().tokensRestantes || 0;
+                    t.update(passRef, { tokensRestantes: tokensActuales + 1 });
                 }
             }
+
+            // Actualizamos aforo y borramos reserva
+            const nuevoAforo = Math.max(0, (cData.aforoActual || 1) - 1);
+            t.update(cRef, { aforoActual: nuevoAforo });
             t.delete(bRef);
         });
-        res.json({ success: true, message: "Cancelada OK" });
-    } catch (e) { res.status(400).json({ error: e.message }); }
-}));
 
-// RENOVACIÓN MASIVA (Real logic linked to UID)
-exports.renovarBonosBatch = onRequest((req, res) => cors(req, res, async () => {
-    const auth = await validarUsuario(req, res); if (!auth) return;
-    const { listaUsuarios, mes, anio, tokensPorDefecto } = req.body;
-    const batch = db.batch();
-    
-    listaUsuarios.forEach(item => {
-        const ref = db.collection("passes").doc();
-        batch.set(ref, {
-            userId: item.userId, // Asignado al UID recibido
-            mes: parseInt(mes),
-            anio: parseInt(anio),
-            tokensTotales: parseInt(item.tokens || tokensPorDefecto || 8),
-            tokensRestantes: parseInt(item.tokens || tokensPorDefecto || 8),
-            activo: true, 
-            fechaCreacion: admin.firestore.FieldValue.serverTimestamp()
-        });
-    });
-    
-    try {
-        await batch.commit();
-        res.json({ success: true });
-    } catch (e) { res.status(500).json({ error: e.message }); }
+        res.json({ success: true, message: "Reserva cancelada y token gestionado." });
+    } catch (e) {
+        console.error("Error en transacción:", e.message);
+        res.status(400).json({ error: e.message });
+    }
 }));
-
-// RESTO DE FUNCIONES...
-exports.crearReserva = onRequest((req, res) => cors(req, res, async () => res.json({ status: "success" })));
-exports.autoEmailExerciseAssignments = onDocumentWritten("exercise_assignments/{id}", () => null);
-exports.enviarCodigoOTP = onRequest((req, res) => cors(req, res, async () => res.json({ success: true })));
-exports.verificarCodigoOTP = onRequest((req, res) => cors(req, res, async () => res.json({ success: true })));
-exports.registrarFichaje = onRequest((req, res) => cors(req, res, async () => res.json({ success: true })));

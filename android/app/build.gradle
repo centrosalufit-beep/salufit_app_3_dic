@@ -31,11 +31,11 @@ if (keystorePropertiesFile.exists()) {
 }
 
 android {
+    ndkVersion = "28.2.13676358"
     namespace "com.salufit.app"
     compileSdk flutter.compileSdkVersion
     
     // ðŸ› ï¸ ACTUALIZACIÃ“N: Usamos la versiÃ³n 27 porque los plugins la exigen
-    ndkVersion "28.0.12433566"
 
     compileOptions {
         coreLibraryDesugaringEnabled true

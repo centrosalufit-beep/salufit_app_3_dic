@@ -6,6 +6,52 @@ part of 'home_providers.dart';
 // RiverpodGenerator
 // **************************************************************************
 
+@ProviderFor(HomeTab)
+const homeTabProvider = HomeTabProvider._();
+
+final class HomeTabProvider extends $NotifierProvider<HomeTab, int> {
+  const HomeTabProvider._()
+      : super(
+          from: null,
+          argument: null,
+          retry: null,
+          name: r'homeTabProvider',
+          isAutoDispose: true,
+          dependencies: null,
+          $allTransitiveDependencies: null,
+        );
+
+  @override
+  String debugGetCreateSourceHash() => _$homeTabHash();
+
+  @$internal
+  @override
+  HomeTab create() => HomeTab();
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(int value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<int>(value),
+    );
+  }
+}
+
+String _$homeTabHash() => r'af6f6238f9adfa0e4d1637d119472793310ee825';
+
+abstract class _$HomeTab extends $Notifier<int> {
+  int build();
+  @$mustCallSuper
+  @override
+  void runBuild() {
+    final created = build();
+    final ref = this.ref as $Ref<int, int>;
+    final element = ref.element
+        as $ClassProviderElement<AnyNotifier<int, int>, int, Object?, Object?>;
+    element.handleValue(ref, created);
+  }
+}
+
 @ProviderFor(BookingDate)
 const bookingDateProvider = BookingDateProvider._();
 
@@ -38,7 +84,7 @@ final class BookingDateProvider
   }
 }
 
-String _$bookingDateHash() => r'2f7a39799b50ecb12412420d43f7ee1348fea7b1';
+String _$bookingDateHash() => r'932b93a8806bc2b67dc6845b30580e391ef588c0';
 
 abstract class _$BookingDate extends $Notifier<DateTime> {
   DateTime build();
@@ -49,52 +95,6 @@ abstract class _$BookingDate extends $Notifier<DateTime> {
     final ref = this.ref as $Ref<DateTime, DateTime>;
     final element = ref.element as $ClassProviderElement<
         AnyNotifier<DateTime, DateTime>, DateTime, Object?, Object?>;
-    element.handleValue(ref, created);
-  }
-}
-
-@ProviderFor(HomeTab)
-const homeTabProvider = HomeTabProvider._();
-
-final class HomeTabProvider extends $NotifierProvider<HomeTab, int> {
-  const HomeTabProvider._()
-      : super(
-          from: null,
-          argument: null,
-          retry: null,
-          name: r'homeTabProvider',
-          isAutoDispose: true,
-          dependencies: null,
-          $allTransitiveDependencies: null,
-        );
-
-  @override
-  String debugGetCreateSourceHash() => _$homeTabHash();
-
-  @$internal
-  @override
-  HomeTab create() => HomeTab();
-
-  /// {@macro riverpod.override_with_value}
-  Override overrideWithValue(int value) {
-    return $ProviderOverride(
-      origin: this,
-      providerOverride: $SyncValueProvider<int>(value),
-    );
-  }
-}
-
-String _$homeTabHash() => r'cabce8566aac737ae68126319897bae84444c137';
-
-abstract class _$HomeTab extends $Notifier<int> {
-  int build();
-  @$mustCallSuper
-  @override
-  void runBuild() {
-    final created = build();
-    final ref = this.ref as $Ref<int, int>;
-    final element = ref.element
-        as $ClassProviderElement<AnyNotifier<int, int>, int, Object?, Object?>;
     element.handleValue(ref, created);
   }
 }

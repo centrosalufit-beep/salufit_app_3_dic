@@ -80,7 +80,7 @@ final class MyAssignmentsProvider
   MyAssignments create() => MyAssignments();
 }
 
-String _$myAssignmentsHash() => r'97c4600042daae2fd2ea8a94622def8eea86a7a5';
+String _$myAssignmentsHash() => r'a90a2f3e9f4fc44207ebe7ba5baabce14dab5e8f';
 
 abstract class _$MyAssignments
     extends $StreamNotifier<List<Map<String, dynamic>>> {

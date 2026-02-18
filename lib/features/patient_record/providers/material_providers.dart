@@ -1,5 +1,7 @@
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 part 'material_providers.g.dart';
 
@@ -17,8 +19,20 @@ class DailyProgress extends _$DailyProgress {
 class MyAssignments extends _$MyAssignments {
   @override
   Stream<List<Map<String, dynamic>>> build() {
-    // Por ahora vacío, se conectará a Firebase en la unificación con Surface
-    return Stream.value([]);
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return Stream.value([]);
+
+    return FirebaseFirestore.instance
+        .collection('exercise_assignments')
+        .where('userId', isEqualTo: user.uid)
+        .snapshots()
+        .map((snapshot) {
+          return snapshot.docs.map((doc) {
+            final data = doc.data();
+            data['id'] = doc.id;
+            return data;
+          }).toList();
+        });
   }
 }
 

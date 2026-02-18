@@ -3,33 +3,27 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'home_providers.dart';
 
 class HomeScreen extends ConsumerWidget {
-  final String? userId;
-  final String? userRole;
-  const HomeScreen({super.key, this.userId, this.userRole});
+  const HomeScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final selectedTab = ref.watch(homeTabProvider);
+    final tabIndex = ref.watch(homeTabProvider);
     final selectedDate = ref.watch(bookingDateProvider);
 
     return Scaffold(
-      appBar: AppBar(title: Text('sALUFIT: $userRole')),
+      appBar: AppBar(title: const Text('Salufit Home')),
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Text('Usuario: $userId'),
-            Text('Fecha seleccionada: $selectedDate'),
+            Text('Tab Activa: $tabIndex'),
+            Text('Fecha: ${selectedDate.toLocal()}'),
+            ElevatedButton(
+              onPressed: () => ref.read(homeTabProvider.notifier).setTab(0),
+              child: const Text('Reset Tab'),
+            ),
           ],
         ),
-      ),
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: selectedTab,
-        onTap: (index) => ref.read(homeTabProvider.notifier).setTab(index),
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Inicio'),
-          BottomNavigationBarItem(icon: Icon(Icons.calendar_today), label: 'Citas'),
-        ],
       ),
     );
   }

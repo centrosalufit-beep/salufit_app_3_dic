@@ -1,57 +1,64 @@
-import * as functions from "firebase-functions";
+import { onRequest } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
+const cors = require("cors")({ origin: true });
 
-admin.initializeApp();
+if (admin.apps.length === 0) { admin.initializeApp(); }
 const db = admin.firestore();
 
-export const checkAccountStatus = functions.https.onCall(async (data, context) => {
-  const email = (data.email as string).trim().toLowerCase();
-  const historyIdRaw = data.historyId.toString().trim();
-  
-  // 1. Normalización para comparación
-  const idString = historyIdRaw.padStart(6, "0"); // "000001"
-  const idNumber = parseInt(historyIdRaw, 10);   // 1
-  
-  try {
-    // 2. Primero verificamos si ya existe en 'users'
-    const userSnapshot = await db.collection("users")
-      .where("email", "==", email)
-      .limit(1)
-      .get();
-      
-    if (!userSnapshot.empty) {
-      return { status: "ALREADY_REGISTERED" };
-    }
-    
-    // 3. Si no existe, buscamos en 'legacy_import' por EMAIL
-    // Buscamos todos los registros con ese email (suele ser solo 1)
-    const legacySnapshot = await db.collection("legacy_import")
-      .where("email", "==", email)
-      .get();
-      
-    if (legacySnapshot.empty) {
-      return { status: "NOT_FOUND" };
-    }
-    
-    // 4. Verificación HÍBRIDA de ID de historia
-    // Buscamos en los documentos encontrados si alguno coincide con el ID (como string o como número)
-    const match = legacySnapshot.docs.find(doc => {
-      const d = doc.data();
-      // Buscamos en los nombres de campo más probables
-      const dbId = d.historyId || d.idH || d.numero;
-      
-      // Comparamos sin importar el tipo (== hace cast automático en JS/TS para esto)
-      return dbId == idString || dbId == idNumber || dbId == historyIdRaw;
+export const cancelarReserva = onRequest((req, res) => {
+    return cors(req, res, async () => {
+        const { bookingId } = req.body;
+        if (!bookingId) {
+            res.status(400).json({ error: "Falta bookingId" });
+            return;
+        }
+
+        try {
+            let reembolsoRealizado = false;
+
+            await db.runTransaction(async (t) => {
+                const bRef = db.collection("bookings").doc(bookingId);
+                const bSnap = await t.get(bRef);
+                if (!bSnap.exists) throw new Error("La reserva no existe.");
+                
+                const bData = bSnap.data();
+                const cRef = db.collection("groupClasses").doc(bData!.groupClassId);
+                const cSnap = await t.get(cRef);
+                if (!cSnap.exists) throw new Error("La clase no existe.");
+                
+                const cData = cSnap.data();
+                const ahora = new Date();
+                const fechaClase = cData!.fechaHoraInicio.toDate();
+                const diffHoras = (fechaClase.getTime() - ahora.getTime()) / (1000 * 60 * 60);
+                
+                if (diffHoras >= 24) {
+                    const passesSnap = await t.get(db.collection("passes")
+                        .where("userId", "==", bData!.userId)
+                        .where("activo", "==", true)
+                        .limit(1));
+
+                    if (!passesSnap.empty) {
+                        const passRef = passesSnap.docs[0].ref;
+                        const tokensActuales = passesSnap.docs[0].data().tokensRestantes || 0;
+                        t.update(passRef, { tokensRestantes: tokensActuales + 1 });
+                        reembolsoRealizado = true;
+                    }
+                }
+
+                const nuevoAforo = Math.max(0, (cData!.aforoActual || 1) - 1);
+                t.update(cRef, { aforoActual: nuevoAforo });
+                t.delete(bRef);
+            });
+
+            res.json({ 
+                success: true, 
+                tokenDevuelto: reembolsoRealizado,
+                message: reembolsoRealizado ? "Reserva anulada y token devuelto." : "Reserva anulada (sin devolución de token)."
+            });
+            return;
+        } catch (e: any) {
+            res.status(400).json({ error: e.message });
+            return;
+        }
     });
-    
-    if (match) {
-      return { status: "ACTIVATION_PENDING" };
-    } else {
-      return { status: "NOT_FOUND" };
-    }
-    
-  } catch (error) {
-    console.error("Error en checkAccountStatus:", error);
-    throw new functions.https.HttpsError("internal", "Error al verificar la cuenta");
-  }
 });

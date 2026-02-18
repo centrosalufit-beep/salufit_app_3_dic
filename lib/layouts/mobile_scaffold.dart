@@ -9,7 +9,7 @@ import 'package:salufit_app/features/auth/presentation/login_screen.dart';
 import 'package:salufit_app/features/auth/providers/auth_providers.dart';
 import 'package:salufit_app/features/bookings/presentation/admin_class_manager_screen.dart';
 import 'package:salufit_app/features/bookings/services/class_generator_service.dart';
-import 'package:salufit_app/features/client_portal/presentation/screens/class_list_screen.dart';
+import 'package:salufit_app/features/client_portal/presentation/screens/client_class_list_screen.dart';
 import 'package:salufit_app/features/communication/presentation/internal_management_screen.dart';
 import 'package:salufit_app/features/patient_record/presentation/admin_create_patient_screen.dart';
 import 'package:salufit_app/features/patient_record/presentation/admin_patient_detail_screen.dart';
@@ -290,7 +290,7 @@ class _MobileScaffoldState extends ConsumerState<MobileScaffold> {
                     () => Navigator.push(
                       context,
                       MaterialPageRoute<void>(
-                        builder: (_) => ClassListScreen(
+                        builder: (_) => ClientClassListScreen(
                           userId: widget.userId,
                           userRole: widget.userRole,
                         ),
