@@ -4,12 +4,13 @@ publish_to: 'none'
 version: 2.0.2+132
 
 environment:
-  sdk: '>=3.0.0 <4.0.0'
+  sdk: '>=3.8.0 <4.0.0'
 
 dependencies:
   chewie: ^1.8.5
   cloud_firestore: ^5.0.0
   cloud_functions: ^5.0.0
+  crypto: ^3.0.0
   csv: ^6.0.0
   cupertino_icons: ^1.0.6
   device_info_plus: ^10.0.0

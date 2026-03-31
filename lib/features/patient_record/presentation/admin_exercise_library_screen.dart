@@ -206,7 +206,7 @@ class _AdminExerciseLibraryScreenState
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text('Error: $e')));
+        ).showSnackBar(const SnackBar(content: Text('Error al procesar la solicitud'), backgroundColor: Colors.red));
       }
     } finally {
       if (mounted) setState(() => _isUploading = false);
@@ -335,7 +335,7 @@ class _AdminExerciseLibraryScreenState
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+          const SnackBar(content: Text('Error al subir el ejercicio'), backgroundColor: Colors.red),
         );
       }
     } finally {

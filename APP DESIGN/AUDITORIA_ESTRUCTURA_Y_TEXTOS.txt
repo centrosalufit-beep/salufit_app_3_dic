@@ -1,0 +1,55 @@
+﻿================================================================
+INFORME DE AUDITORÍA: ESTRUCTURA DE COMUNICACIÓN Y CODIFICACIÓN
+================================================================
+
+[1] LOCALIZACIÓN DE ARCHIVOS CRÍTICOS:
+⚠️ ERROR: chat_detail_screen.dart NO ENCONTRADO EN 'lib/'
+
+[2] MUESTRA DE TEXTO CORRUPTO (Para saneamiento):
+--- Muestra de: lib/features/admin_dashboard/presentation/admin_renewal_screen.dart ---
+import 'dart:convert';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'package:intl/intl.dart';
+import 'package:salufit_app/core/config/app_config.dart';
+
+class AdminRenewalScreen extends StatefulWidget {
+  const AdminRenewalScreen({super.key});
+  @override
+  State<AdminRenewalScreen> createState() => _AdminRenewalScreenState();
+}
+
+class _AdminRenewalScreenState extends State<AdminRenewalScreen> {
+  int _
+--- Muestra de: lib/features/communication/presentation/internal_management_screen.dart ---
+import 'package:flutter/material.dart';
+import 'package:salufit_app/features/communication/presentation/widgets/chat_list_widget.dart';
+
+class InternalManagementScreen extends StatelessWidget {
+  const InternalManagementScreen({
+    required this.currentUserId,
+    required this.userRole,
+    this.viewType = 'chat',
+    super.key,
+  });
+
+  final String currentUserId;
+  final String userRole;
+  final String viewType;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      b
+
+[3] ESTRUCTURA DE CARPETAS (Communication):
+
+FullName                                                     
+--------                                                     
+C:\Proyectos\salufit_app_3_dic\lib\features\communication\...
+C:\Proyectos\salufit_app_3_dic\lib\features\communication\...
+C:\Proyectos\salufit_app_3_dic\lib\features\communication\...
+C:\Proyectos\salufit_app_3_dic\lib\features\communication\...
+
+

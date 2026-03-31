@@ -1,10 +1,9 @@
-import 'dart:developer' as dev;
-
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:salufit_app/core/theme/app_colors.dart';
 import 'package:salufit_app/features/auth/presentation/activation_screen.dart';
-import 'package:salufit_app/features/auth/providers/auth_providers.dart';
-import 'package:salufit_app/shared/widgets/salufit_scaffold.dart';
+import 'package:salufit_app/features/auth/presentation/controllers/login_controller.dart';
+import 'package:salufit_app/features/auth/presentation/forgot_password_screen.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -17,7 +16,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-  bool _isLoading = false;
   bool _isPasswordVisible = false;
 
   @override
@@ -27,286 +25,88 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     super.dispose();
   }
 
-  Future<void> _handleLogin() async {
-    if (!_formKey.currentState!.validate()) return;
-    FocusScope.of(context).unfocus();
-    setState(() => _isLoading = true);
-
-    try {
-      final authService = ref.read(authServiceProvider);
-      await authService.signIn(
-        email: _emailController.text.trim(),
-        password: _passwordController.text.trim(),
-      );
-    } catch (e) {
-      if (mounted) {
-        setState(() => _isLoading = false);
-        var message = 'Error al iniciar sesión';
-        final errorStr = e.toString().toLowerCase();
-
-        if (errorStr.contains('user-not-found')) {
-          message = 'No existe una cuenta con este correo.';
-        } else if (errorStr.contains('wrong-password')) {
-          message = 'La contraseña es incorrecta.';
-        } else if (errorStr.contains('invalid-credential')) {
-          message = 'Credenciales inválidas.';
-        } else if (errorStr.contains('too-many-requests')) {
-          message = 'Cuenta bloqueada temporalmente.';
-        }
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(message),
-            backgroundColor: Colors.red,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
-    }
-  }
-
-  void _onPrimeraVezPressed() {
-    Navigator.push(
-      context,
-      MaterialPageRoute<ActivationScreen>(
-        builder: (context) => const ActivationScreen(),
-      ),
-    );
-  }
-
-  Future<void> _onForgotPasswordPressed() async {
-    final emailResetController =
-        TextEditingController(text: _emailController.text);
-
-    final result = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Recuperar contraseña'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text(
-              'Introduce tu correo y te enviaremos un enlace para generar una nueva contraseña.',
-            ),
-            const SizedBox(height: 15),
-            TextField(
-              controller: emailResetController,
-              keyboardType: TextInputType.emailAddress,
-              decoration: const InputDecoration(
-                labelText: 'Correo Electrónico',
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.email),
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('CANCELAR'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('ENVIAR ENLACE'),
-          ),
-        ],
-      ),
-    );
-
-    if (result ?? false) {
-      if (!mounted) return;
-      final email = emailResetController.text.trim();
-      if (email.isEmpty || !email.contains('@')) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Por favor, introduce un correo válido.'),
-          ),
-        );
-        return;
-      }
-
-      try {
-        dev.log('>>> [AUDITORIA] Intentando enviar correo de reset a: $email');
-        await ref.read(authServiceProvider).sendPasswordResetEmail(email);
-        
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('✅ Si el correo está registrado, recibirás un enlace en breve.'),
-            backgroundColor: Colors.green,
-            duration: Duration(seconds: 5),
-          ),
-        );
-      } catch (e) {
-        dev.log('>>> [ERROR AUTH] Error al enviar reset: $e');
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Error: No se pudo procesar la solicitud.'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
-    const salufitTeal = Color(0xFF009688);
-
-    return SalufitScaffold(
-      backgroundColor: Colors.white,
-      showWatermark: false,
+    final loginState = ref.watch(loginControllerProvider);
+    return Scaffold(
       body: Stack(
         children: [
           Positioned.fill(
-            child: Image.asset(
-              'assets/login_bg.jpg',
-              fit: BoxFit.cover,
-              errorBuilder: (c, e, s) => Container(color: Colors.grey[300]),
-            ),
+            child: Image.asset('assets/login_bg.jpg', fit: BoxFit.cover),
           ),
           Positioned.fill(
             child: Container(
-              color: Colors.white.withAlpha(13),
+              color: Colors.white.withValues(alpha: 0.1),
             ),
           ),
           Center(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
+              padding: const EdgeInsets.symmetric(horizontal: 24),
               child: Form(
                 key: _formKey,
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Image.asset(
-                      'assets/login_logo.png',
-                      height: 300,
-                      fit: BoxFit.contain,
-                      errorBuilder: (c, e, s) => const SizedBox(height: 300),
-                    ),
-                    const SizedBox(height: 15),
-                    const FittedBox(
-                      fit: BoxFit.scaleDown,
-                      child: Text(
-                        'Tu salud en manos profesionales',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 32,
-                          fontWeight: FontWeight.w600,
-                          color: Color.fromRGBO(0, 0, 0, 0.87),
-                          letterSpacing: 0.5,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 25),
+                    Image.asset('assets/login_logo.png', height: 250),
+                    const SizedBox(height: 10),
+                    const _PremiumSlogan(),
+                    const SizedBox(height: 35),
                     TextFormField(
                       controller: _emailController,
                       keyboardType: TextInputType.emailAddress,
-                      style: const TextStyle(color: Colors.black87),
                       decoration: InputDecoration(
                         labelText: 'Correo Electrónico',
-                        prefixIcon: const Icon(
-                          Icons.email_outlined,
-                          color: salufitTeal,
-                          size: 26,
-                        ),
+                        prefixIcon: const Icon(Icons.email_outlined, color: AppColors.primary),
                         filled: true,
-                        fillColor: Colors.white.withAlpha(230),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide(
-                            color: Colors.grey.withAlpha(77),
-                          ),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide:
-                              const BorderSide(color: salufitTeal, width: 2),
-                        ),
+                        fillColor: Colors.white.withValues(alpha: 0.9),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                       ),
-                      validator: (value) => (value == null ||
-                              value.isEmpty ||
-                              !value.contains('@'))
-                          ? 'Correo inválido'
-                          : null,
+                      validator: (v) => (v == null || !v.contains('@')) ? 'Correo inválido' : null,
                     ),
                     const SizedBox(height: 20),
                     TextFormField(
                       controller: _passwordController,
                       obscureText: !_isPasswordVisible,
-                      style: const TextStyle(color: Colors.black87),
                       decoration: InputDecoration(
                         labelText: 'Contraseña',
-                        prefixIcon: const Icon(
-                          Icons.lock_outline,
-                          color: salufitTeal,
-                          size: 26,
-                        ),
+                        prefixIcon: const Icon(Icons.lock_outline, color: AppColors.primary),
                         suffixIcon: IconButton(
-                          icon: Icon(
-                            _isPasswordVisible
-                                ? Icons.visibility_off
-                                : Icons.visibility,
-                          ),
-                          color: Colors.grey,
-                          onPressed: () => setState(
-                            () => _isPasswordVisible = !_isPasswordVisible,
-                          ),
+                          icon: Icon(_isPasswordVisible ? Icons.visibility_off : Icons.visibility),
+                          onPressed: () => setState(() => _isPasswordVisible = !_isPasswordVisible),
                         ),
                         filled: true,
-                        fillColor: Colors.white.withAlpha(230),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide(
-                            color: Colors.grey.withAlpha(77),
-                          ),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide:
-                              const BorderSide(color: salufitTeal, width: 2),
-                        ),
+                        fillColor: Colors.white.withValues(alpha: 0.9),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                       ),
-                      validator: (value) => (value == null || value.length < 6)
-                          ? 'Mínimo 6 caracteres'
-                          : null,
+                      validator: (v) => (v == null || v.length < 6) ? 'Mínimo 6 caracteres' : null,
                     ),
                     const SizedBox(height: 30),
                     SizedBox(
                       height: 55,
                       child: ElevatedButton(
-                        onPressed: _isLoading ? null : _handleLogin,
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: salufitTeal,
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          elevation: 4,
+                          backgroundColor: AppColors.primary,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                         ),
-                        child: _isLoading
-                            ? const SizedBox(
-                                height: 24,
-                                width: 24,
-                                child: CircularProgressIndicator(
-                                  color: Colors.white,
-                                  strokeWidth: 3,
-                                ),
-                              )
+                        onPressed: loginState.isLoading
+                            ? null
+                            : () {
+                                if (_formKey.currentState!.validate()) {
+                                  ref.read(loginControllerProvider.notifier).login(
+                                        _emailController.text.trim(),
+                                        _passwordController.text.trim(),
+                                      );
+                                }
+                              },
+                        child: loginState.isLoading
+                            ? const CircularProgressIndicator(color: Colors.white)
                             : const Text(
                                 'INICIAR SESIÓN',
                                 style: TextStyle(
-                                  fontSize: 18,
+                                  color: Colors.white,
                                   fontWeight: FontWeight.bold,
-                                  letterSpacing: 1,
+                                  fontSize: 18,
                                 ),
                               ),
                       ),
@@ -316,39 +116,31 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       children: [
                         Expanded(
                           child: OutlinedButton(
-                            onPressed: _isLoading ? null : _onPrimeraVezPressed,
+                            // CORRECCIÓN 1: Tipado explícito <void> para MaterialPageRoute
+                            onPressed: () => Navigator.push<void>(
+                              context,
+                              MaterialPageRoute<void>(builder: (c) => const ActivationScreen()),
+                            ),
                             style: OutlinedButton.styleFrom(
-                              foregroundColor: salufitTeal,
-                              backgroundColor:
-                                  Colors.white.withAlpha(178),
-                              side: const BorderSide(
-                                color: salufitTeal,
-                                width: 1.5,
-                              ),
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(10),
-                              ),
+                              foregroundColor: AppColors.primary,
+                              side: const BorderSide(color: AppColors.primary),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                             ),
-                            child: const Text(
-                              'Primera vez',
-                              style: TextStyle(fontWeight: FontWeight.bold),
-                            ),
+                            child: const Text('Primera vez', style: TextStyle(fontWeight: FontWeight.bold)),
                           ),
                         ),
                         const SizedBox(width: 15),
                         Expanded(
                           child: TextButton(
-                            onPressed:
-                                _isLoading ? null : _onForgotPasswordPressed,
-                            style: TextButton.styleFrom(
-                              foregroundColor: const Color(0xFF424242),
-                              padding: const EdgeInsets.symmetric(vertical: 12),
+                            // CORRECCIÓN 2: Tipado explícito <void> para MaterialPageRoute
+                            onPressed: () => Navigator.push<void>(
+                              context,
+                              MaterialPageRoute<void>(builder: (c) => const ForgotPasswordScreen()),
                             ),
                             child: const Text(
                               '¿Olvidaste\ncontraseña?',
                               textAlign: TextAlign.center,
-                              style: TextStyle(height: 1.1),
+                              style: TextStyle(color: Colors.black54),
                             ),
                           ),
                         ),
@@ -361,6 +153,55 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _PremiumSlogan extends StatelessWidget {
+  const _PremiumSlogan();
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        RichText(
+          textAlign: TextAlign.center,
+          text: const TextSpan(
+            style: TextStyle(
+              fontSize: 26,
+              letterSpacing: 0.8,
+              height: 1.2,
+            ),
+            children: [
+              TextSpan(
+                text: 'Tu salud en manos\n',
+                style: TextStyle(
+                  color: Color(0xFF454545),
+                  fontWeight: FontWeight.w300,
+                ),
+              ),
+              TextSpan(
+                text: 'PROFESIONALES',
+                style: TextStyle(
+                  color: Color(0xFF009688),
+                  fontWeight: FontWeight.w900,
+                  // CORRECCIÓN 3: prefer_int_literals (2 en lugar de 2.0)
+                  letterSpacing: 2,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 8),
+        Container(
+          height: 3,
+          width: 60,
+          decoration: BoxDecoration(
+            color: const Color(0xFF009688),
+            borderRadius: BorderRadius.circular(2),
+          ),
+        ),
+      ],
     );
   }
 }

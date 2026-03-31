@@ -41,9 +41,7 @@ class InitHelper {
       if (kIsWeb || defaultTargetPlatform == TargetPlatform.windows) {
         enablePersistence = false;
         if (kDebugMode) {
-          print(
-            '🖥️ Windows/Web detectado: Persistencia Firestore DESACTIVADA.',
-          );
+          debugPrint('Windows/Web: Persistencia Firestore desactivada');
         }
       }
 
@@ -75,7 +73,7 @@ class InitHelper {
 
     // 6. Logs
     if (kDebugMode) {
-      print('🚀 Salufit Dev Mode Activo');
+      debugPrint('Salufit Dev Mode Activo');
     }
 
     // 7. Formatos de fecha (CORREGIDO: 'es' en lugar de 'es_ES')

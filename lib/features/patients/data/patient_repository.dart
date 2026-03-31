@@ -1,6 +1,5 @@
 // lib/features/patients/data/patient_repository.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 // Importamos el modelo donde hemos definido la extensión .toPatient()
 import 'package:salufit_app/features/patients/domain/patient_model.dart';

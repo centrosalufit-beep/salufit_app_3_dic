@@ -1,111 +1,73 @@
-import 'dart:developer' as dev;
-
-import 'package:cloud_firestore/cloud_firestore.dart';
+﻿import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:salufit_app/core/utils/safe_parsing_extensions.dart';
 
 class AuthService {
-  AuthService({FirebaseAuth? auth, FirebaseFirestore? firestore})
-      : _auth = auth ?? FirebaseAuth.instance,
-        _firestore = firestore ?? FirebaseFirestore.instance;
+  final _auth = FirebaseAuth.instance;
+  final _db = FirebaseFirestore.instance;
 
-  final FirebaseAuth _auth;
-  final FirebaseFirestore _firestore;
+  // Generador de Keywords Inteligente 2026
+  List<String> _generateKeywords(String nombre, String apellidos, String numHistoria) {
+    final cleanH = numHistoria.trim();
+    // Normalizamos a 6 dígitos como hace la App móvil
+    final paddedH = cleanH.padLeft(6, '0');
+    
+    final words = '$nombre $apellidos $cleanH $paddedH'.toLowerCase().split(' ')
+      ..add('$nombre $apellidos'.toLowerCase())
+      ..add(cleanH.toLowerCase())
+      ..add(paddedH.toLowerCase()); 
+      
+    return words.where((w) => w.isNotEmpty).toSet().toList();
+  }
+
+  Future<void> activateClient({
+    required String email, 
+    required String numHistoria, 
+    required String password
+  }) async {
+    // Normalizamos la entrada (Inferencia automática de tipo String)
+    final normalizedH = numHistoria.trim().padLeft(6, '0');
+    
+    final bbddDoc = await _db.collection('bbdd').doc(email.toLowerCase()).get();
+    if (!bbddDoc.exists) throw Exception('No autorizado.');
+
+    final data = bbddDoc.data()!;
+    // Comparamos el número de la BBDD
+    final dbH = (data['numHistoria'] as String? ?? '').trim().padLeft(6, '0');
+    
+    if (dbH != normalizedH) throw Exception('Nº Historia incorrecto.');
+
+    final credential = await _auth.createUserWithEmailAndPassword(email: email, password: password);
+    final uid = credential.user!.uid;
+
+    final nombre = data['nombre'] as String? ?? '';        
+    final nombreCompleto = data['nombreCompleto'] as String? ?? '';
+    final apellidos = nombreCompleto.replaceFirst(nombre, '').trim();
+
+    await _db.collection('users_app').doc(uid).set({       
+      'uid': uid,
+      'numHistoria': normalizedH,
+      'email': email.toLowerCase(),
+      'nombre': nombre,
+      'apellidos': apellidos,
+      'nombreCompleto': nombreCompleto,
+      'activo': true,
+      'rol': 'cliente',
+      'termsAccepted': false,
+      'keywords': _generateKeywords(nombre, apellidos, normalizedH),
+      'createdAt': FieldValue.serverTimestamp(),
+      'deviceInfo': 'App Mobile 2026',
+    });
+
+    await bbddDoc.reference.update({'status': 'activated', 'activatedUid': uid});
+  }
 
   Future<void> signIn({required String email, required String password}) async {
-    try {
-      final userCredential = await _auth.signInWithEmailAndPassword(
-        email: email,
-        password: password,
-      );
-      final user = userCredential.user;
-      if (user == null) throw AuthException('Error al obtener usuario.');
-
-      await _checkAndClaimLegacyData(user);
-    } on FirebaseAuthException catch (e) {
-      throw AuthException(_mapFirebaseError(e.code));
-    } catch (e) {
-      if (e is AuthException) rethrow;
-      throw AuthException('Error de conexión: $e');
-    }
+    await _auth.signInWithEmailAndPassword(email: email, password: password);
   }
 
   Future<void> sendPasswordResetEmail(String email) async {
-    try {
-      await _auth.setLanguageCode('es');
-      final actionCodeSettings = ActionCodeSettings(url: 'https://salufitnewapp.firebaseapp.com', handleCodeInApp: true, androidPackageName: 'com.salufit.app', iOSBundleId: 'com.salufit.app');
-      await _auth.sendPasswordResetEmail(email: email, actionCodeSettings: actionCodeSettings);
-    } on FirebaseAuthException catch (e) {
-      throw AuthException(_mapFirebaseError(e.code));
-    }
-  }
-
-  Future<void> _checkAndClaimLegacyData(User user) async {
-    final userRef = _firestore.collection('users').doc(user.uid);
-    
-    final legacyQuery = await _firestore
-        .collection('legacy_import')
-        .where('email', isEqualTo: user.email)
-        .get();
-
-    if (legacyQuery.docs.isEmpty) return;
-
-    final legacyDoc = legacyQuery.docs.first;
-    final legacyData = legacyDoc.data();
-
-    if (legacyData.safeBool('migrated')) return;
-
-    await userRef.set(
-      {
-        ...legacyData,
-        'uid': user.uid,
-        'id': user.uid,
-        'migrated': true,
-        'termsAccepted': false,
-        'privacyAccepted': false,
-        'migratedAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      },
-      SetOptions(merge: true),
-    );
-
-    await legacyDoc.reference.update({'migrated': true, 'migratedTo': user.uid});
-    dev.log('>>> [MIGRACIÓN] Datos legacy movidos exitosamente al UID: ${user.uid}');
-  }
-
-  Future<void> deleteAccount() async {
-    final user = _auth.currentUser;
-    if (user == null) throw AuthException('No hay usuario autenticado');
-    try {
-      await _firestore.collection('users').doc(user.uid).delete();
-      await user.delete();
-    } on FirebaseAuthException catch (e) {
-      if (e.code == 'requires-recent-login') {
-        throw AuthException('requires-recent-login');
-      }
-      throw AuthException(_mapFirebaseError(e.code));
-    }
-  }
-
-  String _mapFirebaseError(String code) {
-    switch (code) {
-      case 'user-not-found':
-        return 'Usuario no registrado.';
-      case 'wrong-password':
-        return 'Contraseña incorrecta.';
-      case 'too-many-requests':
-        return 'Cuenta bloqueada temporalmente.';
-      default:
-        return 'Error de acceso ($code)';
-    }
+    await _auth.sendPasswordResetEmail(email: email);      
   }
 
   Future<void> signOut() => _auth.signOut();
-}
-
-class AuthException implements Exception {
-  AuthException(this.message);
-  final String message;
-  @override
-  String toString() => message;
 }

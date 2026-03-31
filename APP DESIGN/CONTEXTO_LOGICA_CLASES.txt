@@ -1,0 +1,475 @@
+﻿================================================================
+SALUFIT 2026: AUDITORÍA DE LÓGICA DE CREACIÓN DE CLASES
+================================================================
+
+--- ARCHIVO: lib\core\config\app_config.dart ---
+// lib/core/config/app_config.dart
+
+class AppConfig {
+  AppConfig._(); // Constructor privado
+
+  // --- TIEMPOS ---
+  static const Duration apiTimeout = Duration(seconds: 30);
+
+  // --- DATOS DE CONTACTO ---
+  static const String urlWhatsApp = 'https://wa.me/34629011055';
+  static const String urlPrivacidad =
+      'https://centrosalufit.com/politica-de-privacidad/';
+
+  // --- ROLES DEL SISTEMA ---
+  static const String rolCliente = 'cliente';
+  static const String rolAdmin = 'admin';
+  static const String rolProfesional = 'profesional';
+
+  // --- SEGURIDAD Y HARDWARE ---
+  // INFO (Arquitectura): Sincronizar con Firestore config/time_clock_settings
+  static const String wifiPermitida = 'DIGIFIBRA-3AE9';
+
+  // --- BACKEND / CLOUD FUNCTIONS (Gen 2 - ProducciÃ³n) ---
+  // ID del proyecto extraÃ­do: 6cmp56xv3a
+
+  // Reservas
+  static const String urlCrearReserva =
+      'https://crearreserva-6cmp56xv3a-uc.a.run.app';
+  static const String urlCancelarReserva =
+      'https://cancelarreserva-6cmp56xv3a-uc.a.run.app';
+
+  // AdministraciÃ³n
+  static const String urlGenerarClases =
+      'https://generarclasesmensuales-6cmp56xv3a-uc.a.run.app';
+  static const String urlRenovarBonos =
+      'https://renovarbonosbatch-6cmp56xv3a-uc.a.run.app';
+
+  // AutenticaciÃ³n
+  static const String urlOtpEnviar =
+      'https://enviarcodigootp-6cmp56xv3a-uc.a.run.app';
+  static const String urlActivarCuenta =
+      'https://activarcuenta-6cmp56xv3a-uc.a.run.app';
+  // He aÃ±adido esta porque aparece en tu lista y serÃ¡ necesaria para el login:
+  static const String urlOtpVerificar =
+      'https://verificarcodigootp-6cmp56xv3a-uc.a.run.app';
+
+  // Staff
+  static const String urlFichar =
+      'https://registrarfichaje-6cmp56xv3a-uc.a.run.app';
+
+  /// LÃ³gica centralizada de permisos
+  static bool esStaff(String? role) {
+    if (role == null) return false;
+    final staffRoles = [rolAdmin, rolProfesional];
+    return staffRoles.contains(role.toLowerCase());
+  }
+}
+
+----------------------------------------------------------------
+
+--- ARCHIVO: lib\features\bookings\domain\models\class_model.dart ---
+// lib/features/bookings/domain/models/class_model.dart
+
+import 'package:cloud_firestore/cloud_firestore.dart';
+
+class ClassModel {
+  // 2. CONSTRUCTOR PRINCIPAL
+  ClassModel({
+    required this.id,
+    required this.name,
+    required this.instructor,
+    required this.startTime,
+    required this.maxCapacity,
+    required this.currentCapacity,
+    required this.attendees,
+  });
+
+  // 3. FACTORY: AgnÃ³stico a la fuente (Testing & Robustez)
+  factory ClassModel.fromMap(Map<String, dynamic> data, String docId) {
+    return ClassModel(
+      id: docId,
+      // Manejo seguro: Si no es String, intenta convertirlo. Si es nulo, usa default.
+      name: _parseString(data['nombre'], 'Clase sin nombre'),
+      instructor: _parseString(data['monitor'], 'Salufit'),
+
+      // Manejo seguro de fechas (Timestamp, String o Null)
+      startTime: _parseDate(data['fechaHoraInicio']),
+
+      // Manejo seguro de nÃºmeros (int, double, String numÃ©rico o basura)
+      maxCapacity: _parseInt(data['aforoMaximo'], 12),
+      currentCapacity: _parseInt(data['aforoActual'], 0),
+
+      // Manejo seguro de listas (List, null, o tipo incorrecto)
+      attendees: _parseList(data['asistentes']),
+    );
+  }
+
+  // 4. FACTORY: Firestore
+  factory ClassModel.fromFirestore(DocumentSnapshot doc) {
+    final data = doc.data() as Map<String, dynamic>? ?? {};
+    return ClassModel.fromMap(data, doc.id);
+  }
+  // 1. DEFINICIÃ“N DE CAMPOS
+  final String id;
+  final String name;
+  final String instructor;
+  final DateTime startTime;
+  final int maxCapacity;
+  final int currentCapacity;
+  final List<String> attendees;
+
+  // ---------------------------------------------------------------------------
+  // ðŸ›¡ï¸ MÃ‰TODOS PRIVADOS DE SEGURIDAD (HELPERS)
+  // ---------------------------------------------------------------------------
+
+  /// Convierte cualquier cosa a String de forma segura
+  static String _parseString(dynamic value, String defaultValue) {
+    if (value == null) return defaultValue;
+    if (value is String) return value;
+    // Si llega un int/double (ej: nombre: 12345), lo convertimos a texto para no romper la UI
+    return value.toString();
+  }
+
+  /// Intenta extraer un entero de cualquier input (num o String)
+  static int _parseInt(dynamic value, int defaultValue) {
+    if (value is num) return value.toInt(); // Maneja int y double
+    if (value is String) {
+      // Intenta parsear "10", si es "veinte" devuelve null -> defaultValue
+      return int.tryParse(value) ?? defaultValue;
+    }
+    return defaultValue;
+  }
+
+  /// Convierte Timestamps o Strings a DateTime
+  static DateTime _parseDate(dynamic value) {
+    if (value is Timestamp) return value.toDate();
+    if (value is String) return DateTime.tryParse(value) ?? DateTime.now();
+    return DateTime.now();
+  }
+
+  /// Asegura que siempre devolvemos una List<String> vÃ¡lida
+  static List<String> _parseList(dynamic value) {
+    if (value is List) {
+      // Mapeamos cada elemento a String por seguridad (evita crash si hay un int en la lista)
+      return value.map((e) => e.toString()).toList();
+    }
+    return []; // Si llega un String u otro objeto, devolvemos lista vacÃ­a
+  }
+}
+
+----------------------------------------------------------------
+
+--- VISTA CLAVE: lib/features/client_portal/presentation/screens/client_class_list_screen.dart ---
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
+import 'package:salufit_app/core/utils/safe_parsing_extensions.dart';
+import 'package:salufit_app/features/bookings/data/class_repository.dart';
+import 'package:salufit_app/features/bookings/providers/booking_providers.dart';
+import 'package:salufit_app/shared/widgets/salufit_header.dart';
+import 'package:salufit_app/shared/widgets/salufit_scaffold.dart';
+
+class ClientClassListScreen extends ConsumerStatefulWidget {
+  const ClientClassListScreen({
+    required this.userId, 
+    required this.userRole, 
+    super.key, 
+    this.initialDate,
+  });
+
+  final String userId;
+  final String userRole;
+  final DateTime? initialDate;
+
+  @override
+  ConsumerState<ClientClassListScreen> createState() => _ClientClassListScreenState();
+}
+
+class _ClientClassListScreenState extends ConsumerState<ClientClassListScreen> {
+  late DateTime _selectedDate;
+  final List<DateTime> _calendarDays = <DateTime>[];
+  final Set<String> _processingClassIds = <String>{};
+  static const Color salufitTeal = Color(0xFF009688);
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedDate = widget.initialDate ?? DateTime.now();
+    if (_selectedDate.weekday == DateTime.sunday) {
+      _selectedDate = _selectedDate.add(const Duration(days: 1));
+    }
+    _generateCalendarDays();
+  }
+
+  void _generateCalendarDays() {
+    _calendarDays.clear();
+    final now = DateTime.now();
+    for (var i = 0; i < 30; i++) {
+      _calendarDays.add(now.add(Duration(days: i)));
+    }
+  }
+
+  bool _isSameDay(DateTime a, DateTime b) => 
+      a.year == b.year && a.month == b.month && a.day == b.day;
+
+  @override
+  Widget build(BuildContext context) {
+    final classesAsync = ref.watch(classesStreamProvider);
+    final myBookings = ref.watch(myBookingsMapProvider);
+
+    return SalufitScaffold(
+      backgroundColor: const Color(0xFFF0F4F8),
+      body: SafeArea(
+        child: Column(
+          children: [
+            const SalufitHeader(title: 'CLASES GRUPALES'),
+            _buildCalendarRail(),
+            _buildDateDivider(),
+            Expanded(
+              child: classesAsync.when(
+                data: (snap) {
+                  final filtered = snap.docs.where((d) {
+                    final data = d.data()! as Map<String, dynamic>;
+                    return _isSameDay(data.safeDateTime('fechaHoraInicio'), _selectedDate);
+                  }).toList();
+                  if (filtered.isEmpty) {
+                    return const Center(child: Text('No hay clases programadas'));
+                  }
+                  return ListView.builder(
+                    padding: const EdgeInsets.fromLTRB(15, 0, 15, 80),
+                    itemCount: filtered.length,
+                    itemBuilder: (context, i) {
+                      final doc = filtered[i];
+                      final data = doc.data()! as Map<String, dynamic>;
+                      final visuals = _getClassVisuals(data.safeString('nombre'));
+                      return _ClassCard(
+                        data: data,
+                        classId: doc.id,
+                        visuals: visuals,
+                        isBooked: myBookings.containsKey(doc.id),
+                        isProcessing: _processingClassIds.contains(doc.id),
+                        onBook: () => _handleReserva(data, doc.id),
+                      );
+                    },
+                  );
+                },
+                loading: () => const Center(child: CircularProgressIndicator(color: salufitTeal)),
+                error: (e, _) => Center(child: Text('Error: $e')),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCalendarRail() {
+    return SizedBox(
+      height: 100,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 15),
+        itemCount: _calendarDays.length,
+        separatorBuilder: (c, i) => const SizedBox(width: 10),
+        itemBuilder: (context, index) {
+          final date = _calendarDays[index];
+          final isSelected = _isSameDay(date, _selectedDate);
+          return GestureDetector(
+            onTap: () => setState(() => _selectedDate = date),
+            child: Container(
+              width: 65,
+              decoration: BoxDecoration(
+                color: isSelected ? salufitTeal : Colors.white, 
+                borderRadius: BorderRadius.circular(15),
+              ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    DateFormat('EEE', 'es').format(date).toUpperCase().replaceAll('.', ''), 
+                    style: TextStyle(color: isSelected ? Colors.white70 : Colors.grey, fontSize: 12),
+                  ),
+                  Text(
+                    '${date.day}', 
+                    style: TextStyle(
+                      color: isSelected ? Colors.white : Colors.black87, 
+                      fontSize: 20, 
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildDateDivider() => Padding(
+    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15), 
+    child: Text(
+      DateFormat("EEEE d 'DE' MMMM", 'es').format(_selectedDate).toUpperCase(), 
+      style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
+    ),
+  );
+
+  Map<String, dynamic> _getClassVisuals(String nombre) {
+    final n = nombre.toLowerCase();
+    if (n.contains('meditación') || n.contains('meditacion')) {
+      return {'colors': [const Color(0xFF4A148C), const Color(0xFFAB47BC)], 'bgIcon': Icons.self_improvement};
+    }
+    if (n.contains('tribu') || n.contains('activa')) {
+      return {'colors': [const Color(0xFFE65100), const Color(0xFFFFB74D)], 'bgIcon': Icons.directions_walk};
+    }
+    if (n.contains('terapéutico') || n.contains('terapeutico')) {
+      return {'colors': [const Color(0xFF0D47A1), const Color(0xFF42A5F5)], 'bgIcon': Icons.accessibility_new};
+    }
+    if (n.contains('entrenamiento')) {
+      return {'colors': [const Color(0xFFC62828), const Color(0xFFFF5252)], 'bgIcon': Icons.fitness_center};
+    }
+    return {'colors': [const Color(0xFF009688), const Color(0xFF4DB6AC)], 'bgIcon': Icons.person};
+  }
+
+  Future<void> _handleReserva(Map<String, dynamic> data, String id) async {
+    if (_processingClassIds.contains(id)) return;
+    setState(() => _processingClassIds.add(id));
+    try {
+      await ref.read(classRepositoryProvider).inscribirUsuario(
+        userId: widget.userId, 
+        userEmail: FirebaseAuth.instance.currentUser?.email ?? '', 
+        classId: id,
+      );
+    } finally {
+      if (mounted) setState(() => _processingClassIds.remove(id));
+    }
+  }
+}
+
+class _ClassCard extends StatelessWidget {
+  const _ClassCard({
+    required this.data, 
+    required this.classId, 
+    required this.visuals, 
+    required this.isBooked, 
+    required this.isProcessing, 
+    required this.onBook,
+  });
+
+  final Map<String, dynamic> data;
+  final String classId;
+  final Map<String, dynamic> visuals;
+  final bool isBooked;
+  final bool isProcessing;
+  final VoidCallback onBook;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = (visuals['colors'] as List).cast<Color>();
+    return Container(
+      margin: const EdgeInsets.only(bottom: 15),
+      height: 140,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(colors: colors, begin: Alignment.topLeft, end: Alignment.bottomRight),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [BoxShadow(color: colors[0].withValues(alpha: 0.3), blurRadius: 8, offset: const Offset(0, 4))],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(20),
+        child: Stack(
+          children: [
+            Positioned(right: -15, bottom: -25, child: Icon(visuals['bgIcon'] as IconData, size: 170, color: Colors.black.withValues(alpha: 0.25))),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 15),
+              child: Row(
+                children: [
+                  _buildTimeSidebar(data.safeDateTime('fechaHoraInicio')),
+                  const SizedBox(width: 15),
+                  Expanded(child: _buildClassInfo()),
+                  const SizedBox(width: 8),
+                  _buildActionButton(colors[0]),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTimeSidebar(DateTime start) => Container(
+    width: 75, 
+    padding: const EdgeInsets.symmetric(vertical: 15), 
+    decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(15)), 
+    child: Column(
+      mainAxisAlignment: MainAxisAlignment.center, 
+      children: [
+        Text(DateFormat('HH:mm').format(start), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)), 
+        Text(DateFormat('HH:mm').format(start.add(const Duration(hours: 1))), style: const TextStyle(color: Colors.white70, fontSize: 13)),
+      ],
+    ),
+  );
+
+  Widget _buildClassInfo() {
+    final rawName = data.safeString('nombre').toUpperCase();
+    final words = rawName.split(' ');
+    final formattedTitle = words.length > 1 ? words.join('\n') : rawName;
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          height: 65,
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              formattedTitle,
+              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 22, height: 0.95),
+              textAlign: TextAlign.start,
+            ),
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text('MONITOR: ${data.safeString('monitor', defaultValue: 'STAFF')}', style: const TextStyle(color: Colors.white70, fontSize: 10, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 8),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.3), borderRadius: BorderRadius.circular(10)),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.people, color: Colors.white, size: 12),
+              const SizedBox(width: 4),
+              Text('${data.safeInt('aforoActual')}/${data.safeInt('aforoMaximo', defaultValue: 12)}', style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildActionButton(Color primary) {
+    final isFull = data.safeInt('aforoActual') >= data.safeInt('aforoMaximo', defaultValue: 12);
+    final label = isBooked ? 'RESERVADO' : (isFull ? 'LLENO' : 'RESERVAR');
+    return ElevatedButton(
+      onPressed: (isBooked || isProcessing || isFull) ? null : onBook,
+      style: ElevatedButton.styleFrom(backgroundColor: Colors.white, foregroundColor: primary, padding: const EdgeInsets.symmetric(horizontal: 8), minimumSize: const Size(85, 36), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+      child: isProcessing ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2)) : Text(label, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 10)),
+    );
+  }
+}
+
+--- VISTA CLAVE: lib/features/bookings/presentation/admin_class_manager_screen.dart ---
+import 'package:flutter/material.dart';
+import 'package:salufit_app/features/client_portal/presentation/screens/client_class_list_screen.dart';
+
+class AdminClassManagerScreen extends StatelessWidget {
+  const AdminClassManagerScreen({required this.currentUserId, super.key});
+  final String currentUserId;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.transparent,
+      body: ClientClassListScreen(userId: currentUserId, userRole: 'admin'),
+    );
+  }
+}

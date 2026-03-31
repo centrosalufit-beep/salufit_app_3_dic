@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(xargs grep:*)",
+      "Bash(flutter analyze:*)",
+      "Bash(firebase firestore:rules:get)",
+      "Bash(find /c/Proyectos/salufit_app_3_dic/lib -type f -name *alert* -o -name *task* -o -name *notification*)",
+      "Bash(flutter pub:*)",
+      "Bash(grep -E \"lib.*\\\\.dart$\")"
+    ]
+  }
+}

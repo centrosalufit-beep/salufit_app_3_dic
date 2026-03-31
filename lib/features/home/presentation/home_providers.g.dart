@@ -6,20 +6,23 @@ part of 'home_providers.dart';
 // RiverpodGenerator
 // **************************************************************************
 
+// GENERATED CODE - DO NOT MODIFY BY HAND
+// ignore_for_file: type=lint, type=warning
+
 @ProviderFor(HomeTab)
 const homeTabProvider = HomeTabProvider._();
 
 final class HomeTabProvider extends $NotifierProvider<HomeTab, int> {
   const HomeTabProvider._()
-      : super(
-          from: null,
-          argument: null,
-          retry: null,
-          name: r'homeTabProvider',
-          isAutoDispose: true,
-          dependencies: null,
-          $allTransitiveDependencies: null,
-        );
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'homeTabProvider',
+        isAutoDispose: true,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
 
   @override
   String debugGetCreateSourceHash() => _$homeTabHash();
@@ -46,8 +49,14 @@ abstract class _$HomeTab extends $Notifier<int> {
   void runBuild() {
     final created = build();
     final ref = this.ref as $Ref<int, int>;
-    final element = ref.element
-        as $ClassProviderElement<AnyNotifier<int, int>, int, Object?, Object?>;
+    final element =
+        ref.element
+            as $ClassProviderElement<
+              AnyNotifier<int, int>,
+              int,
+              Object?,
+              Object?
+            >;
     element.handleValue(ref, created);
   }
 }
@@ -58,15 +67,15 @@ const bookingDateProvider = BookingDateProvider._();
 final class BookingDateProvider
     extends $NotifierProvider<BookingDate, DateTime> {
   const BookingDateProvider._()
-      : super(
-          from: null,
-          argument: null,
-          retry: null,
-          name: r'bookingDateProvider',
-          isAutoDispose: true,
-          dependencies: null,
-          $allTransitiveDependencies: null,
-        );
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'bookingDateProvider',
+        isAutoDispose: true,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
 
   @override
   String debugGetCreateSourceHash() => _$bookingDateHash();
@@ -93,11 +102,14 @@ abstract class _$BookingDate extends $Notifier<DateTime> {
   void runBuild() {
     final created = build();
     final ref = this.ref as $Ref<DateTime, DateTime>;
-    final element = ref.element as $ClassProviderElement<
-        AnyNotifier<DateTime, DateTime>, DateTime, Object?, Object?>;
+    final element =
+        ref.element
+            as $ClassProviderElement<
+              AnyNotifier<DateTime, DateTime>,
+              DateTime,
+              Object?,
+              Object?
+            >;
     element.handleValue(ref, created);
   }
 }
-
-// ignore_for_file: type=lint
-// ignore_for_file: subtype_of_sealed_class, invalid_use_of_internal_member, invalid_use_of_visible_for_testing_member, deprecated_member_use_from_same_package

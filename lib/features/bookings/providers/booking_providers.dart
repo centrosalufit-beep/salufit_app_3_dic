@@ -1,12 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:salufit_app/core/utils/safe_parsing_extensions.dart';
-
-final currentUserIdProvider =
-    Provider<String?>((ref) => FirebaseAuth.instance.currentUser?.uid);
-final currentUserEmailProvider =
-    Provider<String?>((ref) => FirebaseAuth.instance.currentUser?.email);
+import 'package:salufit_app/features/auth/providers/auth_providers.dart';
 
 final classesStreamProvider = StreamProvider.autoDispose<QuerySnapshot>((ref) {
   final now = DateTime.now();

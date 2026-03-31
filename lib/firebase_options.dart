@@ -85,4 +85,5 @@ class DefaultFirebaseOptions {
     storageBucket: 'salufitnewapp.firebasestorage.app',
     measurementId: 'G-HXPW7BM2ZQ',
   );
+
 }

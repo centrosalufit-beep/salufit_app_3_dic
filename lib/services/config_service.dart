@@ -36,7 +36,7 @@ class ConfigService {
         // CORRECCIÓN: Tipado explícito del error (Object e)
         .handleError((Object e) {
       if (kDebugMode) {
-        print('Error obteniendo config de facturación: $e');
+        debugPrint('Error obteniendo config de facturacion');
       }
       return <String, dynamic>{};
     });

@@ -20,8 +20,8 @@ export const checkAccountStatus = functions.https.onCall(async (data, context) =
   const idNumber = parseInt(historyIdRaw, 10);   // 1
   
   try {
-    // 2. Primero verificamos si ya existe en 'users'
-    const userSnapshot = await db.collection("users")
+    // 2. Primero verificamos si ya existe en 'users_app'
+    const userSnapshot = await db.collection("users_app")
       .where("email", "==", email)
       .limit(1)
       .get();

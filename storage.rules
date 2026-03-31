@@ -1,10 +1,35 @@
 rules_version = '2';
 
-// Craft rules based on data in your Firestore database
-// allow write: if firestore.get(
-//    /databases/(default)/documents/users/$(request.auth.uid)).data.isAdmin;
 service firebase.storage {
   match /b/{bucket}/o {
+    // Usuarios autenticados pueden leer archivos publicos
+    match /public/{allPaths=**} {
+      allow read: if request.auth != null;
+      allow write: if false;
+    }
+
+    // Videos de ejercicios - solo lectura para autenticados
+    match /{videoFile} {
+      allow read: if request.auth != null;
+      allow write: if false;
+    }
+
+    // Documentos de pacientes - solo staff puede escribir, owner puede leer
+    match /patients/{userId}/{allPaths=**} {
+      allow read: if request.auth != null && (request.auth.uid == userId ||
+        firestore.get(/databases/(default)/documents/users_app/$(request.auth.uid)).data.get('rol', 'none') in ['admin', 'administrador', 'profesional']);
+      allow write: if request.auth != null &&
+        firestore.get(/databases/(default)/documents/users_app/$(request.auth.uid)).data.get('rol', 'none') in ['admin', 'administrador', 'profesional'];
+    }
+
+    // Firmas de documentos - el usuario sube su firma, staff puede leer
+    match /signatures/{userId}/{allPaths=**} {
+      allow read: if request.auth != null && (request.auth.uid == userId ||
+        firestore.get(/databases/(default)/documents/users_app/$(request.auth.uid)).data.get('rol', 'none') in ['admin', 'administrador', 'profesional']);
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Todo lo demas denegado por defecto
     match /{allPaths=**} {
       allow read, write: if false;
     }

@@ -89,7 +89,7 @@ class _AdminPatientDetailScreenState extends State<AdminPatientDetailScreen>
         final downloadUrl = await storageRef.getDownloadURL();
 
         final userDoc = await FirebaseFirestore.instance
-            .collection('users')
+            .collection('users_app')
             .doc(widget.userId)
             .get();
         final userEmail = userDoc.data().safeString('email');
@@ -111,69 +111,221 @@ class _AdminPatientDetailScreenState extends State<AdminPatientDetailScreen>
     }
   }
 
-  Future<void> _lanzarConsentimiento(String titulo, String urlPlantilla) async {
+  Future<Map<String, String>?> _seleccionarProfesional() async {
+    final snap = await FirebaseFirestore.instance
+        .collection('users_app')
+        .get();
+
+    final profesionales = snap.docs.where((d) {
+      final data = d.data();
+      final rol = (data['rol'] as String?) ?? '';
+      return rol == 'admin' || rol == 'administrador' || rol == 'profesional';
+    }).toList();
+
+    if (!mounted) return null;
+
+    return showDialog<Map<String, String>>(
+      context: context,
+      builder: (ctx) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.medical_services, color: Colors.deepOrange, size: 36),
+              const SizedBox(height: 12),
+              const Text('Profesional responsable', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+              const SizedBox(height: 4),
+              Text('Selecciona quien debe firmar este documento', style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+              const SizedBox(height: 16),
+              if (profesionales.isEmpty)
+                const Padding(padding: EdgeInsets.all(20), child: Text('No hay profesionales registrados'))
+              else
+                ...profesionales.map((doc) {
+                  final data = doc.data();
+                  final nombre = (data['nombreCompleto'] as String?) ?? (data['nombre'] as String?) ?? 'Sin nombre';
+                  final rol = (data['rol'] as String?) ?? '';
+                  final email = (data['email'] as String?) ?? '';
+                  return ListTile(
+                    leading: CircleAvatar(
+                      backgroundColor: rol == 'admin' || rol == 'administrador' ? Colors.purple.shade100 : Colors.blue.shade100,
+                      child: Icon(rol == 'admin' || rol == 'administrador' ? Icons.admin_panel_settings : Icons.medical_services, color: rol == 'admin' || rol == 'administrador' ? Colors.purple : Colors.blue, size: 20),
+                    ),
+                    title: Text(nombre, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                    subtitle: Text('$rol | $email', style: const TextStyle(fontSize: 10)),
+                    onTap: () => Navigator.pop(ctx, {'id': doc.id, 'nombre': nombre}),
+                  );
+                }),
+              const SizedBox(height: 8),
+              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('CANCELAR')),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _lanzarConsentimiento(String titulo, String urlPlantilla, {bool requiereDobleFirma = false}) async {
+    // Si requiere doble firma, pedir profesional responsable
+    Map<String, String>? profesionalData;
+    if (requiereDobleFirma) {
+      profesionalData = await _seleccionarProfesional();
+      if (profesionalData == null) return; // Cancelado
+    }
+
     setState(() => _isUploading = true);
     try {
+      debugPrint('>>> [CONSENT] Asignando "$titulo" a ${widget.userId}');
+
       final userDoc = await FirebaseFirestore.instance
-          .collection('users')
+          .collection('users_app')
           .doc(widget.userId)
           .get();
       final userEmail = userDoc.data().safeString('email');
 
-      final docId = '${widget.userId}_${DateTime.now().millisecondsSinceEpoch}';
-      await FirebaseFirestore.instance
-          .collection('documents')
-          .doc(docId)
-          .set(<String, dynamic>{
-        'id': docId,
+      await FirebaseFirestore.instance.collection('documents').add({
         'userId': widget.userId,
         'userEmail': userEmail,
         'titulo': titulo,
         'tipo': 'Legal',
         'firmado': false,
         'urlPdf': urlPlantilla,
+        'requiereDobleFirma': requiereDobleFirma,
+        'firmaCliente': null,
+        'firmaProfesional': null,
+        if (profesionalData != null) 'profesionalAsignadoId': profesionalData['id'],
+        if (profesionalData != null) 'profesionalAsignadoNombre': profesionalData['nombre'],
         'fechaCreacion': FieldValue.serverTimestamp(),
       });
+
+      debugPrint('>>> [CONSENT] Documento asignado correctamente${profesionalData != null ? ' (profesional: ${profesionalData['nombre']})' : ''}');
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Consentimiento "$titulo" asignado a ${widget.userName}'), backgroundColor: Colors.green),
+        );
+      }
+    } catch (e) {
+      debugPrint('>>> [CONSENT] ERROR: ${e.runtimeType}');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Error al asignar consentimiento'), backgroundColor: Colors.red),
+        );
+      }
     } finally {
       if (mounted) setState(() => _isUploading = false);
     }
   }
 
-  void _mostrarMenuPrincipal() {
-    showModalBottomSheet<void>(
+  Future<void> _mostrarPlantillas() async {
+    try {
+    debugPrint('>>> [PLANTILLAS] Consultando consent_templates...');
+    final snap = await FirebaseFirestore.instance
+        .collection('consent_templates')
+        .get();
+    debugPrint('>>> [PLANTILLAS] Encontradas: ${snap.docs.length}');
+
+    if (!mounted) return;
+
+    final activeDocs = snap.docs.where((d) {
+      final data = d.data();
+      return data['activa'] == true || data['activo'] == true;
+    }).toList();
+
+    if (activeDocs.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No hay plantillas. Sube una desde Libreria.'), backgroundColor: Colors.orange),
+      );
+      return;
+    }
+
+    await showDialog<void>(
       context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (context) => SafeArea(
+      builder: (ctx) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 30),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              _buildMenuIconBtn(
-                icon: Icons.fitness_center,
-                color: Colors.blue,
-                onTap: () => Navigator.pop(context),
-              ),
-              _buildMenuIconBtn(
-                icon: Icons.upload_file,
-                color: Colors.teal,
-                onTap: () {
-                  Navigator.pop(context);
-                  _subirDocClinico();
-                },
-              ),
-              _buildMenuIconBtn(
-                icon: Icons.draw,
-                color: Colors.orange,
-                onTap: () {
-                  Navigator.pop(context);
-                  _lanzarConsentimiento(
-                    'Consentimiento Nuevo',
-                    'https://ejemplo.com/doc.pdf',
-                  );
-                },
+              const Text('Asignar Consentimiento', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+              const SizedBox(height: 4),
+              Text('Paciente: ${widget.userName}', style: const TextStyle(color: Colors.grey, fontSize: 12)),
+              const SizedBox(height: 16),
+              ...activeDocs.map((doc) {
+                final data = doc.data();
+                final nombre = (data['titulo'] as String?) ?? (data['nombre'] as String?) ?? 'Sin nombre';
+                final url = (data['urlPdf'] as String?) ?? '';
+                final dobleFirma = data['requiereDobleFirma'] == true;
+                return ListTile(
+                  leading: Icon(dobleFirma ? Icons.people : Icons.description, color: dobleFirma ? Colors.deepOrange : Colors.orange),
+                  title: Text(nombre, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                  subtitle: dobleFirma ? const Text('Doble firma (profesional + cliente)', style: TextStyle(fontSize: 10, color: Colors.deepOrange)) : null,
+                  trailing: const Icon(Icons.arrow_forward_ios, size: 14),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _lanzarConsentimiento(nombre, url, requiereDobleFirma: dobleFirma);
+                  },
+                );
+              }),
+            ],
+          ),
+        ),
+      ),
+    );
+    } catch (e) {
+      debugPrint('Error cargando plantillas: ${e.runtimeType}');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Error al cargar plantillas'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  void _mostrarMenuPrincipal() {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        child: Padding(
+          padding: const EdgeInsets.all(28),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('Asignar recurso', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18)),
+              const SizedBox(height: 4),
+              Text('Paciente: ${widget.userName}', style: const TextStyle(color: Colors.grey, fontSize: 12)),
+              const SizedBox(height: 24),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  _buildMenuIconBtn(
+                    icon: Icons.fitness_center,
+                    color: Colors.blue,
+                    label: 'Ejercicio',
+                    onTap: () => Navigator.pop(ctx),
+                  ),
+                  _buildMenuIconBtn(
+                    icon: Icons.upload_file,
+                    color: Colors.teal,
+                    label: 'Documento',
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      _subirDocClinico();
+                    },
+                  ),
+                  _buildMenuIconBtn(
+                    icon: Icons.gavel,
+                    color: Colors.orange,
+                    label: 'Legal',
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      _mostrarPlantillas();
+                    },
+                  ),
+                ],
               ),
             ],
           ),
@@ -185,18 +337,30 @@ class _AdminPatientDetailScreenState extends State<AdminPatientDetailScreen>
   Widget _buildMenuIconBtn({
     required IconData icon,
     required Color color,
+    required String label,
     required VoidCallback onTap,
   }) {
     return InkWell(
+      borderRadius: BorderRadius.circular(16),
       onTap: onTap,
-      child: Container(
-        width: 70,
-        height: 70,
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.1),
-          shape: BoxShape.circle,
+      child: SizedBox(
+        width: 90,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 60,
+              height: 60,
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.1),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, color: color, size: 28),
+            ),
+            const SizedBox(height: 8),
+            Text(label, style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: color)),
+          ],
         ),
-        child: Icon(icon, color: color, size: 35),
       ),
     );
   }

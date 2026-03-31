@@ -9,7 +9,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:salufit_app/core/utils/safe_parsing_extensions.dart';
 import 'package:salufit_app/features/patient_record/presentation/admin_exercise_library_screen.dart';
 
-// PANTALLA 1: GESTIÓN DE DOCUMENTOS DEL PACIENTE
+// PANTALLA 1: GESTIÃ“N DE DOCUMENTOS DEL PACIENTE
 class AdminPatientDocumentsScreen extends StatefulWidget {
   const AdminPatientDocumentsScreen({
     required this.userId,
@@ -96,7 +96,7 @@ class _AdminPatientDocumentsScreenState
       try {
         // FIX LÍNEA 101: Eliminado .where() para permitir el uso de .doc()
         final userDoc = await FirebaseFirestore.instance
-            .collection('users')
+            .collection('users_app')
             .doc(widget.userId)
             .get();
         if (userDoc.exists) {
@@ -190,7 +190,7 @@ class _AdminPatientDocumentsScreenState
   }
 }
 
-// PANTALLA 2: GESTIÓN DE MATERIAL (PAUTA DE EJERCICIOS)
+// PANTALLA 2: GESTIÃ“N DE MATERIAL (PAUTA DE EJERCICIOS)
 class AdminPatientMaterialScreen extends StatefulWidget {
   const AdminPatientMaterialScreen({
     required this.userId,
@@ -212,7 +212,7 @@ class _AdminPatientMaterialScreenState
     try {
       // FIX LÍNEA 218: Eliminado .where() para permitir el uso de .doc()
       final userDoc = await FirebaseFirestore.instance
-          .collection('users')
+          .collection('users_app')
           .doc(widget.userId)
           .get();
       if (userDoc.exists) {

@@ -1,278 +1,286 @@
-// lib/features/auth/presentation/terms_acceptance_screen.dart
+import 'dart:io';
 
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:salufit_app/features/auth/presentation/login_screen.dart';
-// NOTA: Ya no necesitamos importar HomeScreen aquí, el AuthWrapper se encarga.
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:salufit_app/core/theme/app_colors.dart';
+import 'package:salufit_app/features/auth/data/auth_repository.dart';
+import 'package:salufit_app/features/auth/presentation/auth_wrapper.dart';
+import 'package:salufit_app/features/auth/providers/auth_providers.dart';
+import 'package:salufit_app/shared/widgets/salufit_scaffold.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-class TermsAcceptanceScreen extends StatefulWidget {
-  const TermsAcceptanceScreen({
-    required this.userId,
-    required this.userRole,
-    super.key,
-  });
-
-  final String userId;
-  final String userRole;
+class TermsAcceptanceScreen extends ConsumerStatefulWidget {
+  const TermsAcceptanceScreen({super.key});
 
   @override
-  State<TermsAcceptanceScreen> createState() => _TermsAcceptanceScreenState();
+  ConsumerState<TermsAcceptanceScreen> createState() => _TermsAcceptanceScreenState();
 }
 
-class _TermsAcceptanceScreenState extends State<TermsAcceptanceScreen> {
-  bool _acceptedTerms = false;
-  bool _acceptedPrivacy = false;
+class _TermsAcceptanceScreenState extends ConsumerState<TermsAcceptanceScreen> {
+  bool _termsAccepted = false;
+  bool _privacyAccepted = false;
+  bool _termsRead = false;
+  bool _privacyRead = false;
   bool _isLoading = false;
 
-  final Uri _urlPrivacidad =
-      Uri.parse('https://www.centrosalufit.com/politica-de-privacidad');
-  final Uri _urlTerminos =
-      Uri.parse('https://www.centrosalufit.com/terminos-y-condiciones');
+  final String _urlPrivacidad = 'https://centrosalufit.com/politica-de-privacidad/';
+  final String _urlTerminos = 'https://centrosalufit.com/terminos-y-condiciones/';
 
-  Future<void> _abrirWeb(Uri url) async {
-    try {
-      if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('No se pudo abrir el enlace')),
-          );
-        }
+  Future<void> _openWeb(String url, {required bool isTerms}) async {
+    final uri = Uri.parse(url);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (mounted) {
+        setState(() {
+          if (isTerms) {
+            _termsRead = true;
+          } else {
+            _privacyRead = true;
+          }
+        });
       }
-    } catch (e) {
-      debugPrint('Error lanzando URL: $e');
     }
   }
 
-  Future<void> _cerrarSesion() async {
-    await FirebaseAuth.instance.signOut();
-    // Al cerrar sesión, el AuthWrapper detectará user==null y mostrará LoginScreen automáticamente.
-    // Pero por seguridad forzamos la navegación limpia.
-    if (mounted) {
-      await Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute<void>(builder: (_) => const LoginScreen()),
-        (route) => false,
-      );
+  Future<void> _contactClinic() async {
+    final uri = Uri.parse('tel:+34629011055');
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri);
     }
   }
 
-  Future<void> _guardarConsentimiento() async {
-    if (!_acceptedTerms || !_acceptedPrivacy) return;
+  Future<void> _handleAcceptance() async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) {
+      debugPrint('>>> [TERMS] No hay usuario autenticado');
+      return;
+    }
 
     setState(() => _isLoading = true);
-
     try {
-      final user = FirebaseAuth.instance.currentUser;
-      final emailActual = user?.email ?? '';
-
-      final docRef =
-          FirebaseFirestore.instance.collection('users').doc(widget.userId);
-      final docSnap = await docRef.get();
-
-      // Datos legales a guardar
-      final dataToSave = <String, dynamic>{
-        'termsAccepted': true, // CRÍTICO: Esto desbloquea el AuthWrapper
-        'privacyAccepted': true,
-        'consentVersion': 'v1.0', // Versión de los términos aceptados
-        'consentDate':
-            FieldValue.serverTimestamp(), // Fecha legal de aceptación
-        'deviceInfo': 'App Mobile',
-        'email': emailActual, // Guardamos email como evidencia
+      debugPrint('>>> [TERMS] Aceptando terminos para uid=$uid');
+      final metadata = {
+        'platform': defaultTargetPlatform.toString(),
+        'deviceLabel': kIsWeb ? 'Web Browser' : Platform.operatingSystem,
+        'legalVersion': '2026.1',
       };
 
-      // Si el usuario estaba incompleto, rellenamos mínimos
-      if (!docSnap.exists ||
-          (docSnap.data() != null && docSnap.data()!['rol'] == null)) {
-        dataToSave['rol'] = 'cliente';
-        dataToSave['createdAt'] = FieldValue.serverTimestamp();
-      }
+      await ref.read(authRepositoryProvider).acceptTermsWithMetadata(uid, metadata);
+      debugPrint('>>> [TERMS] Escritura exitosa. Navegando al AuthWrapper...');
 
-      // Guardamos en Firestore
-      await docRef.set(dataToSave, SetOptions(merge: true));
-
-      // NO NAVEGAMOS MANUALMENTE.
-      // Al actualizarse Firestore, el stream de 'main.dart' detectará el cambio
-      // y cambiará esta pantalla por HomeScreen automáticamente.
+      if (!mounted) return;
+      await Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute<void>(builder: (_) => const AuthWrapper()),
+        (_) => false,
+      );
     } catch (e) {
+      debugPrint('>>> [TERMS] ERROR: $e');
       if (mounted) {
-        var msg = 'Error al guardar. Contacta con soporte.';
-        if (e.toString().contains('permission-denied')) {
-          msg = '⛔ Error de permisos. No se pudo guardar la aceptación.';
-        }
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(msg), backgroundColor: Colors.red),
+          const SnackBar(content: Text('Ha ocurrido un error. Intentalo de nuevo.'), backgroundColor: Colors.red),
         );
-        setState(() => _isLoading = false);
       }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    // PopScope impide volver atrás (Android botón físico / Gesto iOS)
-    return PopScope(
-      canPop: false,
-      child: Scaffold(
-        appBar: AppBar(
-          title:
-              const Text('Finalizar Registro', style: TextStyle(fontSize: 18)),
-          backgroundColor: Colors.white,
-          elevation: 0,
-          automaticallyImplyLeading: false, // Quita flecha atrás
-          actions: <Widget>[
-            TextButton.icon(
-              onPressed: _cerrarSesion,
-              icon: const Icon(Icons.logout, size: 18, color: Colors.grey),
-              label: const Text('Salir', style: TextStyle(color: Colors.grey)),
-            ),
-          ],
-        ),
-        body: SafeArea(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(25),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                const Center(
-                  child: Icon(
-                    Icons.verified_user_outlined,
-                    size: 60,
-                    color: Colors.teal,
+    final allChecked = _termsAccepted && _privacyAccepted;
+    final allRead = _termsRead && _privacyRead;
+
+    return SalufitScaffold(
+      backgroundColor: Colors.white,
+      body: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 20),
+          children: [
+              const SizedBox(height: 20),
+              const Icon(Icons.verified_user_rounded, size: 70, color: AppColors.primary),
+              const SizedBox(height: 20),
+              const Text(
+                'VALIDACION DE ACCESO',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, letterSpacing: 1.2),
+              ),
+              const SizedBox(height: 10),
+              const Text(
+                'Lee y acepta nuestras politicas oficiales para continuar.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.grey, fontSize: 13),
+              ),
+              const SizedBox(height: 30),
+
+              // --- Boton Terminos ---
+              _buildLegalButton(
+                label: 'LEER TERMINOS Y CONDICIONES',
+                url: _urlTerminos,
+                isTerms: true,
+                wasRead: _termsRead,
+              ),
+              const SizedBox(height: 10),
+
+              // --- Boton Privacidad ---
+              _buildLegalButton(
+                label: 'LEER POLITICA DE PRIVACIDAD',
+                url: _urlPrivacidad,
+                isTerms: false,
+                wasRead: _privacyRead,
+              ),
+              const SizedBox(height: 30),
+
+              // --- Casillas (bloqueadas hasta leer) ---
+              _buildCheckRow(
+                text: 'Acepto los Terminos y Condiciones',
+                value: _termsAccepted,
+                enabled: _termsRead,
+                onChanged: (v) => setState(() => _termsAccepted = v!),
+              ),
+              _buildCheckRow(
+                text: 'Acepto la Politica de Privacidad',
+                value: _privacyAccepted,
+                enabled: _privacyRead,
+                onChanged: (v) => setState(() => _privacyAccepted = v!),
+              ),
+
+              if (!allRead) ...[
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.shade50,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: Colors.orange.shade200),
+                  ),
+                  child: const Row(
+                    children: [
+                      Icon(Icons.info_outline, color: Colors.orange, size: 20),
+                      SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          'Debes leer ambos documentos antes de poder aceptar.',
+                          style: TextStyle(fontSize: 12, color: Colors.orange, fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 20),
-                const Text(
-                  'Protección de Datos',
-                  style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black87,
+              ],
+
+              const SizedBox(height: 30),
+
+              // --- Mensaje de soporte ---
+              AnimatedOpacity(
+                duration: const Duration(milliseconds: 300),
+                opacity: allChecked ? 0.0 : 1.0,
+                child: Column(
+                  children: [
+                    const Text(
+                      'Es necesario aceptar ambas politicas para entrar.',
+                      style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 12),
+                    ),
+                    const SizedBox(height: 4),
+                    const Text(
+                      'Si no estas de acuerdo, contacta con la clinica:',
+                      style: TextStyle(color: Colors.grey, fontSize: 11),
+                    ),
+                    const SizedBox(height: 4),
+                    GestureDetector(
+                      onTap: _contactClinic,
+                      child: const Text(
+                        'Soporte Salufit: +34 629 011 055',
+                        style: TextStyle(
+                          color: AppColors.primary,
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                          decoration: TextDecoration.underline,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
+
+              // --- Botones de accion ---
+              if (_isLoading)
+                const Center(child: CircularProgressIndicator())
+              else ...[
+                ElevatedButton(
+                  onPressed: allChecked ? _handleAcceptance : null,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                    disabledBackgroundColor: Colors.grey.shade200,
+                    padding: const EdgeInsets.all(18),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
                   ),
-                  textAlign: TextAlign.center,
+                  child: const Text('CONFIRMAR Y ACCEDER', style: TextStyle(fontWeight: FontWeight.bold)),
                 ),
                 const SizedBox(height: 15),
-                const Text(
-                  'Para garantizar la seguridad de tus datos médicos y cumplir con la normativa vigente, necesitamos tu consentimiento explícito antes de continuar.',
-                  style: TextStyle(
-                    fontSize: 15,
-                    color: Colors.black54,
-                    height: 1.4,
-                  ),
+                TextButton(
+                  onPressed: () => ref.read(authServiceProvider).signOut(),
+                  child: const Text('SALIR', style: TextStyle(color: Colors.grey, fontSize: 12)),
                 ),
-                const SizedBox(height: 30),
-
-                // CHECKBOX 1: PRIVACIDAD
-                CheckboxListTile(
-                  value: _acceptedPrivacy,
-                  activeColor: Colors.teal,
-                  onChanged: (bool? v) => setState(() => _acceptedPrivacy = v!),
-                  controlAffinity: ListTileControlAffinity.leading,
-                  contentPadding: EdgeInsets.zero,
-                  title: GestureDetector(
-                    onTap: () => _abrirWeb(_urlPrivacidad),
-                    child: const Text.rich(
-                      TextSpan(
-                        text: 'He leído y acepto la ',
-                        children: <InlineSpan>[
-                          TextSpan(
-                            text: 'Política de Privacidad',
-                            style: TextStyle(
-                              color: Colors.teal,
-                              fontWeight: FontWeight.bold,
-                              decoration: TextDecoration.underline,
-                            ),
-                          ),
-                          TextSpan(text: ' (Tratamiento de datos de salud).'),
-                        ],
-                      ),
-                      style: TextStyle(fontSize: 14),
-                    ),
-                  ),
-                ),
-
-                // CHECKBOX 2: TÉRMINOS
-                CheckboxListTile(
-                  value: _acceptedTerms,
-                  activeColor: Colors.teal,
-                  onChanged: (bool? v) => setState(() => _acceptedTerms = v!),
-                  controlAffinity: ListTileControlAffinity.leading,
-                  contentPadding: EdgeInsets.zero,
-                  title: GestureDetector(
-                    onTap: () => _abrirWeb(_urlTerminos),
-                    child: const Text.rich(
-                      TextSpan(
-                        text: 'Acepto los ',
-                        children: <InlineSpan>[
-                          TextSpan(
-                            text: 'Términos y Condiciones',
-                            style: TextStyle(
-                              color: Colors.teal,
-                              fontWeight: FontWeight.bold,
-                              decoration: TextDecoration.underline,
-                            ),
-                          ),
-                          TextSpan(text: ' del servicio Salufit.'),
-                        ],
-                      ),
-                      style: TextStyle(fontSize: 14),
-                    ),
-                  ),
-                ),
-
-                const SizedBox(height: 40),
-
-                SizedBox(
-                  width: double.infinity,
-                  height: 55,
-                  child: ElevatedButton(
-                    // Botón deshabilitado hasta que marque ambos
-                    onPressed:
-                        (_acceptedPrivacy && _acceptedTerms && !_isLoading)
-                            ? _guardarConsentimiento
-                            : null,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.teal,
-                      foregroundColor: Colors.white,
-                      disabledBackgroundColor: Colors.grey.shade300,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                    ),
-                    child: _isLoading
-                        ? const SizedBox(
-                            height: 24,
-                            width: 24,
-                            child: CircularProgressIndicator(
-                              color: Colors.white,
-                              strokeWidth: 2,
-                            ),
-                          )
-                        : const Text(
-                            'ACEPTAR Y CONTINUAR',
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 16,
-                            ),
-                          ),
-                  ),
-                ),
-
-                const SizedBox(height: 20),
-                Center(
-                  child: TextButton(
-                    onPressed: _cerrarSesion,
-                    child: const Text(
-                      'Cancelar y usar otra cuenta',
-                      style: TextStyle(color: Colors.grey),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 20),
               ],
-            ),
+            ],
           ),
         ),
+      );
+  }
+
+  Widget _buildLegalButton({
+    required String label,
+    required String url,
+    required bool isTerms,
+    required bool wasRead,
+  }) {
+    return OutlinedButton.icon(
+      onPressed: () => _openWeb(url, isTerms: isTerms),
+      icon: Icon(
+        wasRead ? Icons.check_circle : Icons.open_in_new,
+        size: 18,
+        color: wasRead ? Colors.green : AppColors.primary,
+      ),
+      label: Text(
+        label,
+        style: TextStyle(
+          color: wasRead ? Colors.green.shade700 : AppColors.primary,
+          fontSize: 11,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+      style: OutlinedButton.styleFrom(
+        side: BorderSide(
+          color: wasRead ? Colors.green.shade300 : AppColors.primary.withValues(alpha: 0.3),
+        ),
+        padding: const EdgeInsets.symmetric(vertical: 14),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+    );
+  }
+
+  Widget _buildCheckRow({
+    required String text,
+    required bool value,
+    required bool enabled,
+    required ValueChanged<bool?> onChanged,
+  }) {
+    return Opacity(
+      opacity: enabled ? 1.0 : 0.4,
+      child: CheckboxListTile(
+        value: value,
+        onChanged: enabled ? onChanged : null,
+        title: Text(
+          text,
+          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+        ),
+        activeColor: AppColors.primary,
+        contentPadding: EdgeInsets.zero,
+        controlAffinity: ListTileControlAffinity.leading,
       ),
     );
   }

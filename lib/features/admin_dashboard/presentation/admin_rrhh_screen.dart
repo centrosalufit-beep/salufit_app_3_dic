@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:salufit_app/features/admin_dashboard/presentation/admin_edit_time_records_screen.dart';
-// IMPORTS LOCALES (Misma carpeta)
 import 'package:salufit_app/features/admin_dashboard/presentation/admin_time_report_screen.dart';
 
 class AdminRRHHScreen extends StatelessWidget {
@@ -10,9 +9,12 @@ class AdminRRHHScreen extends StatelessWidget {
     return DefaultTabController(
       length: 2,
       child: Scaffold(
+        // UNIFICACIÓN FONDOS: Forzar transparencia (AQUÍ ESTABA EL FALLO PRINCIPAL)
+        backgroundColor: Colors.transparent,
         appBar: AppBar(
           backgroundColor: const Color(0xFF1E293B),
           foregroundColor: Colors.white,
+          // CORRECCIÓN: Gestión
           title: const Text(
             'Gestión de RRHH',
             style: TextStyle(fontWeight: FontWeight.bold),
@@ -29,6 +31,7 @@ class AdminRRHHScreen extends StatelessWidget {
         ),
         body: const TabBarView(
           children: <Widget>[
+            // Aseguramos que las pantallas hijas hereden transparencia si es necesario
             AdminTimeReportScreen(),
             AdminEditTimeRecordsScreen(),
           ],

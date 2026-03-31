@@ -3,6 +3,8 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart'; // Necesario para el Provider
 import 'package:http/http.dart' as http;
 import 'package:salufit_app/core/config/app_config.dart';
@@ -46,9 +48,8 @@ class ApiClient {
         'La conexión ha tardado demasiado. Verifica tu internet.',
       );
     } catch (e) {
-      // ignore: avoid_print
-      print('❌ Error de Red en $url: $e');
-      throw ApiException('Error de conexión: $e');
+      debugPrint('Error de red: ${e.runtimeType}');
+      throw ApiException('Error de conexion');
     }
   }
 

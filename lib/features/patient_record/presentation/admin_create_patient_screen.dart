@@ -19,7 +19,7 @@ class _AdminCreatePatientScreenState extends State<AdminCreatePatientScreen> {
     if (!_formKey.currentState!.validate()) return;
 
     try {
-      await FirebaseFirestore.instance.collection('users').add({
+      await FirebaseFirestore.instance.collection('users_app').add({
         'nombreCompleto': _nameController.text.trim(),
         'email': _emailController.text.trim().toLowerCase(),
         'dni': _dniController.text.trim().toUpperCase(),

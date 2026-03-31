@@ -17,70 +17,14 @@ class AdminPatientListScreen extends StatefulWidget {
 
 class _AdminPatientListScreenState extends State<AdminPatientListScreen> {
   String _query = '';
-  bool _searchInExcel = false;
-
-  void _editEmail(String docId, String currentEmail) {
-    final controller = TextEditingController(text: currentEmail);
-    showDialog<void>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Corregir Email en Ficha'),
-        content: TextField(
-          controller: controller,
-          decoration: const InputDecoration(labelText: 'Nuevo Email'),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('CANCELAR'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              final newEmail = controller.text.trim().toLowerCase();
-              await FirebaseFirestore.instance
-                  .collection('legacy_import')
-                  .doc(docId)
-                  .update({'email': newEmail});
-              if (!ctx.mounted) return;
-              Navigator.pop(ctx);
-            },
-            child: const Text('ACTUALIZAR'),
-          ),
-        ],
-      ),
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
-    final collection = _searchInExcel ? 'legacy_import' : 'users';
-
-    return Scaffold(
+    return Scaffold(backgroundColor: Colors.transparent, 
       appBar: AppBar(
-        title: const Text('Buscador de Pacientes'),
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(50),
-          child: Padding(
-            padding: const EdgeInsets.only(bottom: 10),
-            child: SegmentedButton<bool>(
-              segments: const [
-                ButtonSegment(
-                  value: false,
-                  label: Text('En App'),
-                  icon: Icon(Icons.smartphone),
-                ),
-                ButtonSegment(
-                  value: true,
-                  label: Text('En Fichas'),
-                  icon: Icon(Icons.table_view),
-                ),
-              ],
-              selected: {_searchInExcel},
-              onSelectionChanged: (val) =>
-                  setState(() => _searchInExcel = val.first),
-            ),
-          ),
-        ),
+        title: const Text('Buscador Maestro de Clientes (App)'),
+        backgroundColor: const Color(0xFF00796B),
+        foregroundColor: Colors.white,
       ),
       body: Column(
         children: [
@@ -88,62 +32,53 @@ class _AdminPatientListScreenState extends State<AdminPatientListScreen> {
             padding: const EdgeInsets.all(16),
             child: TextField(
               decoration: const InputDecoration(
-                hintText: 'Nombre, Email o Historia...',
-                prefixIcon: Icon(Icons.search),
+                hintText: 'Buscar por Nombre, Apellido o Nº Historia...',
+                prefixIcon: Icon(Icons.person_search, color: Color(0xFF00796B)),
                 border: OutlineInputBorder(),
+                filled: true,
+                fillColor: Color(0xFFF5F5F5),
               ),
-              onChanged: (v) => setState(() => _query = v.toLowerCase()),
+              onChanged: (v) => setState(() => _query = v.toLowerCase().trim()),
             ),
           ),
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
               stream: _query.isEmpty
                   ? FirebaseFirestore.instance
-                      .collection(collection)
-                      .limit(10)
+                      .collection('users_app')
+                      .where('termsAccepted', isEqualTo: true)
+                      .limit(20)
                       .snapshots()
                   : FirebaseFirestore.instance
-                      .collection(collection)
-                      .where('rol', isEqualTo: 'cliente')
+                      .collection('users_app')
+                      .where('termsAccepted', isEqualTo: true)
+                      .where('keywords', arrayContains: _query)
                       .snapshots(),
               builder: (context, snapshot) {
-                if (!snapshot.hasData) {
-                  return const Center(child: CircularProgressIndicator());
-                }
+                if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+                
                 final docs = snapshot.data!.docs;
-                if (docs.isEmpty) {
-                  return const Center(child: Text('No hay resultados'));
-                }
+                if (docs.isEmpty) return const Center(child: Text('No se encontraron clientes con App activa.'));
 
                 return ListView.builder(
+                  padding: const EdgeInsets.all(8),
                   itemCount: docs.length,
                   itemBuilder: (context, index) {
-                    final doc = docs[index];
-                    final data = doc.data()! as Map<String, dynamic>;
+                    final data = docs[index].data()! as Map<String, dynamic>;
                     final nombre = data.safeString('nombreCompleto');
-                    final email = data.safeString('email');
+                    final idH = data.safeString('numHistoria');
 
-                    return ListTile(
-                      leading: CircleAvatar(
-                        backgroundColor: _searchInExcel
-                            ? Colors.orange.shade100
-                            : Colors.teal.shade100,
-                        child: Text(nombre.isNotEmpty ? nombre[0] : '?'),
+                    return Card(
+                      child: ListTile(
+                        leading: CircleAvatar(
+                          backgroundColor: Colors.teal.shade50,
+                          child: Text(nombre.isNotEmpty ? nombre[0].toUpperCase() : '?'),
+                        ),
+                        title: Text(nombre, style: const TextStyle(fontWeight: FontWeight.bold)),
+                        subtitle: Text('Hª: $idH | ${data.safeString('email')}'),
+                        trailing: const Icon(Icons.chevron_right, color: Colors.teal),
+                        onTap: () => widget.onUserSelected(docs[index].id, nombre),
                       ),
-                      title: Text(nombre),
-                      subtitle: Text('ID: ${doc.id} | $email'),
-                      trailing: _searchInExcel
-                          ? IconButton(
-                              icon: const Icon(
-                                Icons.edit_note,
-                                color: Colors.orange,
-                              ),
-                              onPressed: () => _editEmail(doc.id, email),
-                            )
-                          : const Icon(Icons.check_circle, color: Colors.teal),
-                      onTap: _searchInExcel
-                          ? null
-                          : () => widget.onUserSelected(doc.id, nombre),
                     );
                   },
                 );
@@ -155,7 +90,3 @@ class _AdminPatientListScreenState extends State<AdminPatientListScreen> {
     );
   }
 }
-
-
-
-

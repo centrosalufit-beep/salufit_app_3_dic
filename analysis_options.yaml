@@ -1,19 +1,19 @@
-include: package:flutter_lints/flutter.yaml
-
+﻿include: package:very_good_analysis/analysis_options.yaml
 analyzer:
-  plugins:
-    - riverpod_lint
+  plugins: [riverpod_lint]
   language:
     strict-casts: true
     strict-inference: true
     strict-raw-types: true
   errors:
+    invalid_annotation_target: ignore
     avoid_print: ignore
-    unnecessary_import: ignore
-    unused_catch_clause: ignore
-
+    use_setters_to_change_properties: ignore
+    sort_pub_dependencies: ignore
+    unawaited_futures: ignore
 linter:
   rules:
-    - prefer_final_locals
-    - use_super_parameters
-    - use_build_context_synchronously
+    public_member_api_docs: false
+    lines_longer_than_80_chars: false
+    require_trailing_commas: true
+    prefer_const_constructors: true

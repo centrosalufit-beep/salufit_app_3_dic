@@ -3,105 +3,63 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // ==========================================
-    // 🛡️ HELPERS DE SEGURIDAD
-    // ==========================================
-    function isAuthenticated() { return request.auth != null; }
-    function isOwner(userId) { return isAuthenticated() && request.auth.uid == userId; }
-    function getUserData() { return get(/databases/$(database)/documents/users/$(request.auth.uid)).data; }
+    // === HELPERS DE SEGURIDAD ===
+    function isAuthenticated() { 
+      return request.auth != null; 
+    }
     
+    function getRole() {
+      return get(/databases/$(database)/documents/users_app/$(request.auth.uid)).data.get('rol', 'none');
+    }
+
     function isStaff() {
-      let role = getUserData().rol;
-      return isAuthenticated() && (role == 'admin' || role == 'administrador' || role == 'profesional');
+      return isAuthenticated() && getRole() in ['admin', 'administrador', 'profesional'];
     }
+
     function isAdmin() {
-      let role = getUserData().rol;
-      return isAuthenticated() && (role == 'admin' || role == 'administrador');
+      return isAuthenticated() && getRole() in ['admin', 'administrador'];
     }
 
-    // ==========================================
-    // 📋 REGLAS POR COLECCIÓN
-    // ==========================================
-
-    // ✅ REGLA CRÍTICA PARA ACTIVACIÓN (Nuevos Usuarios)
-    match /patient_data/{historyId} {
-      // Permite verificar si el Nº de Historia existe antes de loguearse
-      // Se permite 'get' (documento individual) pero NO 'list' (ver todos)
-      allow get: if true; 
-      allow list: if isStaff(); // Solo el staff puede ver la lista completa
-      allow write: if isStaff();
+    function isOwner(userId) { 
+      return isAuthenticated() && request.auth.uid == userId; 
     }
 
+    // === REGLAS DE ACCESO ===
+    
     match /users/{userId} {
       allow read: if isOwner(userId) || isStaff();
-      allow create: if isOwner(userId); 
-      allow update: if (isOwner(userId) 
-                        && request.resource.data.diff(resource.data).affectedKeys()
-                           .hasOnly(['nombre', 'apellidos', 'telefono', 'fechaNacimiento', 'codigoPostal', 'fotoUrl', 'fcmToken', 'termsAccepted', 'privacyAccepted', 'sesionesRestantes', 'consentDate', 'consentVersion', 'rol'])) 
-                    || isStaff();
-      allow delete: if isAdmin();
+      allow create: if isOwner(userId) || isStaff();
+      allow update: if isStaff() || (isOwner(userId) && !request.resource.data.diff(resource.data).affectedKeys()
+        .hasAny(['rol', 'activo', 'email', 'createdAt']));
+      allow list: if isStaff();
     }
 
-    match /bookings/{bookingId} {
-      allow read: if isOwner(resource.data.userId) || isStaff();
-      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
-      allow delete: if isAuthenticated() && (resource.data.userId == request.auth.uid || isStaff());
-      allow update: if isStaff();
+    match /users_app/{userId} {
+      allow read: if isOwner(userId) || isStaff();
+      allow create: if isOwner(userId) || isStaff();
+      allow update: if isStaff() || (isOwner(userId) && !request.resource.data.diff(resource.data).affectedKeys()
+        .hasAny(['rol', 'activo', 'email', 'numHistoria', 'createdAt', 'activatedAt']));
+      allow list: if isStaff();
     }
 
-    match /appointments/{appointmentId} {
-      allow read: if isOwner(resource.data.userId) || isStaff();
-      allow write: if isStaff();
+    // Blindaje de datos m�dicos ??
+    match /patient_data/{id} { 
+      allow read, write: if isStaff(); 
+    }
+
+    // Seguridad por defecto para admins
+    match /{document=**} {
+      allow read, write: if isAdmin();
     }
     
-    match /groupClasses/{classId} {
-      allow read: if isAuthenticated();
-      allow update: if isAuthenticated() && (
-        isStaff() || 
-        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['aforoActual']) && 
-         (request.resource.data.aforoActual == resource.data.aforoActual + 1 || 
-          request.resource.data.aforoActual == resource.data.aforoActual - 1))
-      );
-      allow create, delete: if isStaff();
-    }
-
-    match /passes/{passId} {
-      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isStaff());
-      allow update: if isAuthenticated() && (
-        isStaff() || 
-        (resource.data.userId == request.auth.uid && 
-         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['tokensRestantes']))
-      );
-      allow create, delete: if isStaff();
-    }
-
-    match /exercises/{exerciseId} { allow read: if isAuthenticated(); allow write: if isStaff(); }
-    match /exercise_assignments/{assignId} {
-      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isStaff());
-      allow create, delete: if isStaff();
-      allow update: if isStaff() || (isOwner(resource.data.userId) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['completado']));
-    }
-
-    match /documents/{docId} {
-      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isStaff());
-      allow create, update: if isStaff(); 
-      allow delete: if isAdmin();
-    }
-
-    match /consent_templates/{templateId} { allow read: if isAuthenticated(); allow write: if isAdmin(); }
-    match /legacy_import/{docId} { allow read: if isAuthenticated() && (resource.data.email == request.auth.token.email || isStaff()); allow write: if isStaff(); }
-
-    match /timeClockRecords/{recordId} { allow read, write: if isStaff(); }
-    match /internal_chats/{chatId} { 
-      allow read, write: if isStaff(); 
-      match /messages/{msgId} { allow read, write: if isStaff(); } 
-    }
-    match /internal_tasks/{taskId} { allow read, write: if isStaff(); }
-    match /broadcasts/{broadcastId} { allow read: if isAuthenticated(); allow write: if isAdmin(); }
-    match /journal/{entryId} { allow read: if isOwner(resource.data.userId) || isStaff(); allow create: if isOwner(request.resource.data.userId); allow update: if isStaff(); }
-    match /metrics/{metricId} { allow read: if isOwner(resource.data.userId) || isStaff(); allow create: if isOwner(request.resource.data.userId); }
-    match /audit_logs/{logId} { allow create: if isAuthenticated(); allow read: if isAdmin(); allow update, delete: if false; }
-    match /system_config/{docId} { allow read: if isAuthenticated(); allow write: if isAdmin(); }
-    match /config/{docId} { allow read: if true; allow write: if isAdmin(); }
+    // Reglas para el resto de colecciones operativas...
+    match /passes/{id} { allow read: if isStaff() || (isAuthenticated() && resource.data.userId == request.auth.uid); allow create: if isStaff(); allow update: if isStaff() || (isAuthenticated() && resource.data.userId == request.auth.uid && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['tokensRestantes'])); allow delete: if isStaff(); }
+    match /exercise_assignments/{id} { allow read: if isStaff() || (isAuthenticated() && resource.data.userId == request.auth.uid); allow write: if isStaff(); }
+    match /audit_logs/{id} { allow read: if isStaff(); allow create: if isAuthenticated(); }
+    match /appointments/{id} { allow read, list: if isStaff() || (isAuthenticated() && resource.data.userId == request.auth.uid); allow write: if isStaff(); }
+    match /bookings/{id} { allow read, delete: if isStaff() || (isAuthenticated() && resource.data.userId == request.auth.uid); allow create: if isStaff() || (isAuthenticated() && request.resource.data.userId == request.auth.uid); }
+    match /groupClasses/{id} { allow read: if isAuthenticated(); allow create, delete: if isStaff(); allow update: if isStaff() || (isAuthenticated() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['aforoActual'])); }
+    match /documents/{id} { allow read: if isStaff() || (isAuthenticated() && resource.data.userId == request.auth.uid); allow create: if isStaff(); allow update: if isStaff() || (isAuthenticated() && resource.data.userId == request.auth.uid && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['firmado', 'fechaFirma', 'firmaDigital', 'firmaCliente', 'firmaProfesional'])); allow delete: if isStaff(); }
+    match /consent_templates/{id} { allow read: if isStaff(); allow write: if isAdmin(); }
   }
 }

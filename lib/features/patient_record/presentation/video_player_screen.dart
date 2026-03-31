@@ -49,16 +49,14 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   int _cfgWork = 60;
   int _cfgRest = 40;
 
-  // --- URL HARDCODED (MODIFICACIÓN ARQUITECTO) ---
+  // URL de demo - en produccion obtener via FirebaseStorage.instance.ref().getDownloadURL()
   final String _fixedVideoUrl =
-      'https://firebasestorage.googleapis.com/v0/b/salufitnewapp.firebasestorage.app/o/1.mp4?alt=media&token=c4c35672-3da8-4ee4-9947-416b4a251e2d';
+      'https://firebasestorage.googleapis.com/v0/b/salufitnewapp.firebasestorage.app/o/1.mp4?alt=media';
 
   @override
   void initState() {
     super.initState();
-    debugPrint('🎬 Iniciando reproductor para: ${widget.title}');
-    // Usamos la URL fija para asegurar que funcione el paso 3
-    debugPrint('🔗 URL Fija aplicada: $_fixedVideoUrl');
+    debugPrint('Iniciando reproductor para: ${widget.title}');
     _initializePlayer();
   }
 

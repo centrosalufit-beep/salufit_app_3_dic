@@ -24,7 +24,7 @@ class ClassRepository {
 
     if (passSnapshot.docs.isEmpty) throw Exception('No tienes un bono activo');
 
-    final userRef = _firestore.collection('users').doc(userId);
+    final userRef = _firestore.collection('users_app').doc(userId);
     final userDoc = await userRef.get();
     final userName = userDoc.data()?['nombreCompleto'] ?? 'Usuario';
 
@@ -49,18 +49,19 @@ class ClassRepository {
     await batch.commit();
   }
 
-  Future<void> cancelarReserva({
+  Future<bool> cancelarReserva({
     required String bookingId,
     required String classId,
     required String userId,
   }) async {
     final batch = _firestore.batch();
-    final passSnapshot = await _firestore
-        .collection('passes')
-        .where('userId', isEqualTo: userId)
-        .where('activo', isEqualTo: true)
-        .limit(1)
-        .get();
+
+    // Obtener fecha de la clase para verificar politica 24h
+    final classDoc = await _firestore.collection('groupClasses').doc(classId).get();
+    final classData = classDoc.data();
+    final fechaClase = (classData?['fechaHoraInicio'] as Timestamp?)?.toDate() ?? DateTime.now();
+    final horasRestantes = fechaClase.difference(DateTime.now()).inHours;
+    final devuelveToken = horasRestantes >= 24;
 
     batch
       ..delete(_firestore.collection('bookings').doc(bookingId))
@@ -69,13 +70,25 @@ class ClassRepository {
         {'aforoActual': FieldValue.increment(-1)},
       );
 
-    if (passSnapshot.docs.isNotEmpty) {
-      batch.update(
-        passSnapshot.docs.first.reference,
-        {'tokensRestantes': FieldValue.increment(1)},
-      );
+    // Solo devolver token si faltan 24h o mas
+    if (devuelveToken) {
+      final passSnapshot = await _firestore
+          .collection('passes')
+          .where('userId', isEqualTo: userId)
+          .where('activo', isEqualTo: true)
+          .limit(1)
+          .get();
+
+      if (passSnapshot.docs.isNotEmpty) {
+        batch.update(
+          passSnapshot.docs.first.reference,
+          {'tokensRestantes': FieldValue.increment(1)},
+        );
+      }
     }
+
     await batch.commit();
+    return devuelveToken;
   }
 
   Future<void> crearClase({

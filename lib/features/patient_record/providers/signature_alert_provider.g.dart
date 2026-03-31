@@ -6,21 +6,24 @@ part of 'signature_alert_provider.dart';
 // RiverpodGenerator
 // **************************************************************************
 
+// GENERATED CODE - DO NOT MODIFY BY HAND
+// ignore_for_file: type=lint, type=warning
+
 @ProviderFor(SignatureAlert)
 const signatureAlertProvider = SignatureAlertProvider._();
 
 final class SignatureAlertProvider
     extends $NotifierProvider<SignatureAlert, bool> {
   const SignatureAlertProvider._()
-      : super(
-          from: null,
-          argument: null,
-          retry: null,
-          name: r'signatureAlertProvider',
-          isAutoDispose: true,
-          dependencies: null,
-          $allTransitiveDependencies: null,
-        );
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'signatureAlertProvider',
+        isAutoDispose: true,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
 
   @override
   String debugGetCreateSourceHash() => _$signatureAlertHash();
@@ -47,11 +50,14 @@ abstract class _$SignatureAlert extends $Notifier<bool> {
   void runBuild() {
     final created = build();
     final ref = this.ref as $Ref<bool, bool>;
-    final element = ref.element as $ClassProviderElement<
-        AnyNotifier<bool, bool>, bool, Object?, Object?>;
+    final element =
+        ref.element
+            as $ClassProviderElement<
+              AnyNotifier<bool, bool>,
+              bool,
+              Object?,
+              Object?
+            >;
     element.handleValue(ref, created);
   }
 }
-
-// ignore_for_file: type=lint
-// ignore_for_file: subtype_of_sealed_class, invalid_use_of_internal_member, invalid_use_of_visible_for_testing_member, deprecated_member_use_from_same_package

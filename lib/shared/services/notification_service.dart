@@ -9,7 +9,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   if (kDebugMode) {
-    print('🌙 Notificación Background recibida: ${message.messageId}');
+    debugPrint('Notificacion Background recibida');
   }
 }
 
@@ -56,7 +56,7 @@ class NotificationService {
       // 4. Obtener Token y guardar
       final token = await _messaging.getToken();
       if (token != null) {
-        if (kDebugMode) print('FCM Token: $token');
+        if (kDebugMode) debugPrint('FCM Token obtenido');
         await _saveTokenToDatabase(token);
       }
 
@@ -88,7 +88,7 @@ class NotificationService {
       initSettings,
       onDidReceiveNotificationResponse: (response) {
         if (kDebugMode) {
-          print('👆 Usuario tocó la notificación: ${response.payload}');
+          debugPrint('Notificacion tocada');
         }
         // NOTA: Aquí es donde en el futuro puedes añadir la lógica para
         // navegar a la pantalla de reservas usando tu sistema de rutas.
@@ -108,7 +108,7 @@ class NotificationService {
   void _setupForegroundListeners() {
     FirebaseMessaging.onMessage.listen((RemoteMessage message) {
       if (kDebugMode) {
-        print('🌞 Mensaje recibido en Primer Plano: ${message.data}');
+        debugPrint('Mensaje recibido en primer plano');
       }
       _showPrivacyNotification(message);
     });
@@ -145,7 +145,7 @@ class NotificationService {
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
       try {
-        await FirebaseFirestore.instance.collection('users').doc(user.uid).set(
+        await FirebaseFirestore.instance.collection('users_app').doc(user.uid).set(
           {
             'fcmToken': token,
             'lastTokenUpdate': FieldValue.serverTimestamp(),

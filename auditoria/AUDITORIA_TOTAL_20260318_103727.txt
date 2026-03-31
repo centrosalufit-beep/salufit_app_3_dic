@@ -1,0 +1,39 @@
+﻿
+    Write-Output "=== DATA RECOVERY PROTOCOL 2026 ==="
+    Write-Output "TIMESTAMP: $timestamp"
+    Write-Output "--- FLUTTER DOCTOR ---"
+    flutter doctor -v
+    
+    Write-Output "--- ESTRUCTURA DE PROYECTO (lib/) ---"
+    Get-ChildItem -Recurse lib | Select-Object FullName
+    
+    Write-Output "--- CONFIGURACIÓN ATÓMICA ---"
+    Write-Output "PUBSPEC.YAML:"
+    Get-Content pubspec.yaml
+    Write-Output "ANALYSIS_OPTIONS.YAML:"
+    if (Test-Path analysis_options.yaml) { Get-Content 
+analysis_options.yaml }
+
+    Write-Output "--- DETECCIÓN DINÁMICA DE ERRORES (ANALYSIS) 
+---"
+    $analysis = flutter analyze
+    Write-Output $analysis
+
+    Write-Output "--- VOLCADO DE CÓDIGO AFECTADO ---"
+    # Buscamos archivos con errores en el reporte de flutter 
+analyze
+    # Nota: Se asume que el análisis detecta archivos en la 
+carpeta lib
+    $filesWithErrors = $analysis | Select-String -Pattern 
+"lib/.*\.dart" | ForEach-Object { 
+        $_.ToString().Split(':')[0].Trim() 
+    } | Select-Object -Unique
+
+    foreach ($file in $filesWithErrors) {
+        if (Test-Path $file) {
+            Write-Output "FILE_START: $file"
+            Get-Content $file
+            Write-Output "FILE_END"
+        }
+    }
+

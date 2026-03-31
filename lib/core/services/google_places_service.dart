@@ -4,8 +4,8 @@ import 'package:http/http.dart' as http;
 class GooglePlacesService {
   static const String _placeId = 'ChIJg9lttwH-nRIREI8yOfGlWSk';
 
-  // ASEGÚRATE DE REEMPLAZAR ESTO CON TU LLAVE REAL DE GOOGLE CLOUD
-  static const String _apiKey = 'TU_API_KEY_AQUÍ';
+  // Configurar via variable de entorno o Firebase Remote Config - NUNCA hardcodear
+  static const String _apiKey = String.fromEnvironment('GOOGLE_PLACES_KEY');
 
   Future<Map<String, dynamic>> getPlaceDetails() async {
     try {

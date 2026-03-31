@@ -1,34 +1,39 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:salufit_app/core/theme/app_colors.dart';
 import 'package:salufit_app/core/utils/safe_parsing_extensions.dart';
 import 'package:salufit_app/features/patient_record/presentation/video_player_screen.dart';
 import 'package:salufit_app/features/patient_record/providers/material_providers.dart';
+import 'package:salufit_app/shared/widgets/salufit_header.dart';
 import 'package:salufit_app/shared/widgets/salufit_scaffold.dart';
-import 'package:skeletonizer/skeletonizer.dart';
 
 class ClientMaterialScreen extends ConsumerWidget {
-  const ClientMaterialScreen({required this.userId, this.embedMode = false, super.key});
+  const ClientMaterialScreen({
+    required this.userId, 
+    this.embedMode = false, 
+    super.key,
+  });
+
   final String userId;
   final bool embedMode;
-  static const Color salufitTeal = Color(0xFF009688);
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final assignmentsAsync = ref.watch(myAssignmentsProvider);
     final completedSet = ref.watch(dailyProgressProvider);
     
-    final List<Map<String, dynamic>> docs = assignmentsAsync.value ?? [];
-    final int total = docs.length;
-    final int done = docs.where((d) => completedSet.contains(d['id']?.toString())).length;
-    final double progress = total == 0 ? 0.0 : (done / total);
+    final docs = assignmentsAsync.value ?? [];
+    final total = docs.length;
+    final done = docs.where((d) => completedSet.contains(d['id']?.toString())).length;
+    final progress = total == 0 ? 0.0 : (done / total);
 
     return SalufitScaffold(
       backgroundColor: const Color(0xFFF0F4F8),
       body: SafeArea(
         child: Column(
           children: [
-            _buildHeader(),
+            const SalufitHeader(title: 'TU MATERIAL'),
             _buildProgressCard(done, total, progress),
             Expanded(
               child: assignmentsAsync.when(
@@ -39,7 +44,7 @@ class ClientMaterialScreen extends ConsumerWidget {
                       itemCount: docsList.length,
                       itemBuilder: (context, index) {
                         final data = docsList[index];
-                        final String safeId = data['id']?.toString() ?? '';
+                        final safeId = data['id']?.toString() ?? '';
                         return _CompactExerciseCard(
                           assignmentId: safeId,
                           titulo: data.safeString('nombre', defaultValue: 'Ejercicio'),
@@ -49,7 +54,7 @@ class ClientMaterialScreen extends ConsumerWidget {
                         );
                       },
                     ),
-                loading: () => const Center(child: CircularProgressIndicator(color: salufitTeal)),
+                loading: () => const Center(child: CircularProgressIndicator(color: AppColors.primary)),
                 error: (e, _) => const Center(child: Text('Error al cargar material')),
               ),
             ),
@@ -59,33 +64,27 @@ class ClientMaterialScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildHeader() => const Padding(
-    padding: EdgeInsets.fromLTRB(20, 20, 20, 10),
-    child: Text('TU MATERIAL', style: TextStyle(fontFamily: 'serif', fontSize: 24, fontWeight: FontWeight.w900, color: salufitTeal)),
-  );
-
   Widget _buildProgressCard(int done, int total, double progress) {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
       child: Stack(
         clipBehavior: Clip.none,
         children: [
-          // Tarjeta Principal
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
               gradient: const LinearGradient(
-                colors: [salufitTeal, Color(0xFF4DB6AC)],
+                colors: [AppColors.primary, Color(0xFF4DB6AC)],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
               borderRadius: BorderRadius.circular(25),
               boxShadow: [
                 BoxShadow(
-                  color: salufitTeal.withValues(alpha: 0.3),
+                  color: AppColors.primary.withValues(alpha: 0.3),
                   blurRadius: 10,
                   offset: const Offset(0, 5),
-                )
+                ),
               ],
             ),
             child: Column(
@@ -108,11 +107,10 @@ class ClientMaterialScreen extends ConsumerWidget {
               ],
             ),
           ),
-          // Badge Circular de Actividad Mensual (Inyectado)
           Positioned(
             top: 15,
             right: 15,
-            child: _buildActivityBadge("12", "HITS"),
+            child: _buildActivityBadge('12', 'HITS'),
           ),
         ],
       ),
@@ -131,7 +129,7 @@ class ClientMaterialScreen extends ConsumerWidget {
             color: Colors.black.withValues(alpha: 0.1),
             blurRadius: 8,
             offset: const Offset(0, 2),
-          )
+          ),
         ],
       ),
       child: Column(
@@ -143,7 +141,6 @@ class ClientMaterialScreen extends ConsumerWidget {
       ),
     );
   }
-
 }
 
 class _CompactExerciseCard extends ConsumerWidget {
@@ -156,8 +153,7 @@ class _CompactExerciseCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final Color color = area.toLowerCase().contains('fuerza') ? const Color(0xFFD32F2F) : const Color(0xFF1976D2);
-    
+    final color = area.toLowerCase().contains('fuerza') ? const Color(0xFFD32F2F) : const Color(0xFF1976D2);
     return Container(
       height: 75,
       margin: const EdgeInsets.only(bottom: 10),
@@ -168,8 +164,8 @@ class _CompactExerciseCard extends ConsumerWidget {
           await Navigator.push<void>(
             context, 
             MaterialPageRoute<void>(
-              builder: (_) => VideoPlayerScreen(videoUrl: urlVideo, title: titulo, assignmentId: assignmentId)
-            )
+              builder: (_) => VideoPlayerScreen(videoUrl: urlVideo, title: titulo, assignmentId: assignmentId),
+            ),
           );
           ref.read(dailyProgressProvider.notifier).markAsDone(assignmentId);
         },

@@ -49,3 +49,13 @@ build/
 ios/build/
 android/app/build/
 .dart_tool/
+
+# Secrets & credentials (never commit)
+*.env
+.env*
+**/*credentials*.json
+**/*secret*.json
+**/*_private.key
+*.pem
+*.p12
+*.jks

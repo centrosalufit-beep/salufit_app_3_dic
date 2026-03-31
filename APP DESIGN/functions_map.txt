@@ -1,0 +1,22 @@
+﻿================================================================================
+SALUFIT 2026 - MAPA DE FUNCIONES FIREBASE (Sincronizado)
+================================================================================
+TIPO: SOLICITUD (HTTPS / CALLABLE) - Llamadas desde la App
+- activarCuenta
+- enviarCodigoOTP
+- verificarCodigoOTP
+- crearReserva
+- cancelarReserva
+- registrarFichaje
+- renovarBonosBatch
+- generarClasesMensuales
+- checkAccountStatus (v1)
+
+TIPO: TRIGGER (DOCUMENT.WRITTEN) - Automáticas en el Servidor
+- autoEmailTimeRecords
+- autoEmailAppointments
+- autoEmailPasses
+- autoEmailBookings
+- autoEmailExerciseAssignments
+- notificarCambioReserva
+================================================================================

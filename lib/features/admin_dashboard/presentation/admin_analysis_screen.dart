@@ -1,20 +1,16 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:salufit_app/core/utils/safe_parsing_extensions.dart';
 
 part 'admin_analysis_screen.g.dart';
 
-// --- CLASE MODELO (Tipado Estricto) ---
 @immutable
 class AnalysisMetric {
-  const AnalysisMetric({
-    required this.label,
-    required this.value,
-    required this.isPositive,
-  });
-
-  /// Factory blindado contra nulos y tipos incorrectos
+  const AnalysisMetric({required this.label, required this.value, required this.isPositive});
   factory AnalysisMetric.fromMap(Map<String, dynamic> map) {
     return AnalysisMetric(
       label: map.safeString('label', defaultValue: 'N/A'),
@@ -22,46 +18,37 @@ class AnalysisMetric {
       isPositive: map.safeBool('isPositive'),
     );
   }
-
   final String label;
   final double value;
   final bool isPositive;
 }
 
-// --- PROVIDER (Riverpod Generator) ---
 @riverpod
-Future<List<AnalysisMetric>> adminAnalysis(Ref ref) async {
-  // Changed AdminAnalysisRef to Ref
-  // Tipado explícito para Future.delayed (Modo Estricto Dart)
-  await Future<void>.delayed(const Duration(seconds: 1));
+class AdminAnalysis extends _$AdminAnalysis {
+  @override
+  FutureOr<List<AnalysisMetric>> build() async => _fetchRealMetrics();
 
-  // Simulación de respuesta API (Map crudo)
-  // CORRECCIÓN LINTER: Eliminado 'Map<String, dynamic>' explícito, uso de var/final con inferencia
-  final rawResponse = <String, dynamic>{
-    'metrics': <Map<String, Object>>[
-      <String, Object>{
-        'label': 'Usuarios Activos',
-        'value': 120.0,
-        'isPositive': true,
-      },
-      <String, Object>{
-        'label': 'Retención',
-        'value': 85.5,
-        'isPositive': false,
-      },
-    ],
-  };
+  Future<List<AnalysisMetric>> _fetchRealMetrics() async {
+    try {
+      final activeUsersQuery = await FirebaseFirestore.instance
+          .collection('users_app')
+          .where('isActive', isEqualTo: true)
+          .count()
+          .get();
+      return [
+        AnalysisMetric(label: 'Usuarios Activos', value: (activeUsersQuery.count ?? 0).toDouble(), isPositive: true),
+        const AnalysisMetric(label: 'Pacientes Inactivos', value: 0, isPositive: false),
+      ];
+    } catch (e) {
+      debugPrint('Error en Auditoría: $e');
+      return [];
+    }
+  }
 
-  // Sanitización y transformación en la capa lógica
-  return rawResponse.safeList<AnalysisMetric>(
-    'metrics',
-    (dynamic item) {
-      if (item is Map<String, dynamic>) {
-        return AnalysisMetric.fromMap(item);
-      }
-      return const AnalysisMetric(label: 'Error', value: 0, isPositive: false);
-    },
-  );
+  Future<void> refreshMetrics() async {
+    state = const AsyncLoading();
+    state = await AsyncValue.guard(_fetchRealMetrics);
+  }
 }
 
 class AdminAnalysisScreen extends ConsumerWidget {
@@ -69,49 +56,92 @@ class AdminAnalysisScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // CORRECCIÓN LINTER: Eliminado 'AsyncValue<...>' explícito
+    final user = FirebaseAuth.instance.currentUser;
     final analysisState = ref.watch(adminAnalysisProvider);
 
     return Scaffold(
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
-        title: const Text('Análisis del Sistema'),
-        actions: const <Widget>[],
+        title: const Text('Panel de Control (Windows)'),
+        backgroundColor: Colors.transparent,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: () => ref.read(adminAnalysisProvider.notifier).refreshMetrics(),
+          ),
+        ],
       ),
-      body: analysisState.when(
-        data: (List<AnalysisMetric> metrics) =>
-            _AnalysisContent(metrics: metrics),
-        error: (Object err, StackTrace stack) =>
-            Center(child: Text('Error: $err')),
-        loading: () => const Center(child: CircularProgressIndicator()),
+      body: ListView(
+        padding: const EdgeInsets.all(24),
+        children: [
+          if (user != null) _ClockingStatusCard(userId: user.uid),
+          const SizedBox(height: 24),
+          const Text('Métricas del Sistema', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)),
+          const SizedBox(height: 16),
+          analysisState.when(
+            data: (metrics) => Column(
+              children: metrics.map((m) => Card(
+                color: Colors.white.withValues(alpha: 0.9),
+                child: ListTile(
+                  leading: Icon(m.isPositive ? Icons.trending_up : Icons.trending_down, color: m.isPositive ? Colors.green : Colors.red),
+                  title: Text(m.label),
+                  trailing: Text(m.value.toInt().toString(), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 20)),
+                ),
+              )).toList(),
+            ),
+            loading: () => const Center(child: CircularProgressIndicator()),
+            error: (e, __) => Text('Error: $e', style: const TextStyle(color: Colors.white)),
+          ),
+        ],
       ),
     );
   }
 }
 
-class _AnalysisContent extends StatelessWidget {
-  const _AnalysisContent({required this.metrics});
-
-  final List<AnalysisMetric> metrics;
+class _ClockingStatusCard extends StatelessWidget {
+  const _ClockingStatusCard({required this.userId});
+  final String userId;
 
   @override
   Widget build(BuildContext context) {
-    return ListView.builder(
-      padding: const EdgeInsets.all(16),
-      itemCount: metrics.length,
-      itemBuilder: (BuildContext context, int index) {
-        // CORRECCIÓN LINTER: Eliminado 'AnalysisMetric' explícito
-        final metric = metrics[index];
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('timeClockRecords')
+          .where('userId', isEqualTo: userId)
+          .orderBy('timestamp', descending: true)
+          .limit(1)
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+          return const Card(child: ListTile(title: Text('Sin registros de jornada hoy')));
+        }
+        final doc = snapshot.data!.docs.first;
+        final type = doc.get('type') as String;
+        final timestamp = (doc.get('timestamp') as Timestamp?)?.toDate() ?? DateTime.now();
+        final isClockedIn = type == 'IN';
 
         return Card(
-          child: ListTile(
-            leading: Icon(
-              metric.isPositive ? Icons.trending_up : Icons.trending_down,
-              color: metric.isPositive ? Colors.green : Colors.red,
-            ),
-            title: Text(metric.label),
-            trailing: Text(
-              metric.value.toString(),
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+          elevation: 4,
+          color: isClockedIn ? Colors.teal.shade700 : Colors.white.withValues(alpha: 0.9),
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Row(
+              children: [
+                Icon(isClockedIn ? Icons.timer : Icons.timer_off, size: 40, color: isClockedIn ? Colors.white : Colors.grey),
+                const SizedBox(width: 20),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(isClockedIn ? 'JORNADA ACTIVA' : 'FUERA DE JORNADA', 
+                        style: TextStyle(fontWeight: FontWeight.bold, color: isClockedIn ? Colors.white : Colors.black87)),
+                      Text('Último registro: ${DateFormat('HH:mm').format(timestamp)}', 
+                        style: TextStyle(color: isClockedIn ? Colors.white70 : Colors.black54, fontSize: 12)),
+                    ],
+                  ),
+                ),
+                if (isClockedIn) const Text('EN CURSO', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              ],
             ),
           ),
         );

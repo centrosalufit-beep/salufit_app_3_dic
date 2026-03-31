@@ -2,6 +2,7 @@ import 'dart:developer' as dev;
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:salufit_app/core/theme/app_colors.dart';
 import 'package:salufit_app/features/auth/presentation/activation_screen_helper.dart';
 import 'package:salufit_app/features/auth/providers/auth_providers.dart';
 import 'package:salufit_app/shared/widgets/salufit_scaffold.dart';
@@ -27,7 +28,7 @@ class _ActivationScreenState extends ConsumerState<ActivationScreen> {
     final idH = _historyController.text.trim().padLeft(6, '0');
 
     try {
-      dev.log('>>> [ACTIVACION] Verificando estado via Cloud Function para: $email');
+      dev.log('>>> [ACTIVACION] Verificando estado via Cloud Function');
 
       // Tipado explícito <Map<String, dynamic>> para evitar avoid_dynamic_calls
       final result = await FirebaseFunctions.instance
@@ -56,7 +57,7 @@ class _ActivationScreenState extends ConsumerState<ActivationScreen> {
       if (!mounted) return;
       _showSuccessDialog(email);
     } catch (e) {
-      dev.log('>>> [ERROR ACTIVACION] $e');
+      dev.log('>>> [ERROR ACTIVACION] ${e.runtimeType}');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -104,8 +105,6 @@ class _ActivationScreenState extends ConsumerState<ActivationScreen> {
 
   @override
   Widget build(BuildContext context) {
-    const salufitTeal = Color(0xFF009688);
-
     return SalufitScaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
@@ -114,7 +113,7 @@ class _ActivationScreenState extends ConsumerState<ActivationScreen> {
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
         backgroundColor: Colors.white,
-        foregroundColor: salufitTeal,
+        foregroundColor: AppColors.primary,
         elevation: 0,
       ),
       body: Form(
@@ -122,7 +121,7 @@ class _ActivationScreenState extends ConsumerState<ActivationScreen> {
         child: ListView(
           padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 20),
           children: [
-            const Icon(Icons.verified_user_outlined, size: 80, color: salufitTeal),
+            const Icon(Icons.verified_user_outlined, size: 80, color: AppColors.primary),
             const SizedBox(height: 20),
             const Text(
               'Introduce tus datos para vincular tu ficha médica con la App.',
@@ -137,7 +136,7 @@ class _ActivationScreenState extends ConsumerState<ActivationScreen> {
                 labelText: 'Nº Historia',
                 prefixIcon: const Icon(
                   Icons.assignment_ind_outlined,
-                  color: salufitTeal,
+                  color: AppColors.primary,
                 ),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
@@ -152,7 +151,7 @@ class _ActivationScreenState extends ConsumerState<ActivationScreen> {
               keyboardType: TextInputType.emailAddress,
               decoration: InputDecoration(
                 labelText: 'Email',
-                prefixIcon: const Icon(Icons.email_outlined, color: salufitTeal),
+                prefixIcon: const Icon(Icons.email_outlined, color: AppColors.primary),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
@@ -165,7 +164,7 @@ class _ActivationScreenState extends ConsumerState<ActivationScreen> {
               height: 55,
               child: ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: salufitTeal,
+                  backgroundColor: AppColors.primary,
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
