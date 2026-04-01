@@ -5,6 +5,7 @@ import 'package:salufit_app/core/providers/places_provider.dart';
 import 'package:salufit_app/features/auth/domain/user_model.dart';
 import 'package:salufit_app/features/auth/providers/user_profile_provider.dart';
 import 'package:salufit_app/features/client_portal/presentation/providers/token_sync_provider.dart';
+import 'package:salufit_app/features/home/presentation/home_providers.dart';
 import 'package:salufit_app/features/home/providers/dashboard_providers.dart';
 import 'package:salufit_app/shared/widgets/google_maps_card.dart';
 import 'package:salufit_app/shared/widgets/pro_goal_card.dart';
@@ -34,7 +35,11 @@ class ClientDashboardScreen extends ConsumerWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 child: Column(
                   children: [
-                    ProGoalCard(userId: userId),
+                    ProGoalCard(
+                      userId: userId,
+                      onTrialTap: () =>
+                          ref.read(homeTabProvider.notifier).setTab(1),
+                    ),
                     const SizedBox(height: 16),
                     ref.watch(googlePlacesProvider).when(
                       data: (data) => GoogleMapsReviewCard(

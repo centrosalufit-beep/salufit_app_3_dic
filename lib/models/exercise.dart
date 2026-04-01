@@ -22,7 +22,7 @@ class Exercise {
       orden: (data['orden'] as int?) ?? 0,
       codigoInterno: (data['codigoInterno'] as int?) ?? 0,
       descripcion: (data['descripcion'] as String?) ?? '',
-      area: (data['area'] as String?) ?? 'General',
+      area: (data['familia'] as String?) ?? (data['area'] as String?) ?? 'General',
       // Lógica de lista segura
       etiquetas: data['etiquetas'] is List
           ? (data['etiquetas'] as List).join(', ')

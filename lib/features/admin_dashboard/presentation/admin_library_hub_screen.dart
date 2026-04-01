@@ -35,13 +35,11 @@ class _AdminLibraryHubScreenState extends State<AdminLibraryHubScreen> with Sing
     return Scaffold(
       backgroundColor: Colors.transparent,
       appBar: AppBar(
-        title: const Text('Libreria Central', style: TextStyle(fontWeight: FontWeight.bold)),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
+        title: const Text('Librería Central', style: TextStyle(fontWeight: FontWeight.bold)),
         bottom: TabBar(
           controller: _tabController,
-          labelColor: Colors.white,
-          unselectedLabelColor: Colors.white60,
+          labelColor: Colors.tealAccent,
+          unselectedLabelColor: Colors.white70,
           indicatorColor: Colors.tealAccent,
           tabs: const [
             Tab(text: 'EJERCICIOS', icon: Icon(Icons.fitness_center, size: 20)),
@@ -211,15 +209,15 @@ class _ConsentTemplateTabState extends State<_ConsentTemplateTab> {
             }
             final docs = snapshot.data?.docs ?? [];
             if (docs.isEmpty) {
-              return Center(
+              return const Center(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(Icons.gavel, size: 60, color: Colors.grey.shade400),
-                    const SizedBox(height: 16),
-                    const Text('No hay plantillas de consentimiento', style: TextStyle(color: Colors.grey)),
-                    const SizedBox(height: 8),
-                    const Text('Sube un PDF para empezar', style: TextStyle(color: Colors.grey, fontSize: 12)),
+                    Icon(Icons.gavel, size: 60, color: Colors.white54),
+                    SizedBox(height: 16),
+                    Text('No hay plantillas de consentimiento', style: TextStyle(color: Colors.white70)),
+                    SizedBox(height: 8),
+                    Text('Sube un PDF para empezar', style: TextStyle(color: Colors.white54, fontSize: 12)),
                   ],
                 ),
               );

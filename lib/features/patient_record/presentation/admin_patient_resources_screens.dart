@@ -243,6 +243,8 @@ class _AdminPatientMaterialScreenState
               final exerciseId = (ex['id'] ?? '').toString();
               final nombre = (ex['nombre'] ?? '').toString();
               final urlVideo = (ex['urlVideo'] ?? '').toString();
+              final familia = (ex['familia'] ?? 'Entrenamiento').toString();
+              final codigoInterno = (ex['codigoInterno'] as int?) ?? 0;
 
               batch.set(docRef, <String, Object>{
                 'id': docRef.id,
@@ -251,6 +253,8 @@ class _AdminPatientMaterialScreenState
                 'exerciseId': exerciseId,
                 'nombre': nombre,
                 'urlVideo': urlVideo,
+                'familia': familia,
+                'codigoInterno': codigoInterno,
                 'fechaAsignacion': DateTime.now().toIso8601String(),
                 'asignadoEl': FieldValue.serverTimestamp(),
                 'completado': false,

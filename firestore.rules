@@ -61,5 +61,22 @@ service cloud.firestore {
     match /groupClasses/{id} { allow read: if isAuthenticated(); allow create, delete: if isStaff(); allow update: if isStaff() || (isAuthenticated() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['aforoActual'])); }
     match /documents/{id} { allow read: if isStaff() || (isAuthenticated() && resource.data.userId == request.auth.uid); allow create: if isStaff(); allow update: if isStaff() || (isAuthenticated() && resource.data.userId == request.auth.uid && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['firmado', 'fechaFirma', 'firmaDigital', 'firmaCliente', 'firmaProfesional'])); allow delete: if isStaff(); }
     match /consent_templates/{id} { allow read: if isStaff(); allow write: if isAdmin(); }
+
+    // Chat interno entre staff
+    match /chats/{chatId} {
+      allow read, write: if isStaff();
+      match /messages/{msgId} {
+        allow read, write: if isStaff();
+      }
+    }
+
+    // Configuración de la app (versión mínima, etc.)
+    match /config/{docId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    // Fichajes
+    match /timeClockRecords/{id} { allow read: if isStaff(); allow create: if isStaff(); allow update: if isAdmin(); allow delete: if isAdmin(); }
   }
 }

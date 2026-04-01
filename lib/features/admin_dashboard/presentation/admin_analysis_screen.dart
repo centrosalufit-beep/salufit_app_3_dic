@@ -63,7 +63,6 @@ class AdminAnalysisScreen extends ConsumerWidget {
       backgroundColor: Colors.transparent,
       appBar: AppBar(
         title: const Text('Panel de Control (Windows)'),
-        backgroundColor: Colors.transparent,
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
@@ -76,7 +75,7 @@ class AdminAnalysisScreen extends ConsumerWidget {
         children: [
           if (user != null) _ClockingStatusCard(userId: user.uid),
           const SizedBox(height: 24),
-          const Text('Métricas del Sistema', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)),
+          Text('Métricas del Sistema', style: TextStyle(color: Colors.white.withValues(alpha: 0.95), fontWeight: FontWeight.bold, fontSize: 18)),
           const SizedBox(height: 16),
           analysisState.when(
             data: (metrics) => Column(
@@ -90,7 +89,7 @@ class AdminAnalysisScreen extends ConsumerWidget {
               )).toList(),
             ),
             loading: () => const Center(child: CircularProgressIndicator()),
-            error: (e, __) => Text('Error: $e', style: const TextStyle(color: Colors.white)),
+            error: (e, __) => const Text('Error al cargar métricas', style: TextStyle(color: Colors.redAccent)),
           ),
         ],
       ),

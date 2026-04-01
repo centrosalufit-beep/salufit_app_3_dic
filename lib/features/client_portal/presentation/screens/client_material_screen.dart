@@ -143,6 +143,17 @@ class ClientMaterialScreen extends ConsumerWidget {
   }
 }
 
+Color _familiaColor(String familia) {
+  final f = familia.toLowerCase();
+  if (f.contains('fisioterapia')) return const Color(0xFF1976D2);
+  if (f.contains('entrenamiento')) return const Color(0xFFD32F2F);
+  if (f.contains('psicolog')) return const Color(0xFF7B1FA2);
+  if (f.contains('nutrici')) return const Color(0xFF388E3C);
+  if (f.contains('medicina')) return const Color(0xFF00796B);
+  if (f.contains('odontolog')) return const Color(0xFFE64A19);
+  return const Color(0xFF1976D2);
+}
+
 class _CompactExerciseCard extends ConsumerWidget {
   const _CompactExerciseCard({required this.assignmentId, required this.titulo, required this.area, required this.urlVideo, required this.isDone});
   final String assignmentId;
@@ -153,7 +164,7 @@ class _CompactExerciseCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final color = area.toLowerCase().contains('fuerza') ? const Color(0xFFD32F2F) : const Color(0xFF1976D2);
+    final color = _familiaColor(area);
     return Container(
       height: 75,
       margin: const EdgeInsets.only(bottom: 10),

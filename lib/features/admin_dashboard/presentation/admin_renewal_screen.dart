@@ -75,7 +75,7 @@ class _AdminRenewalScreenState extends State<AdminRenewalScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.transparent,
-      appBar: AppBar(title: const Text('Gestion de Bonos Mensuales'), backgroundColor: Colors.transparent, elevation: 0),
+      appBar: AppBar(title: const Text('Gestión de Bonos Mensuales')),
       body: Column(
         children: [
           if (_isProcessing) const LinearProgressIndicator(color: Colors.orange),

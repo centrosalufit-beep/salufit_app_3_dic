@@ -19,8 +19,6 @@ class InternalManagementScreen extends StatelessWidget {
       backgroundColor: Colors.transparent,
       appBar: AppBar(
         title: const Text('Comunicación de Equipo'),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
       ),
       body: Column(
         children: [
@@ -28,7 +26,7 @@ class InternalManagementScreen extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
             margin: const EdgeInsets.all(15),
             decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.1),
+              color: const Color(0xFF1E293B).withValues(alpha: 0.7),
               borderRadius: BorderRadius.circular(12),
             ),
             child: const Row(
@@ -38,7 +36,7 @@ class InternalManagementScreen extends StatelessWidget {
                 Expanded(
                   child: Text(
                     'Viendo miembros del equipo (Admin/Profesional) activos.',
-                    style: TextStyle(color: Colors.white70, fontSize: 12),
+                    style: TextStyle(color: Colors.white, fontSize: 12),
                   ),
                 ),
               ],

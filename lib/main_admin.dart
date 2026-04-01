@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:salufit_app/features/auth/presentation/auth_wrapper.dart';
+import 'package:salufit_app/features/auth/presentation/version_gate.dart';
 import 'package:salufit_app/firebase_options.dart';
 
 void main() async {
@@ -30,7 +31,7 @@ class SalufitAdminApp extends StatelessWidget {
         useMaterial3: true,
         colorSchemeSeed: const Color(0xFF009688),
       ),
-      home: const AuthWrapper(),
+      home: const VersionGate(child: AuthWrapper()),
     );
   }
 }

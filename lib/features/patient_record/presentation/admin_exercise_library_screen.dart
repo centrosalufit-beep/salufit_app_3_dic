@@ -8,6 +8,62 @@ import 'package:image_picker/image_picker.dart';
 import 'package:path/path.dart' as path;
 import 'package:permission_handler/permission_handler.dart';
 
+// ═══════════════════════════════════════════════════════════════
+// CONSTANTES
+// ═══════════════════════════════════════════════════════════════
+
+const List<String> _kFamilias = [
+  'Fisioterapia',
+  'Entrenamiento',
+  'Psicología',
+  'Nutrición',
+  'Medicina',
+  'Odontología',
+  'Sin clasificar',
+];
+
+const List<String> _kFamiliasFiltro = ['Todas', ..._kFamilias];
+
+// ═══════════════════════════════════════════════════════════════
+// UTILIDAD: Parsear nombre de archivo
+// ═══════════════════════════════════════════════════════════════
+
+/// Primera letra mayúscula.
+String _capitalize(String s) {
+  if (s.isEmpty) return s;
+  return '${s[0].toUpperCase()}${s.substring(1)}';
+}
+
+/// "100. abdomen mancuerna.mp4" → {codigo: 100, nombre: "Abdomen mancuerna"}
+({int? codigo, String nombre}) _parseFileName(String fileName) {
+  final sinExt = path.basenameWithoutExtension(fileName);
+  // Buscar patrón: número seguido de punto y espacio(s)
+  final regex = RegExp(r'^(\d+)\.\s*(.+)$');
+  final match = regex.firstMatch(sinExt);
+
+  if (match != null) {
+    final codigo = int.tryParse(match.group(1)!);
+    var nombre = match.group(2)!.trim();
+    // Primera letra mayúscula
+    nombre = nombre.replaceAll('_', ' ').replaceAll('-', ' ');
+    if (nombre.isNotEmpty) {
+      nombre = '${nombre[0].toUpperCase()}${nombre.substring(1)}';
+    }
+    return (codigo: codigo, nombre: nombre);
+  }
+
+  // Sin número: limpiar y capitalizar
+  var nombre = sinExt.replaceAll('_', ' ').replaceAll('-', ' ').trim();
+  if (nombre.isNotEmpty) {
+    nombre = '${nombre[0].toUpperCase()}${nombre.substring(1)}';
+  }
+  return (codigo: null, nombre: nombre);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// PANTALLA PRINCIPAL
+// ═══════════════════════════════════════════════════════════════
+
 class AdminExerciseLibraryScreen extends StatefulWidget {
   const AdminExerciseLibraryScreen({
     super.key,
@@ -27,42 +83,15 @@ class _AdminExerciseLibraryScreenState
   final TextEditingController _searchController = TextEditingController();
   String _searchText = '';
   String _filtroFamilia = 'Todas';
-  final List<String> _familiasFiltro = <String>[
-    'Todas',
-    'Fisioterapia',
-    'Psicología',
-    'Odontología',
-    'Entrenamiento',
-    'Nutrición',
-    'Cervical',
-    'Lumbar',
-    'Hombro',
-    'Rodilla',
-    'Cadera',
-    'Tobillo',
-  ];
   final Set<String> _selectedIds = <String>{};
-  final List<Map<String, dynamic>> _selectedExercises =
-      <Map<String, dynamic>>[];
+  final List<Map<String, dynamic>> _selectedExercises = [];
 
+  // Formulario individual
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
   final TextEditingController _nombreController = TextEditingController();
   final TextEditingController _ordenController = TextEditingController();
-
+  final TextEditingController _codigoController = TextEditingController();
   String _selectedFamilyUpload = 'Entrenamiento';
-  final List<String> _familiasUpload = <String>[
-    'Fisioterapia',
-    'Psicología',
-    'Odontología',
-    'Entrenamiento',
-    'Nutrición',
-    'Cervical',
-    'Lumbar',
-    'Hombro',
-    'Rodilla',
-    'Cadera',
-    'Tobillo',
-  ];
   File? _archivoSeleccionado;
   bool _isVideo = false;
   bool _isUploading = false;
@@ -75,21 +104,24 @@ class _AdminExerciseLibraryScreenState
     });
   }
 
+  @override
+  void dispose() {
+    _searchController.dispose();
+    _nombreController.dispose();
+    _ordenController.dispose();
+    _codigoController.dispose();
+    super.dispose();
+  }
+
+  // ── Permisos ──────────────────────────────────────────────
+
   Future<bool> _checkPermission(bool forVideo) async {
     if (Platform.isAndroid) {
       final permission = forVideo ? Permission.videos : Permission.photos;
-
       final status = await permission.request();
-
-      if (status.isGranted || status.isLimited) {
-        return true;
-      }
-
-      if (status.isPermanentlyDenied) {
-        if (mounted) {
-          _mostrarAlertaPermisos();
-        }
-        return false;
+      if (status.isGranted || status.isLimited) return true;
+      if (status.isPermanentlyDenied && mounted) {
+        _mostrarAlertaPermisos();
       }
       return false;
     }
@@ -99,19 +131,20 @@ class _AdminExerciseLibraryScreenState
   void _mostrarAlertaPermisos() {
     showDialog<void>(
       context: context,
-      builder: (BuildContext context) => AlertDialog(
+      builder: (ctx) => AlertDialog(
         title: const Text('Permiso denegado'),
         content: const Text(
-          'Necesitamos acceso a tu galería para subir el ejercicio. Por favor, habilítalo en Ajustes.',
+          'Necesitamos acceso a tu galería para subir el ejercicio. '
+          'Por favor, habilítalo en Ajustes.',
         ),
-        actions: <Widget>[
+        actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(ctx),
             child: const Text('Cancelar'),
           ),
           TextButton(
             onPressed: () {
-              Navigator.pop(context);
+              Navigator.pop(ctx);
               openAppSettings();
             },
             child: const Text('Abrir Ajustes'),
@@ -121,30 +154,32 @@ class _AdminExerciseLibraryScreenState
     );
   }
 
+  // ── Selección de ejercicios (modo asignación) ──────────────
+
   void _toggleSelection(String id, Map<String, dynamic> data) {
     setState(() {
       if (_selectedIds.contains(id)) {
         _selectedIds.remove(id);
-        _selectedExercises
-            .removeWhere((Map<String, dynamic> e) => e['id'] == id);
+        _selectedExercises.removeWhere((e) => e['id'] == id);
       } else {
         _selectedIds.add(id);
-        final exerciseData = Map<String, dynamic>.from(data);
-        exerciseData['id'] = id;
-        _selectedExercises.add(exerciseData);
+        _selectedExercises.add({...data, 'id': id});
       }
     });
   }
 
+  // ── Borrar toda la librería ────────────────────────────────
+
   Future<void> _borrarTodaLaLibreria() async {
     final confirm1 = await showDialog<bool>(
       context: context,
-      builder: (BuildContext ctx) => AlertDialog(
-        title: const Text('⚠️ PELIGRO: Borrar TODO'),
+      builder: (ctx) => AlertDialog(
+        title: const Text('PELIGRO: Borrar TODO'),
         content: const Text(
-          '¿Estás seguro de que quieres BORRAR TODOS los ejercicios de la base de datos?\n\nEsta acción no se puede deshacer.',
+          '¿Estás seguro de que quieres BORRAR TODOS los ejercicios?\n\n'
+          'Esta acción no se puede deshacer.',
         ),
-        actions: <Widget>[
+        actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
             child: const Text('CANCELAR'),
@@ -153,36 +188,27 @@ class _AdminExerciseLibraryScreenState
             onPressed: () => Navigator.pop(ctx, true),
             child: const Text(
               'BORRAR TODO',
-              style: TextStyle(
-                color: Colors.red,
-                fontWeight: FontWeight.bold,
-              ),
+              style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
             ),
           ),
         ],
       ),
     );
-    if (confirm1 != true) return;
+    if (confirm1 != true || !mounted) return;
 
-    if (!mounted) return;
     final confirm2 = await showDialog<bool>(
       context: context,
-      builder: (BuildContext ctx) => AlertDialog(
+      builder: (ctx) => AlertDialog(
         title: const Text('Confirmación final'),
-        content: const Text(
-          'Escribe "BORRAR" mentalmente y pulsa confirmar. Se eliminarán todas las referencias.',
-        ),
-        actions: <Widget>[
+        content: const Text('Se eliminarán TODOS los ejercicios y sus referencias.'),
+        actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
             child: const Text('CANCELAR'),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text(
-              'CONFIRMAR',
-              style: TextStyle(color: Colors.red),
-            ),
+            child: const Text('CONFIRMAR', style: TextStyle(color: Colors.red)),
           ),
         ],
       ),
@@ -191,98 +217,300 @@ class _AdminExerciseLibraryScreenState
 
     setState(() => _isUploading = true);
     try {
-      final instance = FirebaseFirestore.instance;
-      final snapshot = await instance.collection('exercises').get();
+      final snapshot =
+          await FirebaseFirestore.instance.collection('exercises').get();
+      final batch = FirebaseFirestore.instance.batch();
       for (final doc in snapshot.docs) {
-        await doc.reference.delete();
+        batch.delete(doc.reference);
       }
-
+      await batch.commit();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Base de datos limpiada')),
+          const SnackBar(content: Text('Librería vaciada')),
         );
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Error al procesar la solicitud'), backgroundColor: Colors.red));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Error al borrar'),
+            backgroundColor: Colors.red,
+          ),
+        );
       }
     } finally {
       if (mounted) setState(() => _isUploading = false);
     }
   }
 
-  Future<void> _iniciarSubidaMasiva() async {
-    try {
-      final result = await FilePicker.platform.pickFiles(
-        allowMultiple: true,
-        type: FileType.custom,
-        allowedExtensions: <String>['mp4', 'mov', 'avi', 'mkv'],
-      );
-      if (result == null || result.files.isEmpty) return;
+  // ── Eliminar ejercicio individual ─────────────────────────
 
-      var familiaLote = 'Entrenamiento';
+  Future<void> _eliminarEjercicio(String docId) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Eliminar ejercicio'),
+        content: const Text('¿Eliminar este ejercicio de la librería?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('CANCELAR'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('ELIMINAR', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+    if (confirm ?? false) {
+      await FirebaseFirestore.instance
+          .collection('exercises')
+          .doc(docId)
+          .delete();
+    }
+  }
 
-      if (!mounted) return;
-      final continuar = await showDialog<bool>(
-        context: context,
-        barrierDismissible: false,
-        builder: (BuildContext c) => AlertDialog(
-          title: Text('Subir ${result.files.length} vídeos'),
+  // ── Editar ejercicio existente (nombre + código + familia) ──
+
+  Future<void> _editarEjercicio(
+    String docId, {
+    required int currentCodigo,
+    required String currentNombre,
+    required String currentFamilia,
+  }) async {
+    final codigoCtrl = TextEditingController(text: '$currentCodigo');
+    final nombreCtrl = TextEditingController(text: currentNombre);
+    var familia = currentFamilia;
+
+    final result = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: const Text('Editar ejercicio'),
           content: Column(
             mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              const Text('Se subirán con el nombre del archivo.'),
-              const SizedBox(height: 10),
-              DropdownButtonFormField<String>(
-                initialValue: familiaLote,
-                items: _familiasUpload
-                    .map(
-                      (String f) => DropdownMenuItem(value: f, child: Text(f)),
-                    )
-                    .toList(),
-                onChanged: (String? v) => familiaLote = v!,
+            children: [
+              TextField(
+                controller: codigoCtrl,
+                keyboardType: TextInputType.number,
                 decoration: const InputDecoration(
-                  labelText: 'Asignar Familia a todos',
+                  labelText: 'Código',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: nombreCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'Nombre',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<String>(
+                initialValue: _kFamilias.contains(familia) ? familia : 'Sin clasificar',
+                items: _kFamilias
+                    .map((f) => DropdownMenuItem(value: f, child: Text(f)))
+                    .toList(),
+                onChanged: (v) => setDialogState(() => familia = v!),
+                decoration: const InputDecoration(
+                  labelText: 'Familia',
+                  border: OutlineInputBorder(),
                 ),
               ),
             ],
           ),
-          actions: <Widget>[
+          actions: [
             TextButton(
-              onPressed: () => Navigator.pop(c, false),
-              child: const Text('Cancelar'),
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('CANCELAR'),
             ),
             ElevatedButton(
-              onPressed: () => Navigator.pop(c, true),
-              child: const Text('EMPEZAR SUBIDA'),
+              onPressed: () {
+                final nombre = _capitalize(nombreCtrl.text.trim());
+                if (nombre.isEmpty) return;
+                Navigator.pop(ctx, {
+                  'codigoInterno': int.tryParse(codigoCtrl.text) ?? 0,
+                  'orden': int.tryParse(codigoCtrl.text) ?? 0,
+                  'nombre': nombre,
+                  'familia': familia,
+                });
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF009688),
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('GUARDAR'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (result != null) {
+      await FirebaseFirestore.instance
+          .collection('exercises')
+          .doc(docId)
+          .update(result);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Ejercicio actualizado'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    }
+  }
+
+  /// Auto-parsea el archivo seleccionado y rellena nombre + código.
+  void _autoParseFile(String fileName) {
+    final parsed = _parseFileName(fileName);
+    _nombreController.text = parsed.nombre;
+    if (parsed.codigo != null) {
+      _codigoController.text = '${parsed.codigo}';
+      _ordenController.text = '${parsed.codigo}';
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  // SUBIDA MASIVA PREMIUM
+  // ═══════════════════════════════════════════════════════════
+
+  Future<void> _iniciarSubidaMasiva() async {
+    try {
+      // Preguntar al usuario: ¿carpeta o archivos individuales?
+      if (!mounted) return;
+      final mode = await showDialog<String>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Subida masiva de vídeos'),
+          content: const Text(
+            '¿Cómo quieres seleccionar los vídeos?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('CANCELAR'),
+            ),
+            ElevatedButton.icon(
+              onPressed: () => Navigator.pop(ctx, 'folder'),
+              icon: const Icon(Icons.folder_open),
+              label: const Text('CARPETA COMPLETA'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF009688),
+                foregroundColor: Colors.white,
+              ),
+            ),
+            const SizedBox(width: 4),
+            OutlinedButton.icon(
+              onPressed: () => Navigator.pop(ctx, 'files'),
+              icon: const Icon(Icons.video_file),
+              label: const Text('ARCHIVOS'),
             ),
           ],
         ),
       );
-      if (continuar != true) return;
+      if (mode == null || !mounted) return;
 
+      List<File> videoFiles;
+
+      if (mode == 'folder') {
+        // Seleccionar carpeta y leer todos los vídeos
+        final folderPath =
+            await FilePicker.platform.getDirectoryPath();
+        if (folderPath == null) return;
+
+        const validExts = {'.mp4', '.mov', '.avi', '.mkv', '.webm'};
+        final dir = Directory(folderPath);
+        videoFiles = dir
+            .listSync()
+            .whereType<File>()
+            .where(
+              (f) => validExts.contains(
+                path.extension(f.path).toLowerCase(),
+              ),
+            )
+            .toList()
+          ..sort((a, b) => path.basename(a.path).compareTo(
+                path.basename(b.path),
+              ));
+      } else {
+        // Seleccionar archivos individuales
+        final result = await FilePicker.platform.pickFiles(
+          allowMultiple: true,
+        );
+        if (result == null || result.files.isEmpty) return;
+
+        const validExts = {'.mp4', '.mov', '.avi', '.mkv', '.webm'};
+        videoFiles = result.files
+            .where(
+              (f) =>
+                  f.path != null &&
+                  validExts.contains(
+                    path.extension(f.path!).toLowerCase(),
+                  ),
+            )
+            .map((f) => File(f.path!))
+            .toList();
+      }
+
+      if (videoFiles.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('No se encontraron vídeos válidos'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+        return;
+      }
+
+      // Parsear y mostrar preview editable
       if (!mounted) return;
+      final entries = videoFiles.map((f) {
+        final fileName = path.basename(f.path);
+        final parsed = _parseFileName(fileName);
+        return _UploadEntry(
+          file: f,
+          codigo: parsed.codigo ?? 0,
+          nombre: parsed.nombre,
+          familia: 'Entrenamiento',
+        );
+      }).toList();
 
+      final confirmed = await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) => _BulkPreviewDialog(entries: entries),
+      );
+      if (confirmed != true || !mounted) return;
+
+      // Subir con progreso real
       await showDialog<void>(
         context: context,
         barrierDismissible: false,
-        builder: (BuildContext context) {
-          return _ProgressDialog(files: result.files, familia: familiaLote);
-        },
+        builder: (ctx) => _BulkUploadProgressDialog(entries: entries),
       );
     } catch (e) {
       debugPrint('Error en subida masiva: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: ${e.runtimeType}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 
-  Future<void> _eliminarEjercicio(String docId) async {
-    await FirebaseFirestore.instance
-        .collection('exercises')
-        .doc(docId)
-        .delete();
-  }
+  // ═══════════════════════════════════════════════════════════
+  // SUBIDA INDIVIDUAL
+  // ═══════════════════════════════════════════════════════════
 
   Future<void> _sugerirSiguienteNumero() async {
     final query = await FirebaseFirestore.instance
@@ -291,11 +519,12 @@ class _AdminExerciseLibraryScreenState
         .limit(1)
         .get();
     if (query.docs.isNotEmpty) {
-      final data = query.docs.first.data();
-      final ultimo = (data['orden'] is int) ? data['orden'] as int : 0;
-      _ordenController.text = (ultimo + 1).toString();
+      final ultimo = (query.docs.first.data()['orden'] as int?) ?? 0;
+      _ordenController.text = '${ultimo + 1}';
+      _codigoController.text = '${ultimo + 1}';
     } else {
       _ordenController.text = '1';
+      _codigoController.text = '1';
     }
   }
 
@@ -306,18 +535,17 @@ class _AdminExerciseLibraryScreenState
       var downloadUrl = '';
       if (_archivoSeleccionado != null) {
         final fileName = path.basename(_archivoSeleccionado!.path);
-        final ref = FirebaseStorage.instance.ref().child(
-              'ejercicios/$fileName',
-            );
+        final ref =
+            FirebaseStorage.instance.ref().child('ejercicios/$fileName');
         await ref.putFile(_archivoSeleccionado!);
         downloadUrl = await ref.getDownloadURL();
       }
 
-      await FirebaseFirestore.instance
-          .collection('exercises')
-          .add(<String, dynamic>{
-        'nombre': _nombreController.text,
-        'orden': int.tryParse(_ordenController.text) ?? 999,
+      final codigo = int.tryParse(_codigoController.text) ?? 0;
+      await FirebaseFirestore.instance.collection('exercises').add({
+        'nombre': _capitalize(_nombreController.text.trim()),
+        'orden': int.tryParse(_ordenController.text) ?? codigo,
+        'codigoInterno': codigo,
         'familia': _selectedFamilyUpload,
         'urlVideo': downloadUrl,
         'esVideo': _isVideo,
@@ -335,7 +563,10 @@ class _AdminExerciseLibraryScreenState
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Error al subir el ejercicio'), backgroundColor: Colors.red),
+          const SnackBar(
+            content: Text('Error al subir el ejercicio'),
+            backgroundColor: Colors.red,
+          ),
         );
       }
     } finally {
@@ -345,12 +576,13 @@ class _AdminExerciseLibraryScreenState
 
   void _mostrarModalSubida() {
     _nombreController.clear();
+    _codigoController.clear();
     _archivoSeleccionado = null;
     _sugerirSiguienteNumero();
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      builder: (BuildContext c) => Padding(
+      builder: (c) => Padding(
         padding: EdgeInsets.only(
           bottom: MediaQuery.of(c).viewInsets.bottom,
           left: 20,
@@ -362,39 +594,47 @@ class _AdminExerciseLibraryScreenState
             key: _formKey,
             child: Column(
               mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
+              children: [
                 const Text(
                   'Nuevo Ejercicio',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 18,
-                  ),
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
                 ),
                 const SizedBox(height: 10),
                 DropdownButtonFormField<String>(
                   initialValue: _selectedFamilyUpload,
-                  items: _familiasUpload
-                      .map(
-                        (String f) =>
-                            DropdownMenuItem(value: f, child: Text(f)),
-                      )
+                  items: _kFamilias
+                      .map((f) => DropdownMenuItem(value: f, child: Text(f)))
                       .toList(),
-                  onChanged: (String? v) => _selectedFamilyUpload = v!,
+                  onChanged: (v) => _selectedFamilyUpload = v!,
                   decoration: const InputDecoration(labelText: 'Familia'),
                 ),
-                TextField(
-                  controller: _ordenController,
-                  decoration: const InputDecoration(labelText: 'Orden'),
-                  keyboardType: TextInputType.number,
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _codigoController,
+                        decoration: const InputDecoration(labelText: 'Código'),
+                        keyboardType: TextInputType.number,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: TextField(
+                        controller: _ordenController,
+                        decoration: const InputDecoration(labelText: 'Orden'),
+                        keyboardType: TextInputType.number,
+                      ),
+                    ),
+                  ],
                 ),
                 TextFormField(
                   controller: _nombreController,
                   decoration: const InputDecoration(labelText: 'Nombre'),
-                  validator: (String? v) => v!.isEmpty ? 'Requerido' : null,
+                  validator: (v) => v!.isEmpty ? 'Requerido' : null,
                 ),
                 const SizedBox(height: 15),
                 Row(
-                  children: <Widget>[
+                  children: [
                     IconButton(
                       icon: Icon(
                         Icons.image,
@@ -403,14 +643,11 @@ class _AdminExerciseLibraryScreenState
                             : Colors.grey,
                       ),
                       onPressed: () async {
-                        final hasPermission = await _checkPermission(false);
-                        if (!hasPermission) return;
-
-                        final picker = ImagePicker();
-                        final img = await picker.pickImage(
-                          source: ImageSource.gallery,
-                        );
+                        if (!await _checkPermission(false)) return;
+                        final img = await ImagePicker()
+                            .pickImage(source: ImageSource.gallery);
                         if (img != null) {
+                          _autoParseFile(path.basename(img.path));
                           setState(() {
                             _archivoSeleccionado = File(img.path);
                             _isVideo = false;
@@ -426,14 +663,11 @@ class _AdminExerciseLibraryScreenState
                             : Colors.grey,
                       ),
                       onPressed: () async {
-                        final hasPermission = await _checkPermission(true);
-                        if (!hasPermission) return;
-
-                        final picker = ImagePicker();
-                        final vid = await picker.pickVideo(
-                          source: ImageSource.gallery,
-                        );
+                        if (!await _checkPermission(true)) return;
+                        final vid = await ImagePicker()
+                            .pickVideo(source: ImageSource.gallery);
                         if (vid != null) {
+                          _autoParseFile(path.basename(vid.path));
                           setState(() {
                             _archivoSeleccionado = File(vid.path);
                             _isVideo = true;
@@ -470,6 +704,10 @@ class _AdminExerciseLibraryScreenState
     );
   }
 
+  // ═══════════════════════════════════════════════════════════
+  // BUILD
+  // ═══════════════════════════════════════════════════════════
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -479,8 +717,8 @@ class _AdminExerciseLibraryScreenState
           style: const TextStyle(color: Colors.white),
           decoration: InputDecoration(
             hintText: widget.isSelectionMode
-                ? 'Buscar para asignar...'
-                : 'Gestionar librería...',
+                ? 'Buscar por nombre o código...'
+                : 'Buscar por nombre o código...',
             hintStyle: const TextStyle(color: Colors.white70),
             border: InputBorder.none,
             icon: const Icon(Icons.search, color: Colors.white),
@@ -488,7 +726,7 @@ class _AdminExerciseLibraryScreenState
         ),
         backgroundColor: Colors.teal,
         foregroundColor: Colors.white,
-        actions: <Widget>[
+        actions: [
           if (widget.isSelectionMode)
             Padding(
               padding: const EdgeInsets.only(right: 15),
@@ -504,25 +742,20 @@ class _AdminExerciseLibraryScreenState
             ),
           if (!widget.isSelectionMode)
             IconButton(
-              tooltip: 'Subida Masiva (Archivos)',
+              tooltip: 'Subida Masiva',
               icon: const Icon(Icons.drive_folder_upload, size: 28),
               onPressed: _iniciarSubidaMasiva,
             ),
           if (!widget.isSelectionMode)
             PopupMenuButton<String>(
-              onSelected: (String val) {
-                if (val == 'bulk') _iniciarSubidaMasiva();
+              onSelected: (val) {
                 if (val == 'delete_all') _borrarTodaLaLibreria();
               },
-              itemBuilder: (BuildContext c) => <PopupMenuEntry<String>>[
-                const PopupMenuItem(
-                  value: 'bulk',
-                  child: Text('Subida Masiva (PC)'),
-                ),
+              itemBuilder: (c) => [
                 const PopupMenuItem(
                   value: 'delete_all',
                   child: Text(
-                    '⚠️ Borrar Todo (Admin)',
+                    'Borrar Todo (Admin)',
                     style: TextStyle(color: Colors.red),
                   ),
                 ),
@@ -537,11 +770,10 @@ class _AdminExerciseLibraryScreenState
             child: ListView.separated(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
               scrollDirection: Axis.horizontal,
-              itemCount: _familiasFiltro.length,
-              separatorBuilder: (BuildContext c, int i) =>
-                  const SizedBox(width: 10),
-              itemBuilder: (BuildContext context, int index) {
-                final fam = _familiasFiltro[index];
+              itemCount: _kFamiliasFiltro.length,
+              separatorBuilder: (c, i) => const SizedBox(width: 10),
+              itemBuilder: (context, index) {
+                final fam = _kFamiliasFiltro[index];
                 final isSelected = _filtroFamilia == fam;
                 return GestureDetector(
                   onTap: () => setState(() => _filtroFamilia = fam),
@@ -551,7 +783,8 @@ class _AdminExerciseLibraryScreenState
                       vertical: 6,
                     ),
                     decoration: BoxDecoration(
-                      color: isSelected ? Colors.white : Colors.teal.shade900,
+                      color:
+                          isSelected ? Colors.white : Colors.teal.shade900,
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Text(
@@ -568,66 +801,32 @@ class _AdminExerciseLibraryScreenState
           ),
         ),
       ),
-      floatingActionButton: widget.isSelectionMode && _selectedIds.isNotEmpty
-          ? FloatingActionButton.extended(
-              onPressed: () {
-                widget.onExercisesSelected?.call(_selectedExercises);
-                Navigator.pop(context);
-              },
-              label: Text('AÑADIR (${_selectedIds.length})'),
-              icon: const Icon(Icons.check),
-              backgroundColor: Colors.orange,
-            )
-          : (!widget.isSelectionMode
-              ? Column(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: <Widget>[
-                    FloatingActionButton.small(
-                      heroTag: 'btnMasivo',
-                      backgroundColor: Colors.blueGrey,
-                      onPressed: _iniciarSubidaMasiva,
-                      tooltip: 'Subida Masiva (PC)',
-                      child: const Icon(
-                        Icons.drive_folder_upload,
-                        color: Colors.white,
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    FloatingActionButton(
-                      heroTag: 'btnIndividual',
-                      onPressed: _mostrarModalSubida,
-                      backgroundColor: Colors.teal,
-                      tooltip: 'Nuevo Ejercicio',
-                      child: const Icon(Icons.add),
-                    ),
-                  ],
-                )
-              : null),
-      body: StreamBuilder<QuerySnapshot<Object?>>(
+      floatingActionButton: _buildFAB(),
+      body: StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance
             .collection('exercises')
             .orderBy('orden')
             .snapshots(),
-        builder: (
-          BuildContext context,
-          AsyncSnapshot<QuerySnapshot<Object?>> snapshot,
-        ) {
+        builder: (context, snapshot) {
           if (!snapshot.hasData) {
             return const Center(child: CircularProgressIndicator());
           }
-          final docs =
-              snapshot.data!.docs.where((QueryDocumentSnapshot<Object?> d) {
+
+          final docs = snapshot.data!.docs.where((d) {
             final data = d.data()! as Map<String, dynamic>;
             final name = (data['nombre'] ?? '').toString().toLowerCase();
             final familia = (data['familia'] ?? 'General').toString();
+            final codigo = data['codigoInterno']?.toString() ?? '';
 
-            final matchesText = name.contains(_searchText);
+            // Búsqueda por nombre O código
+            final matchesText =
+                name.contains(_searchText) || codigo.contains(_searchText);
             final matchesFamily =
                 _filtroFamilia == 'Todas' || familia == _filtroFamilia;
 
             return matchesText && matchesFamily;
           }).toList();
+
           if (docs.isEmpty) {
             return const Center(
               child: Text(
@@ -636,35 +835,59 @@ class _AdminExerciseLibraryScreenState
               ),
             );
           }
+
           return ListView.builder(
             padding: const EdgeInsets.only(bottom: 80, top: 10),
             itemCount: docs.length,
-            itemBuilder: (BuildContext context, int index) {
+            itemBuilder: (context, index) {
               final doc = docs[index];
               final data = doc.data()! as Map<String, dynamic>;
               final isSelected = _selectedIds.contains(doc.id);
-              final orden = data['orden'] is int ? data['orden'] as int : 0;
+              final codigo =
+                  (data['codigoInterno'] as int?) ?? (data['orden'] as int?) ?? 0;
+              final nombre = (data['nombre'] as String?) ?? 'Sin nombre';
+              final familia = (data['familia'] as String?) ?? 'General';
 
               return Card(
                 color: isSelected ? Colors.orange.shade50 : Colors.white,
                 elevation: isSelected ? 4 : 1,
                 margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 child: ListTile(
-                  leading: CircleAvatar(
-                    backgroundColor:
-                        isSelected ? Colors.orange : Colors.teal.shade100,
-                    child: Text(
-                      '$orden',
-                      style: TextStyle(
-                        color: isSelected ? Colors.white : Colors.teal.shade900,
+                  leading: GestureDetector(
+                    onTap: widget.isSelectionMode
+                        ? null
+                        : () => _editarEjercicio(
+                            doc.id,
+                            currentCodigo: codigo,
+                            currentNombre: nombre,
+                            currentFamilia: familia,
+                          ),
+                    child: CircleAvatar(
+                      backgroundColor:
+                          isSelected ? Colors.orange : Colors.teal.shade100,
+                      child: Text(
+                        '$codigo',
+                        style: TextStyle(
+                          color: isSelected
+                              ? Colors.white
+                              : Colors.teal.shade900,
+                          fontWeight: FontWeight.bold,
+                          fontSize: codigo > 999 ? 10 : 14,
+                        ),
                       ),
                     ),
                   ),
                   title: Text(
-                    (data['nombre'] as String?) ?? 'Sin nombre',
+                    nombre,
                     style: const TextStyle(fontWeight: FontWeight.bold),
                   ),
-                  subtitle: Text((data['familia'] as String?) ?? 'General'),
+                  subtitle: Text(
+                    familia,
+                    style: TextStyle(
+                      color: Colors.teal.shade600,
+                      fontSize: 12,
+                    ),
+                  ),
                   trailing: widget.isSelectionMode
                       ? Icon(
                           isSelected
@@ -673,11 +896,16 @@ class _AdminExerciseLibraryScreenState
                           color: isSelected ? Colors.orange : Colors.grey,
                         )
                       : IconButton(
-                          icon: const Icon(Icons.delete, color: Colors.grey),
+                          icon: const Icon(
+                            Icons.delete_outline,
+                            color: Colors.grey,
+                          ),
                           onPressed: () => _eliminarEjercicio(doc.id),
                         ),
                   onTap: () {
-                    if (widget.isSelectionMode) _toggleSelection(doc.id, data);
+                    if (widget.isSelectionMode) {
+                      _toggleSelection(doc.id, data);
+                    }
                   },
                 ),
               );
@@ -687,20 +915,284 @@ class _AdminExerciseLibraryScreenState
       ),
     );
   }
+
+  Widget? _buildFAB() {
+    if (widget.isSelectionMode && _selectedIds.isNotEmpty) {
+      return FloatingActionButton.extended(
+        onPressed: () {
+          widget.onExercisesSelected?.call(_selectedExercises);
+          Navigator.pop(context);
+        },
+        label: Text('AÑADIR (${_selectedIds.length})'),
+        icon: const Icon(Icons.check),
+        backgroundColor: Colors.orange,
+      );
+    }
+    if (!widget.isSelectionMode) {
+      return Column(
+        mainAxisAlignment: MainAxisAlignment.end,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          FloatingActionButton.small(
+            heroTag: 'btnMasivo',
+            backgroundColor: Colors.blueGrey,
+            onPressed: _iniciarSubidaMasiva,
+            tooltip: 'Subida Masiva',
+            child: const Icon(Icons.drive_folder_upload, color: Colors.white),
+          ),
+          const SizedBox(height: 10),
+          FloatingActionButton(
+            heroTag: 'btnIndividual',
+            onPressed: _mostrarModalSubida,
+            backgroundColor: Colors.teal,
+            tooltip: 'Nuevo Ejercicio',
+            child: const Icon(Icons.add),
+          ),
+        ],
+      );
+    }
+    return null;
+  }
 }
 
-class _ProgressDialog extends StatefulWidget {
-  const _ProgressDialog({required this.files, required this.familia});
-  final List<PlatformFile> files;
-  final String familia;
+// ═══════════════════════════════════════════════════════════════
+// MODELO INTERNO: Entrada de subida
+// ═══════════════════════════════════════════════════════════════
+
+class _UploadEntry {
+  _UploadEntry({
+    required this.file,
+    required this.codigo,
+    required this.nombre,
+    required this.familia,
+  });
+  final File file;
+  int codigo;
+  String nombre;
+  String familia;
+
+  String get fileName => path.basename(file.path);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// DIÁLOGO: Preview editable antes de subir
+// ═══════════════════════════════════════════════════════════════
+
+class _BulkPreviewDialog extends StatefulWidget {
+  const _BulkPreviewDialog({required this.entries});
+  final List<_UploadEntry> entries;
   @override
-  State<_ProgressDialog> createState() => _ProgressDialogState();
+  State<_BulkPreviewDialog> createState() => _BulkPreviewDialogState();
 }
 
-class _ProgressDialogState extends State<_ProgressDialog> {
+class _BulkPreviewDialogState extends State<_BulkPreviewDialog> {
+  String _familiaGlobal = 'Entrenamiento';
+  int _rebuildKey = 0; // Fuerza rebuild de dropdowns al aplicar familia
+
+  void _aplicarFamiliaATodos() {
+    setState(() {
+      for (final entry in widget.entries) {
+        entry.familia = _familiaGlobal;
+      }
+      _rebuildKey++; // Cambia la key para forzar reconstrucción
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Row(
+        children: [
+          const Icon(Icons.preview, color: Color(0xFF009688)),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              '${widget.entries.length} vídeos a subir',
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+          ),
+        ],
+      ),
+      content: SizedBox(
+        width: 650,
+        height: 450,
+        child: Column(
+          children: [
+            // Selector de familia global
+            Container(
+              padding: const EdgeInsets.all(10),
+              margin: const EdgeInsets.only(bottom: 12),
+              decoration: BoxDecoration(
+                color: const Color(0xFF1E293B).withValues(alpha: 0.05),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: Colors.teal.shade100),
+              ),
+              child: Row(
+                children: [
+                  const Text(
+                    'Familia para todos:',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: DropdownButtonFormField<String>(
+                      initialValue: _familiaGlobal,
+                      isExpanded: true,
+                      decoration: const InputDecoration(
+                        isDense: true,
+                        contentPadding: EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 8,
+                        ),
+                        border: OutlineInputBorder(),
+                      ),
+                      items: _kFamilias
+                          .map((f) => DropdownMenuItem(value: f, child: Text(f)))
+                          .toList(),
+                      onChanged: (v) => _familiaGlobal = v!,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  ElevatedButton(
+                    onPressed: _aplicarFamiliaATodos,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.teal,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 10,
+                      ),
+                    ),
+                    child: const Text('APLICAR', style: TextStyle(fontSize: 12)),
+                  ),
+                ],
+              ),
+            ),
+            // Cabecera
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: Colors.teal.shade50,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Row(
+                children: [
+                  SizedBox(width: 70, child: Text('CÓDIGO', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11))),
+                  Expanded(child: Text('NOMBRE', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11))),
+                  SizedBox(width: 130, child: Text('FAMILIA', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11))),
+                  SizedBox(width: 36),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+            // Lista editable
+            Expanded(
+              child: ListView.builder(
+                key: ValueKey(_rebuildKey),
+                itemCount: widget.entries.length,
+                itemBuilder: (context, i) {
+                  final entry = widget.entries[i];
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 6),
+                    child: Row(
+                      children: [
+                        SizedBox(
+                          width: 70,
+                          child: TextFormField(
+                            initialValue: '${entry.codigo}',
+                            keyboardType: TextInputType.number,
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                            decoration: const InputDecoration(
+                              isDense: true,
+                              contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                              border: OutlineInputBorder(),
+                            ),
+                            onChanged: (v) => entry.codigo = int.tryParse(v) ?? 0,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: TextFormField(
+                            initialValue: entry.nombre,
+                            style: const TextStyle(fontSize: 13),
+                            decoration: const InputDecoration(
+                              isDense: true,
+                              contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                              border: OutlineInputBorder(),
+                            ),
+                            onChanged: (v) => entry.nombre = v,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        SizedBox(
+                          width: 130,
+                          child: DropdownButtonFormField<String>(
+                            initialValue: entry.familia,
+                            isExpanded: true,
+                            style: const TextStyle(fontSize: 11, color: Colors.black87),
+                            decoration: const InputDecoration(
+                              isDense: true,
+                              contentPadding: EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+                              border: OutlineInputBorder(),
+                            ),
+                            items: _kFamilias
+                                .map((f) => DropdownMenuItem(value: f, child: Text(f, overflow: TextOverflow.ellipsis)))
+                                .toList(),
+                            onChanged: (v) => setState(() => entry.familia = v!),
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close, size: 18, color: Colors.red),
+                          onPressed: () => setState(() => widget.entries.removeAt(i)),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          child: const Text('CANCELAR'),
+        ),
+        ElevatedButton.icon(
+          onPressed: widget.entries.isEmpty ? null : () => Navigator.pop(context, true),
+          icon: const Icon(Icons.cloud_upload),
+          label: Text('SUBIR ${widget.entries.length} VÍDEOS'),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFF009688),
+            foregroundColor: Colors.white,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// DIÁLOGO: Progreso de subida masiva
+// ═══════════════════════════════════════════════════════════════
+
+class _BulkUploadProgressDialog extends StatefulWidget {
+  const _BulkUploadProgressDialog({required this.entries});
+  final List<_UploadEntry> entries;
+  @override
+  State<_BulkUploadProgressDialog> createState() =>
+      _BulkUploadProgressDialogState();
+}
+
+class _BulkUploadProgressDialogState
+    extends State<_BulkUploadProgressDialog> {
   int _currentIndex = 0;
-  double _progress = 0;
-  final List<String> _errors = <String>[];
+  double _fileProgress = 0; // Progreso del archivo actual (0..1)
+  String _currentFileName = '';
+  String _statusText = 'Preparando...';
+  final List<String> _errors = [];
+  int _completedCount = 0;
 
   @override
   void initState() {
@@ -709,53 +1201,60 @@ class _ProgressDialogState extends State<_ProgressDialog> {
   }
 
   Future<void> _startUpload() async {
-    final total = widget.files.length;
-    var ordenBase = 0;
-    try {
-      final q = await FirebaseFirestore.instance
-          .collection('exercises')
-          .orderBy('orden', descending: true)
-          .limit(1)
-          .get();
-      if (q.docs.isNotEmpty) {
-        ordenBase = q.docs.first.data()['orden'] as int;
-      }
-    } catch (_) {}
+    final total = widget.entries.length;
 
     for (var i = 0; i < total; i++) {
       if (!mounted) return;
+      final entry = widget.entries[i];
+      final name = entry.fileName;
       setState(() {
         _currentIndex = i + 1;
-        _progress = i / total;
+        _fileProgress = 0;
+        _currentFileName = entry.nombre.isNotEmpty ? entry.nombre : name;
+        _statusText = 'Subiendo archivo...';
       });
-      final file = widget.files[i];
-      final nombreLimpio = path
-          .basenameWithoutExtension(file.name)
-          .replaceAll('_', ' ')
-          .replaceAll('-', ' ');
+
       try {
         final ref = FirebaseStorage.instance.ref().child(
-              'ejercicios/${file.name}',
+              'ejercicios/$name',
             );
-        if (file.bytes != null) {
-          await ref.putData(file.bytes!);
-        } else if (file.path != null) {
-          await ref.putFile(File(file.path!));
-        }
 
+        // Subir con seguimiento de progreso
+        final task = ref.putFile(entry.file);
+
+        task.snapshotEvents.listen((event) {
+          if (!mounted) return;
+          final progress = event.totalBytes > 0
+              ? event.bytesTransferred / event.totalBytes
+              : 0.0;
+          setState(() {
+            _fileProgress = progress;
+            _statusText =
+                '${(progress * 100).toInt()}% · '
+                '${(event.bytesTransferred / 1024 / 1024).toStringAsFixed(1)} MB';
+          });
+        });
+
+        await task;
         final url = await ref.getDownloadURL();
-        await FirebaseFirestore.instance
-            .collection('exercises')
-            .add(<String, dynamic>{
-          'nombre': nombreLimpio,
-          'familia': widget.familia,
+
+        if (!mounted) return;
+        setState(() => _statusText = 'Guardando en base de datos...');
+
+        await FirebaseFirestore.instance.collection('exercises').add({
+          'nombre': _capitalize(entry.nombre.trim()),
+          'codigoInterno': entry.codigo,
+          'orden': entry.codigo,
+          'familia': entry.familia,
           'urlVideo': url,
           'esVideo': true,
-          'orden': ordenBase + i + 1,
           'fechaCreacion': FieldValue.serverTimestamp(),
         });
+
+        _completedCount++;
       } catch (e) {
-        _errors.add('Error en ${file.name}: $e');
+        _errors.add('$name: ${e.runtimeType}');
+        debugPrint('Error subiendo $name: $e');
       }
     }
 
@@ -764,7 +1263,8 @@ class _ProgressDialogState extends State<_ProgressDialog> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          'Subida finalizada. ${_errors.isEmpty ? "Todo correcto" : "${_errors.length} errores"}',
+          'Subida finalizada: $_completedCount/$total completados'
+          '${_errors.isEmpty ? "" : " · ${_errors.length} errores"}',
         ),
         backgroundColor: _errors.isEmpty ? Colors.green : Colors.orange,
         duration: const Duration(seconds: 5),
@@ -774,20 +1274,83 @@ class _ProgressDialogState extends State<_ProgressDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final total = widget.entries.length;
+    final globalProgress = total > 0
+        ? ((_completedCount + _fileProgress) / total)
+        : 0.0;
+
     return AlertDialog(
-      title: const Text('Subiendo vídeos...'),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          LinearProgressIndicator(value: _progress),
-          const SizedBox(height: 20),
-          Text('Procesando $_currentIndex de ${widget.files.length}'),
-          const SizedBox(height: 5),
-          Text(
-            widget.files[_currentIndex > 0 ? _currentIndex - 1 : 0].name,
-            style: const TextStyle(fontSize: 12, color: Colors.grey),
-          ),
+      title: const Row(
+        children: [
+          Icon(Icons.cloud_upload, color: Color(0xFF009688)),
+          SizedBox(width: 10),
+          Text('Subiendo vídeos...'),
         ],
+      ),
+      content: SizedBox(
+        width: 400,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Progreso global
+            Row(
+              children: [
+                Expanded(
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: LinearProgressIndicator(
+                      value: globalProgress,
+                      backgroundColor: Colors.grey.shade200,
+                      color: const Color(0xFF009688),
+                      minHeight: 10,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  '${(globalProgress * 100).toInt()}%',
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            // Archivo actual
+            Text(
+              'Archivo $_currentIndex de $total',
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              _currentFileName,
+              style: const TextStyle(fontSize: 13),
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            // Progreso del archivo actual
+            ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: LinearProgressIndicator(
+                value: _fileProgress,
+                backgroundColor: Colors.grey.shade100,
+                color: Colors.teal.shade300,
+                minHeight: 6,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              _statusText,
+              style: const TextStyle(fontSize: 11, color: Colors.grey),
+            ),
+            if (_errors.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Text(
+                '${_errors.length} errores',
+                style: const TextStyle(color: Colors.red, fontSize: 12),
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }
