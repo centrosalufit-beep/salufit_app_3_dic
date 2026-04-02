@@ -46,40 +46,42 @@ class RoleGate extends StatelessWidget {
         final data = snapshot.data!.data() as Map<String, dynamic>?;
         final role = (data?['rol'] ?? 'cliente').toString().toLowerCase();
         final termsAccepted = data?['termsAccepted'] as bool? ?? false;
+        final isDemo = data?['isDemoAccount'] as bool? ?? false;
 
-        // Clientes deben aceptar términos antes de acceder
-        if (!termsAccepted && role == 'cliente') {
+        // Clientes deben aceptar términos (salvo cuenta demo)
+        if (!termsAccepted && !isDemo && role == 'cliente') {
           return const TermsAcceptanceScreen();
         }
 
         final isStaff =
             role == 'admin' || role == 'administrador' || role == 'profesional';
 
+        // Función helper para envolver con o sin PendingSignatureGate
+        Widget wrapChild(Widget child) {
+          if (isDemo) return child; // Demo salta firmas
+          return PendingSignatureGate(
+            userId: user.uid,
+            userRole: role,
+            child: child,
+          );
+        }
+
         if (isStaff) {
-          // Profesional en móvil → dashboard profesional móvil
           if (_isMobile && role == 'profesional') {
-            return PendingSignatureGate(
-              userId: user.uid,
-              userRole: role,
-              child: ProfessionalDashboardScreen(
+            return wrapChild(
+              ProfessionalDashboardScreen(
                 userId: user.uid,
                 userRole: role,
               ),
             );
           }
-          // Admin/profesional en Windows → desktop scaffold
-          return PendingSignatureGate(
-            userId: user.uid,
-            userRole: role,
-            child: DesktopScaffold(userId: user.uid, userRole: role),
+          return wrapChild(
+            DesktopScaffold(userId: user.uid, userRole: role),
           );
         }
 
-        // Cliente → dashboard cliente
-        return PendingSignatureGate(
-          userId: user.uid,
-          userRole: role,
-          child: MainClientDashboardScreen(userId: user.uid, userRole: role),
+        return wrapChild(
+          MainClientDashboardScreen(userId: user.uid, userRole: role),
         );
       },
     );
