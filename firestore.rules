@@ -78,5 +78,12 @@ service cloud.firestore {
 
     // Fichajes
     match /timeClockRecords/{id} { allow read: if isStaff(); allow create: if isStaff(); allow update: if isAdmin(); allow delete: if isAdmin(); }
+
+    // CRM
+    match /crm_entries/{id} {
+      allow read: if isStaff();
+      allow create: if isStaff();
+      allow update, delete: if isAdmin();
+    }
   }
 }

@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:salufit_app/features/admin_dashboard/presentation/admin_analysis_screen.dart';
+import 'package:salufit_app/features/admin_dashboard/presentation/admin_crm_screen.dart';
 import 'package:salufit_app/features/admin_dashboard/presentation/admin_library_hub_screen.dart';
 import 'package:salufit_app/features/admin_dashboard/presentation/admin_renewal_screen.dart';
 import 'package:salufit_app/features/admin_dashboard/presentation/admin_rrhh_screen.dart';
@@ -32,6 +33,7 @@ class _DesktopScaffoldState extends State<DesktopScaffold> {
       const AdminRenewalScreen(),
       AdminPatientListScreen(viewerRole: 'profesional', onUserSelected: _openPatient), 
       InternalManagementScreen(currentUserId: widget.userId, userRole: widget.userRole),
+      AdminCrmScreen(userId: widget.userId, userRole: widget.userRole),
       if (isAdmin) const AdminRRHHScreen(),
       if (isAdmin) const AdminLibraryHubScreen(),
     ];
@@ -76,6 +78,7 @@ class _DesktopScaffoldState extends State<DesktopScaffold> {
                                 const NavigationRailDestination(icon: Icon(Icons.confirmation_number), label: Text('Bonos')),
                                 const NavigationRailDestination(icon: Icon(Icons.assignment), label: Text('Recursos')),
                                 const NavigationRailDestination(icon: Icon(Icons.forum), label: Text('Equipo')),
+                                const NavigationRailDestination(icon: Icon(Icons.leaderboard), label: Text('CRM')),
                                 if (isAdmin) const NavigationRailDestination(icon: Icon(Icons.badge), label: Text('RRHH')),
                                 if (isAdmin) const NavigationRailDestination(icon: Icon(Icons.auto_stories), label: Text('Librería')),
                               ],
