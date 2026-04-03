@@ -646,7 +646,7 @@ class _AdminCrmScreenState extends State<AdminCrmScreen> {
                   ),
                   const SizedBox(height: 20),
 
-                  // Totales (solo admin)
+                  // Totales con desglose (solo admin)
                   if (_isAdmin)
                     _buildTotalsCard(currentEntries, prevEntries),
                   if (_isAdmin) const SizedBox(height: 16),
@@ -762,6 +762,22 @@ class _AdminCrmScreenState extends State<AdminCrmScreen> {
     }).toList();
   }
 
+  /// Desglose por profesional para un tipo dado.
+  Map<String, int> _breakdownByPro(
+    List<QueryDocumentSnapshot> entries,
+    String tipo,
+  ) {
+    final map = <String, int>{};
+    for (final doc in entries) {
+      final data = doc.data()! as Map<String, dynamic>;
+      if (data.safeString('tipo') != tipo) continue;
+      final nombre = data.safeString('profesionalNombre', defaultValue: '?');
+      final shortName = nombre.split(' ').first;
+      map[shortName] = (map[shortName] ?? 0) + 1;
+    }
+    return map;
+  }
+
   Widget _buildTotalsCard(
     List<QueryDocumentSnapshot> current,
     List<QueryDocumentSnapshot> prev,
@@ -773,44 +789,115 @@ class _AdminCrmScreenState extends State<AdminCrmScreen> {
     final ref = count(current, 'referencia');
     final g = count(current, 'grupal');
 
+    final resNow = _breakdownByPro(current, 'resena');
+    final refNow = _breakdownByPro(current, 'referencia');
+    final grpNow = _breakdownByPro(current, 'grupal');
+    final resPrev = _breakdownByPro(prev, 'resena');
+    final refPrev = _breakdownByPro(prev, 'referencia');
+    final grpPrev = _breakdownByPro(prev, 'grupal');
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: const Color(0xFF1E293B).withValues(alpha: 0.7),
         borderRadius: BorderRadius.circular(14),
       ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
+      child: Column(
         children: [
-          _metricChip('⭐', '$r Reseñas', Colors.amber),
-          _metricChip('🔗', '$ref Referencias', Colors.blue),
-          _metricChip('🏋️', '$g/${_countProfessionals(current) * _kMetaGrupalMensual} Grupales', Colors.tealAccent),
+          _metricRow('⭐', '$r Reseñas', Colors.amber, resNow, resPrev),
+          const SizedBox(height: 12),
+          _metricRow('🔗', '$ref Referencias', Colors.blue, refNow, refPrev),
+          const SizedBox(height: 12),
+          _metricRow('🏋️', '$g Grupales', Colors.tealAccent, grpNow, grpPrev),
         ],
       ),
     );
   }
 
-  int _countProfessionals(List<QueryDocumentSnapshot> entries) {
-    final ids = <String>{};
-    for (final doc in entries) {
-      ids.add((doc.data()! as Map<String, dynamic>).safeString('profesionalId'));
-    }
-    return ids.length.clamp(1, 100);
-  }
+  Widget _metricRow(
+    String emoji,
+    String total,
+    Color color,
+    Map<String, int> current,
+    Map<String, int> previous,
+  ) {
+    // Unir todos los nombres de ambos meses
+    final allNames = {...current.keys, ...previous.keys};
 
-  Widget _metricChip(String emoji, String text, Color color) {
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(emoji, style: const TextStyle(fontSize: 20)),
-        const SizedBox(height: 4),
-        Text(
-          text,
-          style: TextStyle(
-            color: color,
-            fontWeight: FontWeight.bold,
-            fontSize: 13,
-          ),
+        Row(
+          children: [
+            Text(emoji, style: const TextStyle(fontSize: 18)),
+            const SizedBox(width: 8),
+            Text(
+              total,
+              style: TextStyle(
+                color: color,
+                fontWeight: FontWeight.bold,
+                fontSize: 14,
+              ),
+            ),
+          ],
         ),
+        if (allNames.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 6, left: 28),
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 4,
+              children: allNames.map((name) {
+                final cur = current[name] ?? 0;
+                final prev = previous[name] ?? 0;
+                final diff = cur - prev;
+                final deltaStr = diff > 0
+                    ? ' +$diff'
+                    : diff < 0
+                        ? ' $diff'
+                        : '';
+                final deltaColor = diff > 0
+                    ? Colors.greenAccent
+                    : diff < 0
+                        ? Colors.redAccent
+                        : null;
+
+                return Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 3,
+                  ),
+                  decoration: BoxDecoration(
+                    color: color.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text.rich(
+                    TextSpan(
+                      children: [
+                        TextSpan(
+                          text: '$name ($cur)',
+                          style: TextStyle(
+                            color: color,
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        if (deltaStr.isNotEmpty)
+                          TextSpan(
+                            text: deltaStr,
+                            style: TextStyle(
+                              color: deltaColor,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
       ],
     );
   }
@@ -1147,56 +1234,82 @@ class _AdminCrmScreenState extends State<AdminCrmScreen> {
 
   Widget _chartRow(String label, _MonthData data, int maxVal) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.only(bottom: 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             label,
             style: const TextStyle(
-              fontSize: 11,
+              fontSize: 12,
               fontWeight: FontWeight.bold,
               color: Colors.black54,
             ),
           ),
           const SizedBox(height: 6),
-          _bar(data.resenas, maxVal, Colors.amber.shade700, '${data.resenas}'),
-          const SizedBox(height: 4),
-          _bar(data.referencias, maxVal, Colors.blue.shade700, '${data.referencias}'),
-          const SizedBox(height: 4),
-          _bar(data.grupales, maxVal, const Color(0xFF009688), '${data.grupales}'),
+          _barWithTags(data.resenas, maxVal, Colors.amber.shade700, data.resBreakdown),
+          const SizedBox(height: 6),
+          _barWithTags(data.referencias, maxVal, Colors.blue.shade700, data.refBreakdown),
+          const SizedBox(height: 6),
+          _barWithTags(data.grupales, maxVal, const Color(0xFF009688), data.grpBreakdown),
         ],
       ),
     );
   }
 
-  Widget _bar(int value, int max, Color color, String label) {
+  Widget _barWithTags(int value, int max, Color color, Map<String, int> breakdown) {
     final fraction = max > 0 ? (value / max).clamp(0.0, 1.0) : 0.0;
-    return Row(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Expanded(
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(4),
-            child: LinearProgressIndicator(
-              value: fraction,
-              backgroundColor: Colors.grey.shade100,
-              color: color,
-              minHeight: 14,
+        Row(
+          children: [
+            Expanded(
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(4),
+                child: LinearProgressIndicator(
+                  value: fraction,
+                  backgroundColor: Colors.grey.shade100,
+                  color: color,
+                  minHeight: 14,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            SizedBox(
+              width: 24,
+              child: Text(
+                '$value',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                  color: color,
+                ),
+              ),
+            ),
+          ],
+        ),
+        if (breakdown.isNotEmpty && _isAdmin)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Wrap(
+              spacing: 6,
+              runSpacing: 3,
+              children: breakdown.entries.map((e) {
+                return Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: color.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    '${e.key} (${e.value})',
+                    style: TextStyle(fontSize: 9, color: color, fontWeight: FontWeight.bold),
+                  ),
+                );
+              }).toList(),
             ),
           ),
-        ),
-        const SizedBox(width: 8),
-        SizedBox(
-          width: 20,
-          child: Text(
-            label,
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.bold,
-              color: color,
-            ),
-          ),
-        ),
       ],
     );
   }
@@ -1209,8 +1322,21 @@ class _AdminCrmScreenState extends State<AdminCrmScreen> {
         _selectedMonth.month - i,
       );
       final docs = await _entriesForMonth(target.month, target.year);
+
+      Map<String, int> breakdown(String tipo) {
+        final map = <String, int>{};
+        for (final doc in docs) {
+          final data = doc.data()! as Map<String, dynamic>;
+          if (data.safeString('tipo') != tipo) continue;
+          final name = data.safeString('profesionalNombre', defaultValue: '?').split(' ').first;
+          map[name] = (map[name] ?? 0) + 1;
+        }
+        return map;
+      }
+
       int count(String tipo) =>
           docs.where((d) => (d.data()! as Map<String, dynamic>).safeString('tipo') == tipo).length;
+
       result.add(
         _MonthData(
           mes: target.month,
@@ -1218,6 +1344,9 @@ class _AdminCrmScreenState extends State<AdminCrmScreen> {
           resenas: count('resena'),
           referencias: count('referencia'),
           grupales: count('grupal'),
+          resBreakdown: breakdown('resena'),
+          refBreakdown: breakdown('referencia'),
+          grpBreakdown: breakdown('grupal'),
         ),
       );
     }
@@ -1236,12 +1365,18 @@ class _MonthData {
     required this.resenas,
     required this.referencias,
     required this.grupales,
+    required this.resBreakdown,
+    required this.refBreakdown,
+    required this.grpBreakdown,
   });
   final int mes;
   final int anio;
   final int resenas;
   final int referencias;
   final int grupales;
+  final Map<String, int> resBreakdown;
+  final Map<String, int> refBreakdown;
+  final Map<String, int> grpBreakdown;
 }
 
 class _ProfessionalPoolCard extends StatelessWidget {

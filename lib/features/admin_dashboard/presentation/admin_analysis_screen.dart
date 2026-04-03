@@ -30,14 +30,44 @@ class AdminAnalysis extends _$AdminAnalysis {
 
   Future<List<AnalysisMetric>> _fetchRealMetrics() async {
     try {
-      final activeUsersQuery = await FirebaseFirestore.instance
+      // Total de usuarios con app instalada (todos en users_app)
+      final totalUsersQuery = await FirebaseFirestore.instance
           .collection('users_app')
-          .where('isActive', isEqualTo: true)
           .count()
           .get();
+
+      // Clientes sin bono activo este mes (no renovados)
+      final now = DateTime.now();
+      final clientesSnap = await FirebaseFirestore.instance
+          .collection('users_app')
+          .where('rol', isEqualTo: 'cliente')
+          .get();
+      final activePasses = await FirebaseFirestore.instance
+          .collection('passes')
+          .where('activo', isEqualTo: true)
+          .where('mes', isEqualTo: now.month)
+          .where('anio', isEqualTo: now.year)
+          .get();
+      final activeUserIds = <String>{};
+      for (final doc in activePasses.docs) {
+        final uid = (doc.data()['userId'] as String?) ?? '';
+        if (uid.isNotEmpty) activeUserIds.add(uid);
+      }
+      final noRenovados = clientesSnap.docs
+          .where((d) => !activeUserIds.contains(d.id))
+          .length;
+
       return [
-        AnalysisMetric(label: 'Usuarios Activos', value: (activeUsersQuery.count ?? 0).toDouble(), isPositive: true),
-        const AnalysisMetric(label: 'Pacientes Inactivos', value: 0, isPositive: false),
+        AnalysisMetric(
+          label: 'App Instalada',
+          value: (totalUsersQuery.count ?? 0).toDouble(),
+          isPositive: true,
+        ),
+        AnalysisMetric(
+          label: 'Clientes no renovados',
+          value: noRenovados.toDouble(),
+          isPositive: false,
+        ),
       ];
     } catch (e) {
       debugPrint('Error en Auditoría: $e');
