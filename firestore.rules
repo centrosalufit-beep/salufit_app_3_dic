@@ -86,6 +86,12 @@ service cloud.firestore {
       allow update, delete: if isAdmin();
     }
 
+    // Pagos mensuales (importación de renovaciones)
+    match /monthly_payments/{id} {
+      allow read: if isStaff();
+      allow create, delete: if isAdmin();
+    }
+
     // Tareas entre profesionales
     match /staff_tasks/{id} {
       allow read, create: if isStaff();

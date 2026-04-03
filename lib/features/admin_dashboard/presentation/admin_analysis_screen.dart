@@ -30,31 +30,31 @@ class AdminAnalysis extends _$AdminAnalysis {
 
   Future<List<AnalysisMetric>> _fetchRealMetrics() async {
     try {
-      // Total de usuarios con app instalada (todos en users_app)
+      final now = DateTime.now();
+
+      // Total de usuarios con app instalada
       final totalUsersQuery = await FirebaseFirestore.instance
           .collection('users_app')
           .count()
           .get();
 
-      // Clientes sin bono activo este mes (no renovados)
-      final now = DateTime.now();
+      // Clientes no renovados = clientes sin pago registrado este mes
       final clientesSnap = await FirebaseFirestore.instance
           .collection('users_app')
           .where('rol', isEqualTo: 'cliente')
           .get();
-      final activePasses = await FirebaseFirestore.instance
-          .collection('passes')
-          .where('activo', isEqualTo: true)
+      final paymentsSnap = await FirebaseFirestore.instance
+          .collection('monthly_payments')
           .where('mes', isEqualTo: now.month)
           .where('anio', isEqualTo: now.year)
           .get();
-      final activeUserIds = <String>{};
-      for (final doc in activePasses.docs) {
+      final paidUserIds = <String>{};
+      for (final doc in paymentsSnap.docs) {
         final uid = (doc.data()['userId'] as String?) ?? '';
-        if (uid.isNotEmpty) activeUserIds.add(uid);
+        if (uid.isNotEmpty) paidUserIds.add(uid);
       }
       final noRenovados = clientesSnap.docs
-          .where((d) => !activeUserIds.contains(d.id))
+          .where((d) => !paidUserIds.contains(d.id))
           .length;
 
       return [
@@ -95,6 +95,11 @@ class AdminAnalysisScreen extends ConsumerWidget {
         title: const Text('Panel de Control (Windows)'),
         actions: [
           IconButton(
+            icon: const Icon(Icons.upload_file),
+            tooltip: 'Importar renovaciones',
+            onPressed: () => _showImportDialog(context, ref),
+          ),
+          IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: () => ref.read(adminAnalysisProvider.notifier).refreshMetrics(),
           ),
@@ -121,8 +126,338 @@ class AdminAnalysisScreen extends ConsumerWidget {
             loading: () => const Center(child: CircularProgressIndicator()),
             error: (e, __) => const Text('Error al cargar métricas', style: TextStyle(color: Colors.redAccent)),
           ),
+          const SizedBox(height: 24),
+          // Lista de no renovados
+          const _NonRenewedList(),
         ],
       ),
+    );
+  }
+
+  Future<void> _showImportDialog(BuildContext context, WidgetRef ref) async {
+    final controller = TextEditingController();
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.upload_file, color: Color(0xFF009688)),
+            SizedBox(width: 8),
+            Text('Importar Renovaciones'),
+          ],
+        ),
+        content: SizedBox(
+          width: 500,
+          height: 350,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Pega la lista de clientes que han pagado este mes '
+                '(un nombre por línea). Se deduplicarán automáticamente.',
+                style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+              ),
+              const SizedBox(height: 12),
+              Expanded(
+                child: TextField(
+                  controller: controller,
+                  maxLines: null,
+                  expands: true,
+                  textAlignVertical: TextAlignVertical.top,
+                  decoration: InputDecoration(
+                    hintText: 'Belén Maeso Carbayo\n'
+                        'Carmen Lutzemkirchen\n'
+                        'Ricardo Rivas\n'
+                        '...',
+                    border: const OutlineInputBorder(),
+                    filled: true,
+                    fillColor: Colors.grey.shade50,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('CANCELAR'),
+          ),
+          ElevatedButton.icon(
+            onPressed: () => Navigator.pop(ctx, true),
+            icon: const Icon(Icons.check),
+            label: const Text('IMPORTAR'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF009688),
+              foregroundColor: Colors.white,
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (result != true || !context.mounted) return;
+
+    final text = controller.text.trim();
+    if (text.isEmpty) return;
+
+    // Parsear nombres (deduplicar)
+    final nombres = text
+        .split('\n')
+        .map((l) => l.trim())
+        .where((l) => l.isNotEmpty)
+        .toSet() // Deduplicar
+        .toList();
+
+    await _processImport(context, nombres, ref);
+  }
+
+  Future<void> _processImport(
+    BuildContext context,
+    List<String> nombres,
+    WidgetRef ref,
+  ) async {
+    final messenger = ScaffoldMessenger.of(context)
+      ..showSnackBar(
+      SnackBar(
+        content: Text('Procesando ${nombres.length} nombres...'),
+        backgroundColor: const Color(0xFF1E293B),
+        duration: const Duration(minutes: 1),
+      ),
+    );
+
+    try {
+      final now = DateTime.now();
+
+      // Cargar todos los clientes para matching
+      final clientesSnap = await FirebaseFirestore.instance
+          .collection('users_app')
+          .where('rol', isEqualTo: 'cliente')
+          .get();
+
+      // Cargar pagos existentes este mes (para no duplicar)
+      final existingPayments = await FirebaseFirestore.instance
+          .collection('monthly_payments')
+          .where('mes', isEqualTo: now.month)
+          .where('anio', isEqualTo: now.year)
+          .get();
+      final alreadyPaidIds = <String>{};
+      for (final doc in existingPayments.docs) {
+        final uid = (doc.data()['userId'] as String?) ?? '';
+        if (uid.isNotEmpty) alreadyPaidIds.add(uid);
+      }
+
+      var matched = 0;
+      var alreadyPaid = 0;
+      var notFound = 0;
+      final batch = FirebaseFirestore.instance.batch();
+
+      for (final nombre in nombres) {
+        // Buscar por coincidencia fuzzy en nombreCompleto
+        final normalizado = _normalize(nombre);
+        QueryDocumentSnapshot? match;
+
+        for (final doc in clientesSnap.docs) {
+          final data = doc.data();
+          final dbNombre = _normalize(
+            data.safeString('nombreCompleto').isNotEmpty
+                ? data.safeString('nombreCompleto')
+                : data.safeString('nombre'),
+          );
+          if (dbNombre == normalizado ||
+              dbNombre.contains(normalizado) ||
+              normalizado.contains(dbNombre)) {
+            match = doc;
+            break;
+          }
+        }
+
+        if (match == null) {
+          notFound++;
+          debugPrint('No encontrado: $nombre');
+          continue;
+        }
+
+        if (alreadyPaidIds.contains(match.id)) {
+          alreadyPaid++;
+          continue;
+        }
+
+        final docRef =
+            FirebaseFirestore.instance.collection('monthly_payments').doc();
+        batch.set(docRef, {
+          'userId': match.id,
+          'nombreCompleto': nombre,
+          'mes': now.month,
+          'anio': now.year,
+          'importadoEl': FieldValue.serverTimestamp(),
+        });
+        alreadyPaidIds.add(match.id);
+        matched++;
+      }
+
+      await batch.commit();
+
+      // Refrescar métricas
+      ref.read(adminAnalysisProvider.notifier).refreshMetrics();
+
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: Text(
+              'Importación completada: $matched nuevos, '
+              '$alreadyPaid ya registrados, '
+              '$notFound no encontrados',
+            ),
+            backgroundColor: notFound > 0 ? Colors.orange : Colors.green,
+            duration: const Duration(seconds: 6),
+          ),
+        );
+    } catch (e) {
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+        );
+    }
+  }
+
+  /// Normaliza nombre para matching: minúsculas, sin acentos, sin espacios extra.
+  static String _normalize(String s) {
+    return s
+        .toLowerCase()
+        .trim()
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .replaceAll('á', 'a')
+        .replaceAll('é', 'e')
+        .replaceAll('í', 'i')
+        .replaceAll('ó', 'o')
+        .replaceAll('ú', 'u')
+        .replaceAll('ñ', 'n')
+        .replaceAll('ü', 'u');
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// LISTA DE CLIENTES NO RENOVADOS
+// ═══════════════════════════════════════════════════════════════
+
+class _NonRenewedList extends StatelessWidget {
+  const _NonRenewedList();
+
+  @override
+  Widget build(BuildContext context) {
+    final now = DateTime.now();
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('monthly_payments')
+          .where('mes', isEqualTo: now.month)
+          .where('anio', isEqualTo: now.year)
+          .snapshots(),
+      builder: (context, paymentsSnap) {
+        return FutureBuilder<QuerySnapshot>(
+          future: FirebaseFirestore.instance
+              .collection('users_app')
+              .where('rol', isEqualTo: 'cliente')
+              .get(),
+          builder: (context, clientesSnap) {
+            if (!clientesSnap.hasData) {
+              return const SizedBox.shrink();
+            }
+
+            final paidIds = <String>{};
+            if (paymentsSnap.hasData) {
+              for (final doc in paymentsSnap.data!.docs) {
+                final data = doc.data()! as Map<String, dynamic>;
+                final uid = data.safeString('userId');
+                if (uid.isNotEmpty) paidIds.add(uid);
+              }
+            }
+
+            final nonRenewed = clientesSnap.data!.docs
+                .where((d) => !paidIds.contains(d.id))
+                .toList();
+
+            if (nonRenewed.isEmpty) {
+              return Card(
+                color: Colors.green.shade50,
+                child: const ListTile(
+                  leading: Icon(Icons.check_circle, color: Colors.green),
+                  title: Text('Todos los clientes han renovado'),
+                ),
+              );
+            }
+
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.warning_amber, color: Colors.orange.shade700),
+                    const SizedBox(width: 8),
+                    Text(
+                      'CLIENTES NO RENOVADOS (${nonRenewed.length})',
+                      style: TextStyle(
+                        color: Colors.orange.shade700,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                      ),
+                    ),
+                    const Spacer(),
+                    if (now.day <= 5)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.red,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Text(
+                          'LLAMAR ANTES DEL 5',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                ...nonRenewed.map((doc) {
+                  final data = doc.data()! as Map<String, dynamic>;
+                  final nombre =
+                      (data['nombreCompleto'] as String?) ??
+                      (data['nombre'] as String?) ??
+                      doc.id;
+                  final email = (data['email'] as String?) ?? '';
+                  return Card(
+                    color: Colors.white.withValues(alpha: 0.9),
+                    margin: const EdgeInsets.only(bottom: 6),
+                    child: ListTile(
+                      dense: true,
+                      leading: const Icon(
+                        Icons.person_off,
+                        color: Colors.red,
+                        size: 20,
+                      ),
+                      title: Text(
+                        nombre,
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      subtitle: email.isNotEmpty ? Text(email, style: const TextStyle(fontSize: 11)) : null,
+                    ),
+                  );
+                }),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 }
