@@ -595,8 +595,7 @@ class _PendingTasksPreview extends StatelessWidget {
           .collection('staff_tasks')
           .where('asignadoAId', isEqualTo: userId)
           .where('estado', isEqualTo: 'pendiente')
-          .orderBy('fechaLimite')
-          .limit(3)
+          .limit(10)
           .snapshots(),
       builder: (context, snapshot) {
         if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {

@@ -247,21 +247,19 @@ class _TaskList extends StatelessWidget {
   Widget build(BuildContext context) {
     Query query = FirebaseFirestore.instance.collection('staff_tasks');
 
+    // Query simple sin orderBy compuesto (evita índices)
     switch (mode) {
       case _TaskMode.pending:
         query = query
             .where('asignadoAId', isEqualTo: userId)
-            .where('estado', isEqualTo: 'pendiente')
-            .orderBy('fechaLimite');
+            .where('estado', isEqualTo: 'pendiente');
       case _TaskMode.completed:
         query = query
             .where('asignadoAId', isEqualTo: userId)
-            .where('estado', isEqualTo: 'completada')
-            .orderBy('completadaEl', descending: true);
+            .where('estado', isEqualTo: 'completada');
       case _TaskMode.sent:
         query = query
-            .where('creadoPorId', isEqualTo: userId)
-            .orderBy('fechaCreacion', descending: true);
+            .where('creadoPorId', isEqualTo: userId);
     }
 
     return StreamBuilder<QuerySnapshot>(
@@ -270,7 +268,15 @@ class _TaskList extends StatelessWidget {
         if (!snapshot.hasData) {
           return const Center(child: CircularProgressIndicator());
         }
-        final docs = snapshot.data!.docs;
+        // Ordenar en código
+        final docs = snapshot.data!.docs.toList()
+          ..sort((a, b) {
+            final dataA = a.data()! as Map<String, dynamic>;
+            final dataB = b.data()! as Map<String, dynamic>;
+            final tsA = (dataA['fechaCreacion'] as Timestamp?)?.toDate() ?? DateTime(1970);
+            final tsB = (dataB['fechaCreacion'] as Timestamp?)?.toDate() ?? DateTime(1970);
+            return tsB.compareTo(tsA); // Más reciente primero
+          });
         if (docs.isEmpty) {
           final msg = switch (mode) {
             _TaskMode.pending => 'Sin tareas pendientes',

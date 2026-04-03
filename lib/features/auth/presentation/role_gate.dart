@@ -33,7 +33,9 @@ class RoleGate extends StatelessWidget {
 
         if (snapshot.hasError || !snapshot.hasData || !snapshot.data!.exists) {
           debugPrint(
-            '🛡️ RoleGate: Error de acceso o perfil inexistente. Forzando Logout.',
+            '🛡️ RoleGate: uid=${user.uid} email=${user.email} '
+            'hasError=${snapshot.hasError} hasData=${snapshot.hasData} '
+            'exists=${snapshot.data?.exists} error=${snapshot.error}',
           );
           WidgetsBinding.instance.addPostFrameCallback((_) {
             _forceLogout(context);

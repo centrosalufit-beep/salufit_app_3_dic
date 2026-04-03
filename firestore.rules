@@ -35,11 +35,11 @@ service cloud.firestore {
     }
 
     match /users_app/{userId} {
-      allow read: if isOwner(userId) || isStaff();
-      allow create: if isOwner(userId) || isStaff();
+      allow read: if request.auth != null;
+      allow list: if request.auth != null;
+      allow create: if request.auth != null;
       allow update: if isStaff() || (isOwner(userId) && !request.resource.data.diff(resource.data).affectedKeys()
         .hasAny(['rol', 'activo', 'email', 'numHistoria', 'createdAt', 'activatedAt']));
-      allow list: if isStaff();
     }
 
     // Blindaje de datos m�dicos ??
@@ -72,7 +72,7 @@ service cloud.firestore {
 
     // Configuración de la app (versión mínima, etc.)
     match /config/{docId} {
-      allow read: if isAuthenticated();
+      allow read: if request.auth != null;
       allow write: if isAdmin();
     }
 

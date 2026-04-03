@@ -122,18 +122,24 @@ class _AdminCrmScreenState extends State<AdminCrmScreen> {
   Future<void> _registrarGrupal() async {
     final now = DateTime.now();
 
-    // Validar: máximo 1 por día
-    final hoy = DateTime(now.year, now.month, now.day);
-    final manana = hoy.add(const Duration(days: 1));
+    // Validar: máximo 1 por día (query simple mes+anio, filtro en código)
     final existing = await FirebaseFirestore.instance
         .collection('crm_entries')
-        .where('profesionalId', isEqualTo: widget.userId)
-        .where('tipo', isEqualTo: 'grupal')
-        .where('fechaCreacion', isGreaterThanOrEqualTo: hoy)
-        .where('fechaCreacion', isLessThan: manana)
+        .where('mes', isEqualTo: now.month)
+        .where('anio', isEqualTo: now.year)
         .get();
 
-    if (existing.docs.isNotEmpty) {
+    final hoy = DateTime(now.year, now.month, now.day);
+    final yaRegistroHoy = existing.docs.any((doc) {
+      final data = doc.data();
+      if (data.safeString('profesionalId') != widget.userId) return false;
+      if (data.safeString('tipo') != 'grupal') return false;
+      final ts = (data['fechaCreacion'] as Timestamp?)?.toDate();
+      if (ts == null) return false;
+      return ts.year == hoy.year && ts.month == hoy.month && ts.day == hoy.day;
+    });
+
+    if (yaRegistroHoy) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
