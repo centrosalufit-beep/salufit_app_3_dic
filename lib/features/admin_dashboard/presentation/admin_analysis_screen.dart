@@ -38,24 +38,24 @@ class AdminAnalysis extends _$AdminAnalysis {
           .count()
           .get();
 
-      // Clientes no renovados = clientes sin pago registrado este mes
-      final clientesSnap = await FirebaseFirestore.instance
-          .collection('users_app')
-          .where('rol', isEqualTo: 'cliente')
-          .get();
-      final paymentsSnap = await FirebaseFirestore.instance
+      // Renovaciones este mes vs mes anterior
+      final paymentsThisMonth = await FirebaseFirestore.instance
           .collection('monthly_payments')
           .where('mes', isEqualTo: now.month)
           .where('anio', isEqualTo: now.year)
+          .count()
           .get();
-      final paidUserIds = <String>{};
-      for (final doc in paymentsSnap.docs) {
-        final uid = (doc.data()['userId'] as String?) ?? '';
-        if (uid.isNotEmpty) paidUserIds.add(uid);
-      }
-      final noRenovados = clientesSnap.docs
-          .where((d) => !paidUserIds.contains(d.id))
-          .length;
+      final prevMonth = DateTime(now.year, now.month - 1);
+      final paymentsLastMonth = await FirebaseFirestore.instance
+          .collection('monthly_payments')
+          .where('mes', isEqualTo: prevMonth.month)
+          .where('anio', isEqualTo: prevMonth.year)
+          .count()
+          .get();
+
+      final renovados = paymentsThisMonth.count ?? 0;
+      final prevRenovados = paymentsLastMonth.count ?? 0;
+      final noRenovados = (prevRenovados - renovados).clamp(0, 9999);
 
       return [
         AnalysisMetric(
@@ -64,7 +64,12 @@ class AdminAnalysis extends _$AdminAnalysis {
           isPositive: true,
         ),
         AnalysisMetric(
-          label: 'Clientes no renovados',
+          label: 'Renovados este mes',
+          value: renovados.toDouble(),
+          isPositive: true,
+        ),
+        AnalysisMetric(
+          label: 'No renovados (vs mes anterior)',
           value: noRenovados.toDouble(),
           isPositive: false,
         ),
@@ -220,86 +225,63 @@ class AdminAnalysisScreen extends ConsumerWidget {
   ) async {
     final messenger = ScaffoldMessenger.of(context)
       ..showSnackBar(
-      SnackBar(
-        content: Text('Procesando ${nombres.length} nombres...'),
-        backgroundColor: const Color(0xFF1E293B),
-        duration: const Duration(minutes: 1),
-      ),
-    );
+        SnackBar(
+          content: Text('Procesando ${nombres.length} nombres...'),
+          backgroundColor: const Color(0xFF1E293B),
+          duration: const Duration(minutes: 1),
+        ),
+      );
 
     try {
       final now = DateTime.now();
 
-      // Cargar todos los clientes para matching
-      final clientesSnap = await FirebaseFirestore.instance
-          .collection('users_app')
-          .where('rol', isEqualTo: 'cliente')
-          .get();
-
-      // Cargar pagos existentes este mes (para no duplicar)
+      // Cargar pagos existentes este mes (para deduplicar)
       final existingPayments = await FirebaseFirestore.instance
           .collection('monthly_payments')
           .where('mes', isEqualTo: now.month)
           .where('anio', isEqualTo: now.year)
           .get();
-      final alreadyPaidIds = <String>{};
+
+      // Construir set de keywords existentes para deduplicar
+      final existingKeys = <String>{};
       for (final doc in existingPayments.docs) {
-        final uid = (doc.data()['userId'] as String?) ?? '';
-        if (uid.isNotEmpty) alreadyPaidIds.add(uid);
+        final data = doc.data();
+        final kw = (data['keywords'] as List<dynamic>?)
+            ?.map((e) => e.toString())
+            .toList();
+        if (kw != null && kw.isNotEmpty) {
+          existingKeys.add(kw.join('|'));
+        }
       }
 
-      var matched = 0;
-      var alreadyPaid = 0;
-      var notFound = 0;
+      var added = 0;
+      var duplicated = 0;
       final batch = FirebaseFirestore.instance.batch();
 
       for (final nombre in nombres) {
-        // Buscar por coincidencia fuzzy en nombreCompleto
-        final normalizado = _normalize(nombre);
-        QueryDocumentSnapshot? match;
+        final keywords = _toKeywords(nombre);
+        if (keywords.isEmpty) continue;
 
-        for (final doc in clientesSnap.docs) {
-          final data = doc.data();
-          final dbNombre = _normalize(
-            data.safeString('nombreCompleto').isNotEmpty
-                ? data.safeString('nombreCompleto')
-                : data.safeString('nombre'),
-          );
-          if (dbNombre == normalizado ||
-              dbNombre.contains(normalizado) ||
-              normalizado.contains(dbNombre)) {
-            match = doc;
-            break;
-          }
-        }
-
-        if (match == null) {
-          notFound++;
-          debugPrint('No encontrado: $nombre');
-          continue;
-        }
-
-        if (alreadyPaidIds.contains(match.id)) {
-          alreadyPaid++;
+        final keyStr = keywords.join('|');
+        if (existingKeys.contains(keyStr)) {
+          duplicated++;
           continue;
         }
 
         final docRef =
             FirebaseFirestore.instance.collection('monthly_payments').doc();
         batch.set(docRef, {
-          'userId': match.id,
-          'nombreCompleto': nombre,
+          'nombreCompleto': nombre.trim(),
+          'keywords': keywords,
           'mes': now.month,
           'anio': now.year,
           'importadoEl': FieldValue.serverTimestamp(),
         });
-        alreadyPaidIds.add(match.id);
-        matched++;
+        existingKeys.add(keyStr);
+        added++;
       }
 
       await batch.commit();
-
-      // Refrescar métricas
       ref.read(adminAnalysisProvider.notifier).refreshMetrics();
 
       messenger
@@ -307,12 +289,10 @@ class AdminAnalysisScreen extends ConsumerWidget {
         ..showSnackBar(
           SnackBar(
             content: Text(
-              'Importación completada: $matched nuevos, '
-              '$alreadyPaid ya registrados, '
-              '$notFound no encontrados',
+              'Importación: $added nuevos, $duplicated ya registrados',
             ),
-            backgroundColor: notFound > 0 ? Colors.orange : Colors.green,
-            duration: const Duration(seconds: 6),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 5),
           ),
         );
     } catch (e) {
@@ -324,19 +304,21 @@ class AdminAnalysisScreen extends ConsumerWidget {
     }
   }
 
-  /// Normaliza nombre para matching: minúsculas, sin acentos, sin espacios extra.
-  static String _normalize(String s) {
-    return s
-        .toLowerCase()
+  /// Convierte "Belén Maeso Carbayo " → ['belen', 'maeso', 'carbayo']
+  static List<String> _toKeywords(String name) {
+    return name
         .trim()
-        .replaceAll(RegExp(r'\s+'), ' ')
+        .toLowerCase()
         .replaceAll('á', 'a')
         .replaceAll('é', 'e')
         .replaceAll('í', 'i')
         .replaceAll('ó', 'o')
         .replaceAll('ú', 'u')
         .replaceAll('ñ', 'n')
-        .replaceAll('ü', 'u');
+        .replaceAll('ü', 'u')
+        .split(RegExp(r'\s+'))
+        .where((w) => w.isNotEmpty)
+        .toList();
   }
 }
 
@@ -344,48 +326,77 @@ class AdminAnalysisScreen extends ConsumerWidget {
 // LISTA DE CLIENTES NO RENOVADOS
 // ═══════════════════════════════════════════════════════════════
 
+/// Compara mes anterior con mes actual: muestra quién pagó el mes pasado
+/// pero NO aparece este mes.
 class _NonRenewedList extends StatelessWidget {
   const _NonRenewedList();
 
   @override
   Widget build(BuildContext context) {
     final now = DateTime.now();
+    final prevMonth = DateTime(now.year, now.month - 1);
+
     return StreamBuilder<QuerySnapshot>(
+      // Pagos del mes actual (reactivo)
       stream: FirebaseFirestore.instance
           .collection('monthly_payments')
           .where('mes', isEqualTo: now.month)
           .where('anio', isEqualTo: now.year)
           .snapshots(),
-      builder: (context, paymentsSnap) {
+      builder: (context, currentSnap) {
         return FutureBuilder<QuerySnapshot>(
+          // Pagos del mes anterior
           future: FirebaseFirestore.instance
-              .collection('users_app')
-              .where('rol', isEqualTo: 'cliente')
+              .collection('monthly_payments')
+              .where('mes', isEqualTo: prevMonth.month)
+              .where('anio', isEqualTo: prevMonth.year)
               .get(),
-          builder: (context, clientesSnap) {
-            if (!clientesSnap.hasData) {
-              return const SizedBox.shrink();
-            }
+          builder: (context, prevSnap) {
+            if (!prevSnap.hasData) return const SizedBox.shrink();
 
-            final paidIds = <String>{};
-            if (paymentsSnap.hasData) {
-              for (final doc in paymentsSnap.data!.docs) {
+            // Keywords de este mes
+            final currentKeys = <String>{};
+            if (currentSnap.hasData) {
+              for (final doc in currentSnap.data!.docs) {
                 final data = doc.data()! as Map<String, dynamic>;
-                final uid = data.safeString('userId');
-                if (uid.isNotEmpty) paidIds.add(uid);
+                final kw = (data['keywords'] as List<dynamic>?)
+                    ?.map((e) => e.toString())
+                    .join('|');
+                if (kw != null && kw.isNotEmpty) currentKeys.add(kw);
               }
             }
 
-            final nonRenewed = clientesSnap.data!.docs
-                .where((d) => !paidIds.contains(d.id))
-                .toList();
+            // Personas del mes anterior que NO están este mes
+            final nonRenewed = <String>[];
+            for (final doc in prevSnap.data!.docs) {
+              final data = doc.data()! as Map<String, dynamic>;
+              final kw = (data['keywords'] as List<dynamic>?)
+                  ?.map((e) => e.toString())
+                  .join('|');
+              if (kw != null && !currentKeys.contains(kw)) {
+                final nombre = data.safeString('nombreCompleto');
+                if (nombre.isNotEmpty && !nonRenewed.contains(nombre)) {
+                  nonRenewed.add(nombre);
+                }
+              }
+            }
+
+            if (nonRenewed.isEmpty && prevSnap.data!.docs.isEmpty) {
+              return Card(
+                color: Colors.grey.shade50,
+                child: const ListTile(
+                  leading: Icon(Icons.info_outline, color: Colors.grey),
+                  title: Text('Importa las renovaciones del mes anterior para ver el churn'),
+                ),
+              );
+            }
 
             if (nonRenewed.isEmpty) {
               return Card(
                 color: Colors.green.shade50,
                 child: const ListTile(
                   leading: Icon(Icons.check_circle, color: Colors.green),
-                  title: Text('Todos los clientes han renovado'),
+                  title: Text('Todos los clientes del mes anterior han renovado'),
                 ),
               );
             }
@@ -397,15 +408,16 @@ class _NonRenewedList extends StatelessWidget {
                   children: [
                     Icon(Icons.warning_amber, color: Colors.orange.shade700),
                     const SizedBox(width: 8),
-                    Text(
-                      'CLIENTES NO RENOVADOS (${nonRenewed.length})',
-                      style: TextStyle(
-                        color: Colors.orange.shade700,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14,
+                    Expanded(
+                      child: Text(
+                        'NO RENOVADOS (${nonRenewed.length})',
+                        style: TextStyle(
+                          color: Colors.orange.shade700,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                        ),
                       ),
                     ),
-                    const Spacer(),
                     if (now.day <= 5)
                       Container(
                         padding: const EdgeInsets.symmetric(
@@ -428,14 +440,8 @@ class _NonRenewedList extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 10),
-                ...nonRenewed.map((doc) {
-                  final data = doc.data()! as Map<String, dynamic>;
-                  final nombre =
-                      (data['nombreCompleto'] as String?) ??
-                      (data['nombre'] as String?) ??
-                      doc.id;
-                  final email = (data['email'] as String?) ?? '';
-                  return Card(
+                ...nonRenewed.map(
+                  (nombre) => Card(
                     color: Colors.white.withValues(alpha: 0.9),
                     margin: const EdgeInsets.only(bottom: 6),
                     child: ListTile(
@@ -449,10 +455,9 @@ class _NonRenewedList extends StatelessWidget {
                         nombre,
                         style: const TextStyle(fontWeight: FontWeight.bold),
                       ),
-                      subtitle: email.isNotEmpty ? Text(email, style: const TextStyle(fontSize: 11)) : null,
                     ),
-                  );
-                }),
+                  ),
+                ),
               ],
             );
           },
