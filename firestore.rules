@@ -79,6 +79,13 @@ service cloud.firestore {
     // Fichajes
     match /timeClockRecords/{id} { allow read: if isStaff(); allow create: if isStaff(); allow update: if isAdmin(); allow delete: if isAdmin(); }
 
+    // Métricas de pacientes
+    match /patient_metrics/{id} {
+      allow read: if request.auth != null && (resource.data.userId == request.auth.uid || isStaff());
+      allow create: if isStaff();
+      allow delete: if isStaff();
+    }
+
     // CRM
     match /crm_entries/{id} {
       allow read: if isStaff();

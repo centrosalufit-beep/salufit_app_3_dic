@@ -32,7 +32,7 @@ class _AdminPatientDetailScreenState extends State<AdminPatientDetailScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 4, vsync: this);
     _registrarAcceso();
   }
 
@@ -375,6 +375,7 @@ class _AdminPatientDetailScreenState extends State<AdminPatientDetailScreen>
           controller: _tabController,
           tabs: const [
             Tab(text: 'EJERCICIOS', icon: Icon(Icons.fitness_center)),
+            Tab(text: 'MÉTRICAS', icon: Icon(Icons.show_chart)),
             Tab(text: 'CLÍNICOS', icon: Icon(Icons.folder_shared)),
             Tab(text: 'LEGALES', icon: Icon(Icons.gavel)),
           ],
@@ -390,6 +391,10 @@ class _AdminPatientDetailScreenState extends State<AdminPatientDetailScreen>
         controller: _tabController,
         children: [
           _buildListPlaceholder('Lista de Ejercicios'),
+          _MetricsManagementTab(
+            userId: widget.userId,
+            userName: widget.userName,
+          ),
           _buildListPlaceholder('Documentos Clínicos'),
           _buildListPlaceholder('Documentos Legales'),
         ],
@@ -410,6 +415,357 @@ class _AdminPatientDetailScreenState extends State<AdminPatientDetailScreen>
           ),
         ],
       ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// TAB MÉTRICAS — GESTIÓN DESDE WINDOWS
+// ═══════════════════════════════════════════════════════════════
+
+const Map<String, List<Map<String, String>>> _kMetrics = {
+  'Entrenamiento': [
+    {'nombre': '1RM Press Banca', 'unidad': 'kg', 'polaridad': 'up'},
+    {'nombre': '1RM Sentadilla', 'unidad': 'kg', 'polaridad': 'up'},
+    {'nombre': '1RM Peso Muerto', 'unidad': 'kg', 'polaridad': 'up'},
+    {'nombre': 'Peso Corporal', 'unidad': 'kg', 'polaridad': 'neutral'},
+    {'nombre': 'Repeticiones máx', 'unidad': 'reps', 'polaridad': 'up'},
+  ],
+  'Fisioterapia': [
+    {'nombre': 'EVA Dolor', 'unidad': '/10', 'polaridad': 'down'},
+    {'nombre': 'ROM Hombro', 'unidad': '°', 'polaridad': 'up'},
+    {'nombre': 'ROM Rodilla', 'unidad': '°', 'polaridad': 'up'},
+    {'nombre': 'Fuerza (Daniels)', 'unidad': '/5', 'polaridad': 'up'},
+  ],
+  'Nutrición': [
+    {'nombre': 'Peso', 'unidad': 'kg', 'polaridad': 'neutral'},
+    {'nombre': 'IMC', 'unidad': '', 'polaridad': 'down'},
+    {'nombre': '% Grasa', 'unidad': '%', 'polaridad': 'down'},
+    {'nombre': 'Perímetro Cintura', 'unidad': 'cm', 'polaridad': 'down'},
+  ],
+  'Psicología': [
+    {'nombre': 'GAD-7 Ansiedad', 'unidad': '/21', 'polaridad': 'down'},
+    {'nombre': 'PHQ-9 Depresión', 'unidad': '/27', 'polaridad': 'down'},
+  ],
+  'Medicina': [
+    {'nombre': 'Tensión Sistólica', 'unidad': 'mmHg', 'polaridad': 'down'},
+    {'nombre': 'FC Reposo', 'unidad': 'bpm', 'polaridad': 'down'},
+  ],
+  'Odontología': [
+    {'nombre': 'Índice de Placa', 'unidad': '%', 'polaridad': 'down'},
+  ],
+};
+
+class _MetricsManagementTab extends StatelessWidget {
+  const _MetricsManagementTab({
+    required this.userId,
+    required this.userName,
+  });
+  final String userId;
+  final String userName;
+
+  Future<void> _addMetric(BuildContext context) async {
+    var selectedCat = 'Entrenamiento';
+    Map<String, String>? selectedMetric;
+    final valorCtrl = TextEditingController();
+    final notaCtrl = TextEditingController();
+    var customName = '';
+    var customUnit = '';
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDs) {
+          final metricsForCat = _kMetrics[selectedCat] ?? [];
+          return AlertDialog(
+            title: Row(
+              children: [
+                const Icon(Icons.show_chart, color: Color(0xFF009688)),
+                const SizedBox(width: 8),
+                Expanded(child: Text('Registrar métrica · $userName')),
+              ],
+            ),
+            content: SizedBox(
+              width: 450,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Categoría
+                    DropdownButtonFormField<String>(
+                      initialValue: selectedCat,
+                      decoration: const InputDecoration(
+                        labelText: 'Categoría',
+                        border: OutlineInputBorder(),
+                      ),
+                      items: _kMetrics.keys
+                          .map((c) => DropdownMenuItem(value: c, child: Text(c)))
+                          .toList(),
+                      onChanged: (v) => setDs(() {
+                        selectedCat = v!;
+                        selectedMetric = null;
+                      }),
+                    ),
+                    const SizedBox(height: 14),
+                    // Métrica
+                    const Text(
+                      'Métrica:',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                    ),
+                    const SizedBox(height: 6),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        ...metricsForCat.map((m) {
+                          final isSelected = selectedMetric == m;
+                          return ChoiceChip(
+                            label: Text(m['nombre']!),
+                            selected: isSelected,
+                            selectedColor: const Color(0xFF009688).withValues(alpha: 0.2),
+                            onSelected: (_) => setDs(() {
+                              selectedMetric = m;
+                              customName = '';
+                            }),
+                          );
+                        }),
+                        ChoiceChip(
+                          label: const Text('+ Personalizada'),
+                          selected: selectedMetric == null && customName.isNotEmpty,
+                          selectedColor: Colors.orange.shade100,
+                          onSelected: (_) => setDs(() {
+                            selectedMetric = null;
+                            customName = ' ';
+                          }),
+                        ),
+                      ],
+                    ),
+                    if (selectedMetric == null && customName.isNotEmpty) ...[
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              decoration: const InputDecoration(
+                                labelText: 'Nombre',
+                                border: OutlineInputBorder(),
+                              ),
+                              onChanged: (v) => customName = v,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          SizedBox(
+                            width: 80,
+                            child: TextField(
+                              decoration: const InputDecoration(
+                                labelText: 'Unidad',
+                                border: OutlineInputBorder(),
+                              ),
+                              onChanged: (v) => customUnit = v,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                    const SizedBox(height: 14),
+                    // Valor
+                    TextField(
+                      controller: valorCtrl,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      decoration: InputDecoration(
+                        labelText: 'Valor',
+                        border: const OutlineInputBorder(),
+                        suffixText: selectedMetric?['unidad'] ?? customUnit,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    // Nota
+                    TextField(
+                      controller: notaCtrl,
+                      decoration: const InputDecoration(
+                        labelText: 'Nota (opcional)',
+                        border: OutlineInputBorder(),
+                        hintText: 'Ej: Buena técnica, sin dolor',
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('CANCELAR'),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF009688),
+                  foregroundColor: Colors.white,
+                ),
+                child: const Text('REGISTRAR'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+
+    if (result != true) return;
+
+    final valor = double.tryParse(
+      valorCtrl.text.replaceAll(',', '.').trim(),
+    );
+    if (valor == null) return;
+
+    final nombre = selectedMetric?['nombre'] ?? customName.trim();
+    final unidad = selectedMetric?['unidad'] ?? customUnit.trim();
+    final polaridad = selectedMetric?['polaridad'] ?? 'neutral';
+    if (nombre.isEmpty) return;
+
+    final currentUser = FirebaseAuth.instance.currentUser;
+    var proNombre = currentUser?.displayName ?? '';
+    if (proNombre.isEmpty) {
+      try {
+        final doc = await FirebaseFirestore.instance
+            .collection('users_app')
+            .doc(currentUser?.uid)
+            .get();
+        if (doc.exists) {
+          final data = doc.data()!;
+          proNombre = (data['nombreCompleto'] as String?) ??
+              (data['nombre'] as String?) ??
+              '';
+        }
+      } catch (_) {}
+    }
+
+    await FirebaseFirestore.instance.collection('patient_metrics').add({
+      'userId': userId,
+      'profesionalId': currentUser?.uid ?? '',
+      'profesionalNombre': proNombre,
+      'categoria': selectedCat.toLowerCase(),
+      'nombre': nombre,
+      'valor': valor,
+      'unidad': unidad,
+      'polaridad': polaridad,
+      'nota': notaCtrl.text.trim(),
+      'fecha': FieldValue.serverTimestamp(),
+    });
+
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('$nombre: $valor$unidad registrado'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        StreamBuilder<QuerySnapshot>(
+          stream: FirebaseFirestore.instance
+              .collection('patient_metrics')
+              .where('userId', isEqualTo: userId)
+              .limit(100)
+              .snapshots(),
+          builder: (context, snapshot) {
+            if (!snapshot.hasData) {
+              return const Center(child: CircularProgressIndicator());
+            }
+            final docs = snapshot.data!.docs;
+            if (docs.isEmpty) {
+              return const Center(
+                child: Text(
+                  'Sin métricas registradas',
+                  style: TextStyle(color: Colors.grey),
+                ),
+              );
+            }
+
+            // Ordenar por fecha en código
+            final sorted = docs.toList()
+              ..sort((a, b) {
+                final tsA = ((a.data()! as Map<String, dynamic>)['fecha']
+                            as Timestamp?)
+                        ?.millisecondsSinceEpoch ??
+                    0;
+                final tsB = ((b.data()! as Map<String, dynamic>)['fecha']
+                            as Timestamp?)
+                        ?.millisecondsSinceEpoch ??
+                    0;
+                return tsB.compareTo(tsA);
+              });
+
+            return ListView.builder(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 80),
+              itemCount: sorted.length,
+              itemBuilder: (context, i) {
+                final data = sorted[i].data()! as Map<String, dynamic>;
+                final nombre = (data['nombre'] as String?) ?? '';
+                final valor = (data['valor'] as num?)?.toDouble() ?? 0;
+                final unidad = (data['unidad'] as String?) ?? '';
+                final cat = (data['categoria'] as String?) ?? '';
+                final pro = (data['profesionalNombre'] as String?) ?? '';
+                final nota = (data['nota'] as String?) ?? '';
+                final fecha =
+                    (data['fecha'] as Timestamp?)?.toDate();
+
+                return Card(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  child: ListTile(
+                    leading: CircleAvatar(
+                      backgroundColor: Colors.teal.shade50,
+                      child: Text(
+                        valor.toStringAsFixed(valor == valor.roundToDouble() ? 0 : 1),
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
+                          color: Color(0xFF009688),
+                        ),
+                      ),
+                    ),
+                    title: Text(
+                      '$nombre $unidad',
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    subtitle: Text(
+                      '${cat.isNotEmpty ? "$cat · " : ""}'
+                      '${pro.isNotEmpty ? "por $pro · " : ""}'
+                      '${fecha != null ? DateFormat("dd/MM/yyyy").format(fecha) : ""}'
+                      '${nota.isNotEmpty ? '\n"$nota"' : ''}',
+                      style: const TextStyle(fontSize: 11),
+                    ),
+                    trailing: IconButton(
+                      icon: const Icon(Icons.delete_outline, color: Colors.red, size: 20),
+                      onPressed: () => sorted[i].reference.delete(),
+                    ),
+                  ),
+                );
+              },
+            );
+          },
+        ),
+        Positioned(
+          bottom: 16,
+          right: 16,
+          child: FloatingActionButton.extended(
+            heroTag: 'addMetric',
+            onPressed: () => _addMetric(context),
+            backgroundColor: const Color(0xFF009688),
+            icon: const Icon(Icons.add, color: Colors.white),
+            label: const Text(
+              'REGISTRAR MÉTRICA',
+              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
