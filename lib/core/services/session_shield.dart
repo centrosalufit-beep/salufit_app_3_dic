@@ -18,17 +18,21 @@ class SessionShield {
 
     // Auto clock-out si tiene fichaje activo
     try {
-      final lastRecord = await FirebaseFirestore.instance
+      final allRecords = await FirebaseFirestore.instance
           .collection('timeClockRecords')
           .where('userId', isEqualTo: user.uid)
-          .orderBy('timestamp', descending: true)
-          .limit(1)
+          .limit(20)
           .get();
+      // Ordenar en código
+      final sorted = allRecords.docs.toList()
+        ..sort((a, b) {
+          final tsA = (a.data()['timestamp'] as Timestamp?)?.millisecondsSinceEpoch ?? 0;
+          final tsB = (b.data()['timestamp'] as Timestamp?)?.millisecondsSinceEpoch ?? 0;
+          return tsB.compareTo(tsA);
+        });
 
-      if (lastRecord.docs.isNotEmpty &&
-          lastRecord.docs.first.get('type') == 'IN') {
-        // Reutilizar userName del registro IN si existe
-        final lastData = lastRecord.docs.first.data();
+      if (sorted.isNotEmpty && sorted.first.get('type') == 'IN') {
+        final lastData = sorted.first.data();
         final userName =
             (lastData['userName'] as String?) ??
             user.displayName ??

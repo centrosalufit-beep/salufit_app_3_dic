@@ -59,3 +59,4 @@ android/app/build/
 *.pem
 *.p12
 *.jks
+android/key.properties

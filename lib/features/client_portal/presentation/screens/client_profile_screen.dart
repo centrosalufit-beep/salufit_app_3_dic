@@ -117,7 +117,7 @@ class _ClientProfileScreenState extends ConsumerState<ClientProfileScreen> {
   Widget build(BuildContext context) {
     final profileAsync = ref.watch(userProfileProvider);
     final passesStream = FirebaseFirestore.instance.collection('passes').where('userId', isEqualTo: widget.userId).where('activo', isEqualTo: true).snapshots();
-    final bookingsStream = FirebaseFirestore.instance.collection('bookings').where('userId', isEqualTo: widget.userId).orderBy('fechaReserva', descending: true).limit(10).snapshots();
+    final bookingsStream = FirebaseFirestore.instance.collection('bookings').where('userId', isEqualTo: widget.userId).limit(20).snapshots();
 
     return profileAsync.when(
       loading: () => const SalufitScaffold(body: Center(child: CircularProgressIndicator())),

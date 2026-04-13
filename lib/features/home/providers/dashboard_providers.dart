@@ -11,13 +11,27 @@ final myActiveBookingsProvider =
   final userId = ref.watch(currentUserIdProvider);
   if (userId == null) return const Stream.empty();
 
+  // Sin orderBy para evitar índice compuesto — ordenamos en código
   return FirebaseFirestore.instance
       .collection('bookings')
       .where('userId', isEqualTo: userId)
-      .orderBy('fechaReserva', descending: true)
-      .limit(5)
+      .limit(20)
       .snapshots()
-      .map((snapshot) => snapshot.docs);
+      .map((snapshot) {
+    final docs = snapshot.docs.toList()
+      ..sort((a, b) {
+        final tsA = ((a.data()['fechaReserva'] as Timestamp?)
+                    ?.toDate() ??
+                DateTime(1970))
+            .millisecondsSinceEpoch;
+        final tsB = ((b.data()['fechaReserva'] as Timestamp?)
+                    ?.toDate() ??
+                DateTime(1970))
+            .millisecondsSinceEpoch;
+        return tsB.compareTo(tsA);
+      });
+    return docs.take(5).toList();
+  });
 });
 
 // 2. Proveedor de "Próxima Clase" (Tipado y Null-Safe)
@@ -74,14 +88,26 @@ final nextAppointmentProvider =
   final userId = ref.watch(currentUserIdProvider);
   if (userId == null) return const Stream.empty();
 
+  // Sin orderBy para evitar índice compuesto
   return FirebaseFirestore.instance
       .collection('appointments')
       .where('userId', isEqualTo: userId)
-      .orderBy(
-        'fechaHoraInicio',
-        descending: false,
-      ) // ASC para encontrar la más cercana en el tiempo
-      .limit(1)
+      .limit(10)
       .snapshots()
-      .map((snapshot) => snapshot.docs.isNotEmpty ? snapshot.docs.first : null);
+      .map((snapshot) {
+    if (snapshot.docs.isEmpty) return null;
+    final sorted = snapshot.docs.toList()
+      ..sort((a, b) {
+        final tsA = ((a.data()['fechaHoraInicio'] as Timestamp?)
+                    ?.toDate() ??
+                DateTime(2099))
+            .millisecondsSinceEpoch;
+        final tsB = ((b.data()['fechaHoraInicio'] as Timestamp?)
+                    ?.toDate() ??
+                DateTime(2099))
+            .millisecondsSinceEpoch;
+        return tsA.compareTo(tsB);
+      });
+    return sorted.first;
+  });
 });

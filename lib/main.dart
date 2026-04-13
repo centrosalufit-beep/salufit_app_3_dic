@@ -1,4 +1,4 @@
-﻿import 'package:firebase_app_check/firebase_app_check.dart';
+import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -9,11 +9,22 @@ import 'package:salufit_app/firebase_options.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
+
+  // Capturar errores de Flutter (widgets, rendering)
+  FlutterError.onError = (details) {
+    debugPrint('FlutterError: ${details.exceptionAsString()}');
+    FlutterError.presentError(details);
+  };
+
+  // Capturar errores asíncronos no manejados
+  PlatformDispatcher.instance.onError = (error, stack) {
+    debugPrint('PlatformError: $error');
+    return true; // No propagar — evita crash
+  };
+
   try {
-    // CORRECCIÓN: Se elimina el 'null' redundante para el linter
     await initializeDateFormatting('es');
-    
+
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
@@ -27,7 +38,7 @@ void main() async {
       await FirebaseAppCheck.instance.activate();
     }
   } catch (e) {
-    debugPrint('❌ Error Crítico en main: $e');
+    debugPrint('Error Crítico en main: $e');
   }
 
   runApp(
@@ -49,6 +60,22 @@ class SalufitApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF009688)),
         useMaterial3: true,
       ),
+      // ErrorWidget para evitar pantalla roja en producción
+      builder: (context, child) {
+        ErrorWidget.builder = (details) => Material(
+              child: Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Text(
+                    'Ha ocurrido un error.\nPor favor, reinicia la aplicación.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: Colors.grey.shade600, fontSize: 16),
+                  ),
+                ),
+              ),
+            );
+        return child ?? const SizedBox.shrink();
+      },
       home: const AuthWrapper(),
     );
   }

@@ -155,7 +155,6 @@ class _AdminPatientDocumentsScreenState
         stream: FirebaseFirestore.instance
             .collection('documents')
             .where('userId', isEqualTo: widget.userId)
-            .orderBy('fechaCreacion', descending: true)
             .snapshots(),
         builder: (BuildContext c, AsyncSnapshot<QuerySnapshot<Object?>> s) {
           if (!s.hasData) {

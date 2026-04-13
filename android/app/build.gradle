@@ -52,8 +52,6 @@ android {
     }
 
     defaultConfig {
-        externalNativeBuild { ndkBuild { arguments 'APP_SUPPORT_FLEXIBLE_PAGE_SIZES:=true' } }
-        externalNativeBuild { ndkBuild { arguments "APP_SUPPORT_FLEXIBLE_PAGE_SIZES:=true" } }
         applicationId "com.salufit.app"
         minSdk flutter.minSdkVersion
         targetSdk flutter.targetSdkVersion
