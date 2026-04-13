@@ -177,13 +177,19 @@ class _AdminClockSwitchState extends State<_AdminClockSwitch> {
       stream: FirebaseFirestore.instance
           .collection('timeClockRecords')
           .where('userId', isEqualTo: widget.userId)
-          .orderBy('timestamp', descending: true)
-          .limit(1)
+          .limit(20)
           .snapshots(),
       builder: (context, snapshot) {
-        final active = snapshot.hasData &&
-            snapshot.data!.docs.isNotEmpty &&
-            snapshot.data!.docs.first.get('type') == 'IN';
+        var active = false;
+        if (snapshot.hasData && snapshot.data!.docs.isNotEmpty) {
+          final sorted = snapshot.data!.docs.toList()
+            ..sort((a, b) {
+              final tsA = ((a.data()! as Map<String, dynamic>)['timestamp'] as Timestamp?)?.millisecondsSinceEpoch ?? 0;
+              final tsB = ((b.data()! as Map<String, dynamic>)['timestamp'] as Timestamp?)?.millisecondsSinceEpoch ?? 0;
+              return tsB.compareTo(tsA);
+            });
+          active = (sorted.first.data()! as Map<String, dynamic>)['type'] == 'IN';
+        }
         return Column(
           children: [
             Text(

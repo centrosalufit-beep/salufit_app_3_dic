@@ -477,14 +477,20 @@ class _ClockingStatusCard extends StatelessWidget {
       stream: FirebaseFirestore.instance
           .collection('timeClockRecords')
           .where('userId', isEqualTo: userId)
-          .orderBy('timestamp', descending: true)
-          .limit(1)
+          .limit(20)
           .snapshots(),
       builder: (context, snapshot) {
         if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
           return const Card(child: ListTile(title: Text('Sin registros de jornada hoy')));
         }
-        final doc = snapshot.data!.docs.first;
+        // Ordenar en código para evitar índice compuesto
+        final sorted = snapshot.data!.docs.toList()
+          ..sort((a, b) {
+            final tsA = (a.get('timestamp') as Timestamp?)?.millisecondsSinceEpoch ?? 0;
+            final tsB = (b.get('timestamp') as Timestamp?)?.millisecondsSinceEpoch ?? 0;
+            return tsB.compareTo(tsA);
+          });
+        final doc = sorted.first;
         final type = doc.get('type') as String;
         final timestamp = (doc.get('timestamp') as Timestamp?)?.toDate() ?? DateTime.now();
         final isClockedIn = type == 'IN';

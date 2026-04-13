@@ -69,7 +69,7 @@ android {
         }
     }
 
-        packagingOptions {
+    packagingOptions {
         jniLibs {
             useLegacyPackaging = false
         }
