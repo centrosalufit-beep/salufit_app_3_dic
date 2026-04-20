@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:salufit_app/core/config/app_config.dart';
 import 'package:salufit_app/core/theme/app_colors.dart';
 import 'package:salufit_app/features/auth/data/auth_repository.dart';
 import 'package:salufit_app/features/auth/presentation/auth_wrapper.dart';
@@ -25,8 +26,8 @@ class _TermsAcceptanceScreenState extends ConsumerState<TermsAcceptanceScreen> {
   bool _privacyRead = false;
   bool _isLoading = false;
 
-  final String _urlPrivacidad = 'https://centrosalufit.com/politica-de-privacidad/';
-  final String _urlTerminos = 'https://centrosalufit.com/terminos-y-condiciones/';
+  final String _urlPrivacidad = AppConfig.urlPrivacidad;
+  final String _urlTerminos = AppConfig.urlTerminos;
 
   Future<void> _openWeb(String url, {required bool isTerms}) async {
     final uri = Uri.parse(url);
@@ -45,7 +46,7 @@ class _TermsAcceptanceScreenState extends ConsumerState<TermsAcceptanceScreen> {
   }
 
   Future<void> _contactClinic() async {
-    final uri = Uri.parse('tel:+34629011055');
+    final uri = Uri.parse('tel:${AppConfig.telefonoSoporte.replaceAll(' ', '')}');
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri);
     }
@@ -53,33 +54,30 @@ class _TermsAcceptanceScreenState extends ConsumerState<TermsAcceptanceScreen> {
 
   Future<void> _handleAcceptance() async {
     final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid == null) {
-      debugPrint('>>> [TERMS] No hay usuario autenticado');
-      return;
-    }
+    if (uid == null) return;
 
     setState(() => _isLoading = true);
     try {
-      debugPrint('>>> [TERMS] Aceptando terminos para uid=$uid');
       final metadata = {
         'platform': defaultTargetPlatform.toString(),
         'deviceLabel': kIsWeb ? 'Web Browser' : Platform.operatingSystem,
-        'legalVersion': '2026.1',
+        'legalVersion': AppConfig.termsVersionActual,
       };
 
       await ref.read(authRepositoryProvider).acceptTermsWithMetadata(uid, metadata);
-      debugPrint('>>> [TERMS] Escritura exitosa. Navegando al AuthWrapper...');
 
       if (!mounted) return;
       await Navigator.of(context).pushAndRemoveUntil(
         MaterialPageRoute<void>(builder: (_) => const AuthWrapper()),
         (_) => false,
       );
-    } catch (e) {
-      debugPrint('>>> [TERMS] ERROR: $e');
+    } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Ha ocurrido un error. Intentalo de nuevo.'), backgroundColor: Colors.red),
+          const SnackBar(
+            content: Text('Ha ocurrido un error. Inténtalo de nuevo.'),
+            backgroundColor: Colors.red,
+          ),
         );
       }
     } finally {
@@ -102,21 +100,54 @@ class _TermsAcceptanceScreenState extends ConsumerState<TermsAcceptanceScreen> {
               const Icon(Icons.verified_user_rounded, size: 70, color: AppColors.primary),
               const SizedBox(height: 20),
               const Text(
-                'VALIDACION DE ACCESO',
+                'VALIDACIÓN DE ACCESO',
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, letterSpacing: 1.2),
               ),
               const SizedBox(height: 10),
-              const Text(
-                'Lee y acepta nuestras politicas oficiales para continuar.',
+              Text(
+                'Lee y acepta nuestras políticas oficiales para continuar.',
                 textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.grey, fontSize: 13),
+                style: TextStyle(color: Colors.grey.shade700, fontSize: 13),
               ),
-              const SizedBox(height: 30),
+              const SizedBox(height: 20),
+
+              // --- DISCLAIMER MÉDICO (App Store 5.1.2) ---
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: Colors.amber.shade50,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.amber.shade300),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(Icons.medical_services_outlined,
+                        color: Colors.amber.shade800, size: 22),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'AVISO MÉDICO: La información y evaluaciones de esta '
+                        'aplicación son complementarias a tu seguimiento en '
+                        'consulta. No sustituyen el diagnóstico, tratamiento '
+                        'o consejo de un profesional sanitario titulado. '
+                        'Ante cualquier síntoma grave consulta a tu médico.',
+                        style: TextStyle(
+                          fontSize: 11.5,
+                          color: Colors.amber.shade900,
+                          height: 1.4,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
 
               // --- Boton Terminos ---
               _buildLegalButton(
-                label: 'LEER TERMINOS Y CONDICIONES',
+                label: 'LEER TÉRMINOS Y CONDICIONES',
                 url: _urlTerminos,
                 isTerms: true,
                 wasRead: _termsRead,
@@ -125,7 +156,7 @@ class _TermsAcceptanceScreenState extends ConsumerState<TermsAcceptanceScreen> {
 
               // --- Boton Privacidad ---
               _buildLegalButton(
-                label: 'LEER POLITICA DE PRIVACIDAD',
+                label: 'LEER POLÍTICA DE PRIVACIDAD',
                 url: _urlPrivacidad,
                 isTerms: false,
                 wasRead: _privacyRead,
@@ -134,13 +165,13 @@ class _TermsAcceptanceScreenState extends ConsumerState<TermsAcceptanceScreen> {
 
               // --- Casillas (bloqueadas hasta leer) ---
               _buildCheckRow(
-                text: 'Acepto los Terminos y Condiciones',
+                text: 'Acepto los Términos y Condiciones',
                 value: _termsAccepted,
                 enabled: _termsRead,
                 onChanged: (v) => setState(() => _termsAccepted = v!),
               ),
               _buildCheckRow(
-                text: 'Acepto la Politica de Privacidad',
+                text: 'Acepto la Política de Privacidad',
                 value: _privacyAccepted,
                 enabled: _privacyRead,
                 onChanged: (v) => setState(() => _privacyAccepted = v!),
@@ -155,14 +186,14 @@ class _TermsAcceptanceScreenState extends ConsumerState<TermsAcceptanceScreen> {
                     borderRadius: BorderRadius.circular(10),
                     border: Border.all(color: Colors.orange.shade200),
                   ),
-                  child: const Row(
+                  child: Row(
                     children: [
-                      Icon(Icons.info_outline, color: Colors.orange, size: 20),
-                      SizedBox(width: 10),
+                      Icon(Icons.info_outline, color: Colors.orange.shade800, size: 20),
+                      const SizedBox(width: 10),
                       Expanded(
                         child: Text(
                           'Debes leer ambos documentos antes de poder aceptar.',
-                          style: TextStyle(fontSize: 12, color: Colors.orange, fontWeight: FontWeight.w600),
+                          style: TextStyle(fontSize: 12, color: Colors.orange.shade900, fontWeight: FontWeight.w600),
                         ),
                       ),
                     ],
@@ -179,19 +210,19 @@ class _TermsAcceptanceScreenState extends ConsumerState<TermsAcceptanceScreen> {
                 child: Column(
                   children: [
                     const Text(
-                      'Es necesario aceptar ambas politicas para entrar.',
+                      'Es necesario aceptar ambas políticas para entrar.',
                       style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 12),
                     ),
                     const SizedBox(height: 4),
-                    const Text(
-                      'Si no estas de acuerdo, contacta con la clinica:',
-                      style: TextStyle(color: Colors.grey, fontSize: 11),
+                    Text(
+                      'Si no estás de acuerdo, contacta con la clínica:',
+                      style: TextStyle(color: Colors.grey.shade700, fontSize: 11),
                     ),
                     const SizedBox(height: 4),
                     GestureDetector(
                       onTap: _contactClinic,
                       child: const Text(
-                        'Soporte Salufit: +34 629 011 055',
+                        'Soporte Salufit: ${AppConfig.telefonoSoporte}',
                         style: TextStyle(
                           color: AppColors.primary,
                           fontSize: 13,

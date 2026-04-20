@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:salufit_app/features/auth/presentation/migration_gate.dart';
 import 'package:salufit_app/features/auth/presentation/pending_signature_gate.dart';
 import 'package:salufit_app/features/auth/presentation/terms_acceptance_screen.dart';
 import 'package:salufit_app/features/home/presentation/screens/main_client_dashboard_screen.dart';
@@ -58,14 +59,17 @@ class RoleGate extends StatelessWidget {
         final isStaff =
             role == 'admin' || role == 'administrador' || role == 'profesional';
 
-        // Función helper para envolver con o sin PendingSignatureGate
+        // Función helper: envuelve con MigrationGate (siempre) y
+        // PendingSignatureGate (si no es demo).
         Widget wrapChild(Widget child) {
-          if (isDemo) return child; // Demo salta firmas
-          return PendingSignatureGate(
-            userId: user.uid,
-            userRole: role,
-            child: child,
-          );
+          final protected = isDemo
+              ? child
+              : PendingSignatureGate(
+                  userId: user.uid,
+                  userRole: role,
+                  child: child,
+                );
+          return MigrationGate(userId: user.uid, child: protected);
         }
 
         if (isStaff) {

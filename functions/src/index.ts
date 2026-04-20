@@ -1,142 +1,618 @@
+/**
+ * Salufit Cloud Functions — Versión blindada 2026-04-20
+ *
+ * Políticas aplicadas:
+ * - Rate limiting por UID/email/IP usando Firestore
+ * - Prevención de enumeración de usuarios
+ * - Validación de input estricta
+ * - CORS whitelist (no abierto)
+ * - Logging de auditoría en cada operación sensible
+ * - Cascade delete RGPD-compliant para derecho al olvido
+ */
+
 import { onRequest } from "firebase-functions/v2/https";
 import * as functions from "firebase-functions";
 import * as admin from "firebase-admin";
-const cors = require("cors")({ origin: true });
 
-if (admin.apps.length === 0) { admin.initializeApp(); }
+// Dominios autorizados a llamar nuestras funciones HTTP
+const ALLOWED_ORIGINS = [
+    "https://centrosalufit.com",
+    "https://www.centrosalufit.com",
+    "https://salufit-app.web.app",
+    "https://salufit-app.firebaseapp.com",
+];
+
+// Helper CORS con whitelist estricta
+function applyCors(req: any, res: any): boolean {
+    const origin = (req.headers.origin as string) || "";
+    if (ALLOWED_ORIGINS.includes(origin)) {
+        res.set("Access-Control-Allow-Origin", origin);
+        res.set("Access-Control-Allow-Methods", "POST, OPTIONS");
+        res.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
+        res.set("Access-Control-Max-Age", "3600");
+    }
+    if (req.method === "OPTIONS") {
+        res.status(204).send("");
+        return true;
+    }
+    return false;
+}
+
+if (admin.apps.length === 0) {
+    admin.initializeApp();
+}
 const db = admin.firestore();
 
-// ── Activación de clientes (v1 onCall para compatibilidad con Flutter) ──
-export const checkAccountStatus = functions.https.onCall(async (data, _context) => {
-    const email = (data.email as string).trim().toLowerCase();
-    const historyIdRaw = data.historyId.toString().trim();
+// ═══════════════════════════════════════════════════════════════
+// HELPERS DE SEGURIDAD
+// ═══════════════════════════════════════════════════════════════
+
+/**
+ * Rate limiter basado en Firestore.
+ * @param key identificador único (uid, email hash, IP)
+ * @param maxAttempts intentos permitidos en la ventana
+ * @param windowSeconds duración de la ventana en segundos
+ */
+async function checkRateLimit(
+    key: string,
+    maxAttempts: number,
+    windowSeconds: number,
+): Promise<void> {
+    const now = Date.now();
+    const cutoff = now - windowSeconds * 1000;
+    const ref = db.collection("rate_limits").doc(key);
+
+    await db.runTransaction(async (t) => {
+        const snap = await t.get(ref);
+        const data = snap.data() || {};
+        const attempts: number[] = (data.attempts || []).filter(
+            (ts: number) => ts > cutoff,
+        );
+        if (attempts.length >= maxAttempts) {
+            throw new functions.https.HttpsError(
+                "resource-exhausted",
+                "Demasiados intentos. Espera unos minutos.",
+            );
+        }
+        attempts.push(now);
+        t.set(ref, { attempts, lastAttempt: now }, { merge: true });
+    });
+}
+
+/**
+ * Valida formato de email RFC 5322 simplificado.
+ */
+function isValidEmail(email: string): boolean {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email);
+}
+
+/**
+ * Valida que un string sea un número de historia aceptable.
+ */
+function isValidHistoryId(raw: string): boolean {
+    return /^\d{1,10}$/.test(raw);
+}
+
+/**
+ * Valida fortaleza de contraseña (12+ chars, mayúscula, minúscula, número).
+ */
+function isStrongPassword(pwd: string): boolean {
+    if (pwd.length < 12) return false;
+    if (!/[A-Z]/.test(pwd)) return false;
+    if (!/[a-z]/.test(pwd)) return false;
+    if (!/\d/.test(pwd)) return false;
+    return true;
+}
+
+/**
+ * Escribe un registro de auditoría.
+ */
+async function writeAudit(entry: {
+    tipo: string;
+    userId: string | null;
+    targetUserId?: string;
+    metadata?: Record<string, unknown>;
+    ip?: string;
+    userAgent?: string;
+    status: "SUCCESS" | "FAILURE" | "DENIED";
+}): Promise<void> {
+    try {
+        await db.collection("audit_logs").add({
+            ...entry,
+            timestamp: admin.firestore.FieldValue.serverTimestamp(),
+        });
+    } catch (e) {
+        console.error("No se pudo escribir audit log:", e);
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ACTIVACIÓN — Prevención de enumeración + rate limit
+// ═══════════════════════════════════════════════════════════════
+export const checkAccountStatus = functions.https.onCall(async (data, context) => {
+    const emailRaw = (data?.email as string | undefined)?.trim().toLowerCase() || "";
+    const historyIdRaw = (data?.historyId as string | undefined)?.toString().trim() || "";
+
+    // Validación de input
+    if (!isValidEmail(emailRaw)) {
+        throw new functions.https.HttpsError("invalid-argument", "Email inválido.");
+    }
+    if (!isValidHistoryId(historyIdRaw)) {
+        throw new functions.https.HttpsError("invalid-argument", "Número de historia inválido.");
+    }
+
+    // Rate limit — 5 intentos cada 15 minutos por email
+    const rateLimitKey = `activate_${Buffer.from(emailRaw).toString("base64").slice(0, 32)}`;
+    await checkRateLimit(rateLimitKey, 5, 900);
 
     const idString = historyIdRaw.padStart(6, "0");
     const idNumber = parseInt(historyIdRaw, 10);
 
     try {
-        // Verificar si ya existe en users_app (colección activa)
+        // ¿Ya está activado?
         const userSnapshot = await db.collection("users_app")
-            .where("email", "==", email)
+            .where("email", "==", emailRaw)
             .limit(1)
             .get();
 
         if (!userSnapshot.empty) {
+            await writeAudit({
+                tipo: "ACTIVATION_ALREADY_REGISTERED",
+                userId: null,
+                metadata: { emailHash: Buffer.from(emailRaw).toString("base64").slice(0, 16) },
+                status: "SUCCESS",
+            });
             return { status: "ALREADY_REGISTERED" };
         }
 
-        // Buscar en bbdd y legacy_import por email
+        // Buscar en bbdd y legacy_import
         const [bbddSnapshot, legacySnapshot] = await Promise.all([
-            db.collection("bbdd").where("email", "==", email).get(),
-            db.collection("legacy_import").where("email", "==", email).get(),
+            db.collection("bbdd").where("email", "==", emailRaw).get(),
+            db.collection("legacy_import").where("email", "==", emailRaw).get(),
         ]);
 
         const allDocs = [...bbddSnapshot.docs, ...legacySnapshot.docs];
 
+        // Prevención de enumeración: siempre misma respuesta genérica si falla
         if (allDocs.length === 0) {
+            await writeAudit({
+                tipo: "ACTIVATION_NOT_FOUND",
+                userId: null,
+                status: "FAILURE",
+            });
+            // Respuesta que no revela si el email existe o no
             return { status: "NOT_FOUND" };
         }
 
-        // Verificación híbrida de ID de historia
-        const match = allDocs.find(doc => {
+        const match = allDocs.find((doc) => {
             const d = doc.data();
             const dbId = d.historyId || d.idH || d.numero || d.numHistoria;
             return dbId == idString || dbId == idNumber || dbId == historyIdRaw;
         });
 
-        if (match) {
-            const matchData = match.data();
-
-            // Crear usuario en Firebase Auth (si no existe ya)
-            let uid: string;
-            try {
-                const existingUser = await admin.auth().getUserByEmail(email);
-                uid = existingUser.uid;
-            } catch {
-                // Usuario no existe en Auth, lo creamos con contraseña temporal
-                const newUser = await admin.auth().createUser({
-                    email: email,
-                    displayName: matchData.nombreCompleto || matchData.nombre || email,
-                });
-                uid = newUser.uid;
-            }
-
-            // Crear perfil en users_app
-            await db.collection("users_app").doc(uid).set({
-                email: email,
-                nombre: matchData.nombre || "",
-                nombreCompleto: matchData.nombreCompleto || matchData.nombre || "",
-                numHistoria: matchData.numHistoria || matchData.historyId || matchData.idH || historyIdRaw,
-                rol: "cliente",
-                activo: true,
-                createdAt: admin.firestore.FieldValue.serverTimestamp(),
-                activatedAt: admin.firestore.FieldValue.serverTimestamp(),
-            }, { merge: true });
-
-            return { status: "ACTIVATION_PENDING" };
-        } else {
+        if (!match) {
+            await writeAudit({
+                tipo: "ACTIVATION_INVALID_HISTORY",
+                userId: null,
+                status: "FAILURE",
+            });
             return { status: "NOT_FOUND" };
         }
+
+        const matchData = match.data();
+
+        let uid: string;
+        try {
+            const existingUser = await admin.auth().getUserByEmail(emailRaw);
+            uid = existingUser.uid;
+        } catch {
+            const newUser = await admin.auth().createUser({
+                email: emailRaw,
+                displayName: matchData.nombreCompleto || matchData.nombre || emailRaw,
+            });
+            uid = newUser.uid;
+        }
+
+        await db.collection("users_app").doc(uid).set({
+            email: emailRaw,
+            nombre: matchData.nombre || "",
+            nombreCompleto: matchData.nombreCompleto || matchData.nombre || "",
+            numHistoria: matchData.numHistoria || matchData.historyId || matchData.idH || historyIdRaw,
+            rol: "cliente",
+            activo: true,
+            // Marcadores de migración pendiente (el cliente completará via MigrationGate)
+            passwordUpdated: false,
+            dateOfBirthSet: false,
+            consentVersion: null,
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            activatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        }, { merge: true });
+
+        await writeAudit({
+            tipo: "ACTIVATION_SUCCESS",
+            userId: uid,
+            status: "SUCCESS",
+        });
+
+        return { status: "ACTIVATION_PENDING" };
     } catch (error) {
-        console.error("Error en checkAccountStatus:", error);
-        throw new Error("Error al verificar la cuenta");
+        if (error instanceof functions.https.HttpsError) throw error;
+        console.error("Error en checkAccountStatus");
+        throw new functions.https.HttpsError("internal", "Error al procesar la solicitud.");
     }
 });
 
-export const cancelarReserva = onRequest((req, res) => {
-    return cors(req, res, async () => {
-        const { bookingId } = req.body;
-        if (!bookingId) {
-            res.status(400).json({ error: "Falta bookingId" });
-            return;
+// ═══════════════════════════════════════════════════════════════
+// CONSUMO DE TOKEN POR QR (asistencia sin reserva / walk-in)
+// ═══════════════════════════════════════════════════════════════
+export const consumirTokenPorQR = functions.https.onCall(async (data, context) => {
+    if (!context.auth) {
+        throw new functions.https.HttpsError("unauthenticated", "Debes iniciar sesión.");
+    }
+
+    const scannerUid = context.auth.uid;
+    const scannedUid = (data?.scannedUserId as string | undefined)?.trim() || "";
+
+    if (!scannedUid || !/^[A-Za-z0-9]{10,40}$/.test(scannedUid)) {
+        throw new functions.https.HttpsError("invalid-argument", "UID de cliente inválido.");
+    }
+
+    // Rate limit: 60 escaneos / minuto por profesional (uso legítimo intenso aceptado)
+    await checkRateLimit(`qr_scan_${scannerUid}`, 60, 60);
+
+    const scannerDoc = await db.collection("users_app").doc(scannerUid).get();
+    if (!scannerDoc.exists) {
+        throw new functions.https.HttpsError("permission-denied", "Tu perfil no existe.");
+    }
+    const scannerRole = (scannerDoc.data()?.rol || "").toLowerCase();
+    const isStaff = ["admin", "administrador", "profesional"].includes(scannerRole);
+    if (!isStaff) {
+        await writeAudit({
+            tipo: "QR_SCAN_DENIED",
+            userId: scannerUid,
+            targetUserId: scannedUid,
+            status: "DENIED",
+        });
+        throw new functions.https.HttpsError("permission-denied", "Solo el personal puede escanear códigos QR.");
+    }
+
+    const scannedDoc = await db.collection("users_app").doc(scannedUid).get();
+    if (!scannedDoc.exists) {
+        await writeAudit({
+            tipo: "QR_SCAN_USER_NOT_FOUND",
+            userId: scannerUid,
+            targetUserId: scannedUid,
+            status: "FAILURE",
+        });
+        return { status: "USER_NOT_FOUND" };
+    }
+    const scannedData = scannedDoc.data()!;
+    const clientName = scannedData.nombreCompleto || scannedData.nombre || scannedData.email || "Cliente";
+
+    try {
+        const result = await db.runTransaction(async (t) => {
+            const passQuery = await db.collection("passes")
+                .where("userId", "==", scannedUid)
+                .where("activo", "==", true)
+                .limit(1)
+                .get();
+
+            if (passQuery.empty) {
+                return { status: "NO_ACTIVE_PASS", clientName };
+            }
+
+            const passRef = passQuery.docs[0].ref;
+            const passSnap = await t.get(passRef);
+            const tokensRestantes = (passSnap.data()?.tokensRestantes as number | undefined) ?? 0;
+
+            if (tokensRestantes <= 0) {
+                return { status: "NO_TOKENS", clientName, tokensRestantes };
+            }
+
+            t.update(passRef, { tokensRestantes: tokensRestantes - 1 });
+
+            const attendanceRef = db.collection("walk_in_attendance").doc();
+            t.set(attendanceRef, {
+                clientId: scannedUid,
+                clientName,
+                scannerId: scannerUid,
+                scannerName: scannerDoc.data()?.nombreCompleto || scannerDoc.data()?.nombre || "",
+                scannerRole,
+                timestamp: admin.firestore.FieldValue.serverTimestamp(),
+                passId: passRef.id,
+                tokensBefore: tokensRestantes,
+                tokensAfter: tokensRestantes - 1,
+            });
+
+            return { status: "SUCCESS", clientName, tokensAfter: tokensRestantes - 1 };
+        });
+
+        await writeAudit({
+            tipo: "QR_SCAN",
+            userId: scannerUid,
+            targetUserId: scannedUid,
+            metadata: { result: (result as any).status },
+            status: (result as any).status === "SUCCESS" ? "SUCCESS" : "FAILURE",
+        });
+
+        return result;
+    } catch (error) {
+        if (error instanceof functions.https.HttpsError) throw error;
+        console.error("Error en consumirTokenPorQR");
+        throw new functions.https.HttpsError("internal", "Error al procesar el escaneo.");
+    }
+});
+
+// ═══════════════════════════════════════════════════════════════
+// VALIDAR NUEVA CONTRASEÑA (invocada desde MigrationGate)
+// ═══════════════════════════════════════════════════════════════
+export const setStrongPassword = functions.https.onCall(async (data, context) => {
+    if (!context.auth) {
+        throw new functions.https.HttpsError("unauthenticated", "Debes iniciar sesión.");
+    }
+
+    const uid = context.auth.uid;
+    const newPassword = (data?.newPassword as string | undefined) || "";
+
+    if (!isStrongPassword(newPassword)) {
+        throw new functions.https.HttpsError(
+            "invalid-argument",
+            "La contraseña debe tener al menos 12 caracteres, una mayúscula, una minúscula y un número.",
+        );
+    }
+
+    // Rate limit: 3 cambios / hora
+    await checkRateLimit(`pwd_${uid}`, 3, 3600);
+
+    try {
+        await admin.auth().updateUser(uid, { password: newPassword });
+        await db.collection("users_app").doc(uid).update({
+            passwordUpdated: true,
+            passwordUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        await writeAudit({
+            tipo: "PASSWORD_UPDATED",
+            userId: uid,
+            status: "SUCCESS",
+        });
+        return { status: "SUCCESS" };
+    } catch (error) {
+        console.error("Error en setStrongPassword");
+        await writeAudit({
+            tipo: "PASSWORD_UPDATE_FAILED",
+            userId: uid,
+            status: "FAILURE",
+        });
+        throw new functions.https.HttpsError("internal", "No se pudo actualizar la contraseña.");
+    }
+});
+
+// ═══════════════════════════════════════════════════════════════
+// DELETE USER DATA — Cascada RGPD-compliant (derecho al olvido)
+// ═══════════════════════════════════════════════════════════════
+export const deleteUserData = functions.https.onCall(async (data, context) => {
+    if (!context.auth) {
+        throw new functions.https.HttpsError("unauthenticated", "Debes iniciar sesión.");
+    }
+
+    const callerUid = context.auth.uid;
+    const targetUid = (data?.targetUserId as string | undefined)?.trim() || callerUid;
+
+    // Solo el propio usuario o un admin puede borrar datos
+    let isAdmin = false;
+    if (targetUid !== callerUid) {
+        const callerDoc = await db.collection("users_app").doc(callerUid).get();
+        const callerRole = (callerDoc.data()?.rol || "").toLowerCase();
+        isAdmin = ["admin", "administrador"].includes(callerRole);
+        if (!isAdmin) {
+            throw new functions.https.HttpsError("permission-denied", "No tienes permiso para borrar a otros usuarios.");
+        }
+    }
+
+    // Rate limit: 1 borrado por usuario cada 24h (protección contra abuso)
+    await checkRateLimit(`delete_${callerUid}`, 1, 86400);
+
+    const collectionsToCleanByUserId = [
+        "bookings",
+        "passes",
+        "documents",
+        "signed_documents",
+        "exercise_assignments",
+        "exercises",
+        "patient_metrics",
+        "patient_data",
+        "walk_in_attendance",
+        "appointments",
+        "otp_requests",
+    ];
+    const collectionsToCleanByClientId = ["walk_in_attendance"];
+    const collectionsToCleanByAsignadoA = ["staff_tasks"];
+
+    try {
+        // Borrar documentos por userId
+        for (const col of collectionsToCleanByUserId) {
+            const snap = await db.collection(col).where("userId", "==", targetUid).get();
+            const batch = db.batch();
+            snap.docs.forEach((d) => batch.delete(d.ref));
+            if (snap.size > 0) await batch.commit();
         }
 
+        // Borrar walk_in_attendance por clientId
+        for (const col of collectionsToCleanByClientId) {
+            const snap = await db.collection(col).where("clientId", "==", targetUid).get();
+            const batch = db.batch();
+            snap.docs.forEach((d) => batch.delete(d.ref));
+            if (snap.size > 0) await batch.commit();
+        }
+
+        // Borrar tareas asignadas (marcar como eliminadas, no borrar para auditoría)
+        for (const col of collectionsToCleanByAsignadoA) {
+            const snap = await db.collection(col).where("asignadoAId", "==", targetUid).get();
+            const batch = db.batch();
+            snap.docs.forEach((d) => batch.update(d.ref, { usuarioEliminado: true }));
+            if (snap.size > 0) await batch.commit();
+        }
+
+        // Borrar Storage (fotos, firmas, documentos subidos)
+        const bucket = admin.storage().bucket();
+        const prefixes = [`patients/${targetUid}/`, `signatures/${targetUid}/`, `users/${targetUid}/`];
+        for (const prefix of prefixes) {
+            try {
+                await bucket.deleteFiles({ prefix });
+            } catch (e) {
+                console.warn(`No se pudo borrar Storage ${prefix}:`, e);
+            }
+        }
+
+        // Borrar perfil principal
+        await db.collection("users_app").doc(targetUid).delete();
+
+        // Borrar en Firebase Auth (solo si es el propio usuario o admin)
         try {
-            let reembolsoRealizado = false;
-
-            await db.runTransaction(async (t) => {
-                const bRef = db.collection("bookings").doc(bookingId);
-                const bSnap = await t.get(bRef);
-                if (!bSnap.exists) throw new Error("La reserva no existe.");
-                
-                const bData = bSnap.data();
-                const cRef = db.collection("groupClasses").doc(bData!.groupClassId);
-                const cSnap = await t.get(cRef);
-                if (!cSnap.exists) throw new Error("La clase no existe.");
-                
-                const cData = cSnap.data();
-                const ahora = new Date();
-                const fechaClase = cData!.fechaHoraInicio.toDate();
-                const diffHoras = (fechaClase.getTime() - ahora.getTime()) / (1000 * 60 * 60);
-                
-                if (diffHoras >= 24) {
-                    const passesSnap = await t.get(db.collection("passes")
-                        .where("userId", "==", bData!.userId)
-                        .where("activo", "==", true)
-                        .limit(1));
-
-                    if (!passesSnap.empty) {
-                        const passRef = passesSnap.docs[0].ref;
-                        const tokensActuales = passesSnap.docs[0].data().tokensRestantes || 0;
-                        t.update(passRef, { tokensRestantes: tokensActuales + 1 });
-                        reembolsoRealizado = true;
-                    }
-                }
-
-                const nuevoAforo = Math.max(0, (cData!.aforoActual || 1) - 1);
-                t.update(cRef, { aforoActual: nuevoAforo });
-                t.delete(bRef);
-            });
-
-            res.json({ 
-                success: true, 
-                tokenDevuelto: reembolsoRealizado,
-                message: reembolsoRealizado ? "Reserva anulada y token devuelto." : "Reserva anulada (sin devolución de token)."
-            });
-            return;
-        } catch (e: any) {
-            res.status(400).json({ error: e.message });
-            return;
+            await admin.auth().deleteUser(targetUid);
+        } catch (e) {
+            console.warn("No se pudo borrar Auth user:", e);
         }
+
+        await writeAudit({
+            tipo: "USER_DATA_DELETED",
+            userId: callerUid,
+            targetUserId: targetUid,
+            metadata: { cascadeCollections: collectionsToCleanByUserId.length },
+            status: "SUCCESS",
+        });
+
+        return { status: "SUCCESS" };
+    } catch (error) {
+        console.error("Error en deleteUserData");
+        await writeAudit({
+            tipo: "USER_DATA_DELETE_FAILED",
+            userId: callerUid,
+            targetUserId: targetUid,
+            status: "FAILURE",
+        });
+        throw new functions.https.HttpsError("internal", "No se pudo completar el borrado.");
+    }
+});
+
+// ═══════════════════════════════════════════════════════════════
+// LOG AUDIT — Entrada manual de eventos de auditoría desde cliente
+// ═══════════════════════════════════════════════════════════════
+export const logAudit = functions.https.onCall(async (data, context) => {
+    if (!context.auth) {
+        throw new functions.https.HttpsError("unauthenticated", "Debes iniciar sesión.");
+    }
+
+    const uid = context.auth.uid;
+    const tipo = (data?.tipo as string | undefined)?.trim() || "";
+    const metadata = (data?.metadata as Record<string, unknown> | undefined) || {};
+
+    if (!tipo || tipo.length > 100) {
+        throw new functions.https.HttpsError("invalid-argument", "Tipo inválido.");
+    }
+
+    // Rate limit: máximo 120 eventos / hora por usuario
+    await checkRateLimit(`audit_${uid}`, 120, 3600);
+
+    await writeAudit({
+        tipo,
+        userId: uid,
+        metadata,
+        status: "SUCCESS",
     });
+
+    return { ok: true };
+});
+
+// ═══════════════════════════════════════════════════════════════
+// CANCELAR RESERVA — Actualizado con CORS seguro y auditoría
+// ═══════════════════════════════════════════════════════════════
+export const cancelarReserva = onRequest(async (req, res) => {
+    if (applyCors(req, res)) return;
+
+    const authHeader = req.headers.authorization || "";
+    if (!authHeader.startsWith("Bearer ")) {
+        res.status(401).json({ error: "No autenticado" });
+        return;
+    }
+
+    let callerUid: string;
+    try {
+        const token = authHeader.substring(7);
+        const decoded = await admin.auth().verifyIdToken(token);
+        callerUid = decoded.uid;
+    } catch {
+        res.status(401).json({ error: "Token inválido" });
+        return;
+    }
+
+    const { bookingId } = req.body || {};
+    if (!bookingId || typeof bookingId !== "string") {
+        res.status(400).json({ error: "Falta bookingId" });
+        return;
+    }
+
+    try {
+        let reembolsoRealizado = false;
+
+        await db.runTransaction(async (t) => {
+            const bRef = db.collection("bookings").doc(bookingId);
+            const bSnap = await t.get(bRef);
+            if (!bSnap.exists) throw new Error("La reserva no existe.");
+
+            const bData = bSnap.data()!;
+
+            // Verificar ownership o staff
+            if (bData.userId !== callerUid) {
+                const callerDoc = await db.collection("users_app").doc(callerUid).get();
+                const callerRole = (callerDoc.data()?.rol || "").toLowerCase();
+                const isStaff = ["admin", "administrador", "profesional"].includes(callerRole);
+                if (!isStaff) throw new Error("No tienes permiso para cancelar esta reserva.");
+            }
+
+            const cRef = db.collection("groupClasses").doc(bData.groupClassId);
+            const cSnap = await t.get(cRef);
+            if (!cSnap.exists) throw new Error("La clase no existe.");
+
+            const cData = cSnap.data()!;
+            const ahora = new Date();
+            const fechaClase = cData.fechaHoraInicio.toDate();
+            const diffHoras = (fechaClase.getTime() - ahora.getTime()) / (1000 * 60 * 60);
+
+            if (diffHoras >= 24) {
+                const passesSnap = await t.get(db.collection("passes")
+                    .where("userId", "==", bData.userId)
+                    .where("activo", "==", true)
+                    .limit(1));
+
+                if (!passesSnap.empty) {
+                    const passRef = passesSnap.docs[0].ref;
+                    const tokensActuales = passesSnap.docs[0].data().tokensRestantes || 0;
+                    t.update(passRef, { tokensRestantes: tokensActuales + 1 });
+                    reembolsoRealizado = true;
+                }
+            }
+
+            const nuevoAforo = Math.max(0, (cData.aforoActual || 1) - 1);
+            t.update(cRef, { aforoActual: nuevoAforo });
+            t.delete(bRef);
+        });
+
+        await writeAudit({
+            tipo: "BOOKING_CANCELLED",
+            userId: callerUid,
+            metadata: { bookingId, reembolso: reembolsoRealizado },
+            status: "SUCCESS",
+        });
+
+        res.json({
+            success: true,
+            tokenDevuelto: reembolsoRealizado,
+            message: reembolsoRealizado
+                ? "Reserva anulada y token devuelto."
+                : "Reserva anulada (sin devolución de token).",
+        });
+    } catch (e: any) {
+        res.status(400).json({ error: e.message });
+    }
 });

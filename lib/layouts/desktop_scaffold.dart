@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:salufit_app/features/admin_dashboard/presentation/admin_analysis_screen.dart';
 import 'package:salufit_app/features/admin_dashboard/presentation/admin_crm_screen.dart';
 import 'package:salufit_app/features/admin_dashboard/presentation/admin_library_hub_screen.dart';
@@ -10,6 +11,7 @@ import 'package:salufit_app/features/bookings/presentation/admin_class_manager_s
 import 'package:salufit_app/features/communication/presentation/internal_management_screen.dart';
 import 'package:salufit_app/features/patient_record/presentation/admin_patient_detail_screen.dart';
 import 'package:salufit_app/features/patient_record/presentation/admin_patient_list_screen.dart';
+import 'package:salufit_app/features/professional/presentation/professional_desktop_dashboard_screen.dart';
 
 class DesktopScaffold extends StatefulWidget {
   const DesktopScaffold({required this.userId, required this.userRole, super.key});
@@ -27,11 +29,17 @@ class _DesktopScaffoldState extends State<DesktopScaffold> {
   Widget build(BuildContext context) {
     final isAdmin = widget.userRole == 'admin' || widget.userRole == 'administrador';
     final pages = <Widget>[
-      const AdminAnalysisScreen(),
+      if (isAdmin)
+        const AdminAnalysisScreen()
+      else
+        ProfessionalDesktopDashboardScreen(
+          userId: widget.userId,
+          userRole: widget.userRole,
+        ),
       AdminClassManagerScreen(currentUserId: widget.userId),
       AdminPatientListScreen(viewerRole: widget.userRole, onUserSelected: _openPatient),
-      const AdminRenewalScreen(),
-      AdminPatientListScreen(viewerRole: 'profesional', onUserSelected: _openPatient), 
+      if (isAdmin) const AdminRenewalScreen(),
+      AdminPatientListScreen(viewerRole: 'profesional', onUserSelected: _openPatient),
       InternalManagementScreen(currentUserId: widget.userId, userRole: widget.userRole),
       AdminCrmScreen(userId: widget.userId, userRole: widget.userRole),
       if (isAdmin) const AdminRRHHScreen(),
@@ -72,10 +80,13 @@ class _DesktopScaffoldState extends State<DesktopScaffold> {
                               selectedLabelTextStyle: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11),
                               unselectedLabelTextStyle: const TextStyle(color: Colors.white60, fontSize: 10),
                               destinations: [
-                                const NavigationRailDestination(icon: Icon(Icons.analytics), label: Text('Dashboard')),
+                                NavigationRailDestination(
+                                  icon: Icon(isAdmin ? Icons.analytics : Icons.space_dashboard_outlined),
+                                  label: const Text('Dashboard'),
+                                ),
                                 const NavigationRailDestination(icon: Icon(Icons.calendar_month), label: Text('Clases')),
                                 const NavigationRailDestination(icon: Icon(Icons.people), label: Text('Pacientes')),
-                                const NavigationRailDestination(icon: Icon(Icons.confirmation_number), label: Text('Bonos')),
+                                if (isAdmin) const NavigationRailDestination(icon: Icon(Icons.confirmation_number), label: Text('Bonos')),
                                 const NavigationRailDestination(icon: Icon(Icons.assignment), label: Text('Recursos')),
                                 const NavigationRailDestination(icon: Icon(Icons.forum), label: Text('Equipo')),
                                 const NavigationRailDestination(icon: Icon(Icons.leaderboard), label: Text('CRM')),
@@ -92,7 +103,18 @@ class _DesktopScaffoldState extends State<DesktopScaffold> {
                       onTap: () => setState(() => _selectedIndex = 5),
                     ),
                     const SizedBox(height: 8),
-                    IconButton(icon: const Icon(Icons.power_settings_new, color: Colors.redAccent, size: 30), onPressed: () => FirebaseAuth.instance.signOut()),
+                    Semantics(
+                      label: 'Cerrar sesión',
+                      button: true,
+                      child: IconButton(
+                        icon: const Icon(Icons.power_settings_new, color: Colors.redAccent, size: 30),
+                        tooltip: 'Cerrar sesión',
+                        onPressed: () async {
+                          HapticFeedback.mediumImpact();
+                          await FirebaseAuth.instance.signOut();
+                        },
+                      ),
+                    ),
                     const SizedBox(height: 20),
                   ],
                 ),

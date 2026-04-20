@@ -79,7 +79,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         fillColor: Colors.white.withValues(alpha: 0.9),
                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                       ),
-                      validator: (v) => (v == null || v.length < 6) ? 'Mínimo 6 caracteres' : null,
+                      validator: (v) => (v == null || v.isEmpty) ? 'Introduce tu contraseña' : null,
                     ),
                     const SizedBox(height: 30),
                     SizedBox(
@@ -112,39 +112,56 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       ),
                     ),
                     const SizedBox(height: 24),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: OutlinedButton(
-                            // CORRECCIÓN 1: Tipado explícito <void> para MaterialPageRoute
-                            onPressed: () => Navigator.push<void>(
-                              context,
-                              MaterialPageRoute<void>(builder: (c) => const ActivationScreen()),
-                            ),
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: AppColors.primary,
-                              side: const BorderSide(color: AppColors.primary),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                            ),
-                            child: const Text('Primera vez', style: TextStyle(fontWeight: FontWeight.bold)),
-                          ),
-                        ),
-                        const SizedBox(width: 15),
-                        Expanded(
-                          child: TextButton(
-                            // CORRECCIÓN 2: Tipado explícito <void> para MaterialPageRoute
-                            onPressed: () => Navigator.push<void>(
-                              context,
-                              MaterialPageRoute<void>(builder: (c) => const ForgotPasswordScreen()),
-                            ),
-                            child: const Text(
-                              '¿Olvidaste\ncontraseña?',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(color: Colors.black54),
+                    IntrinsicHeight(
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Expanded(
+                            child: OutlinedButton(
+                              onPressed: () => Navigator.push<void>(
+                                context,
+                                MaterialPageRoute<void>(builder: (c) => const ActivationScreen()),
+                              ),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: AppColors.primary,
+                                side: const BorderSide(color: AppColors.primary),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+                                minimumSize: const Size.fromHeight(52),
+                              ),
+                              child: const FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Text(
+                                  'Primera vez',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(fontWeight: FontWeight.bold),
+                                ),
+                              ),
                             ),
                           ),
-                        ),
-                      ],
+                          const SizedBox(width: 15),
+                          Expanded(
+                            child: TextButton(
+                              onPressed: () => Navigator.push<void>(
+                                context,
+                                MaterialPageRoute<void>(builder: (c) => const ForgotPasswordScreen()),
+                              ),
+                              style: TextButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+                                minimumSize: const Size.fromHeight(52),
+                              ),
+                              child: const FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Text(
+                                  '¿Olvidaste contraseña?',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(color: Colors.black54),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ],
                 ),
