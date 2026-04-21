@@ -38,15 +38,19 @@ class SalufitHeader extends StatelessWidget {
                     fontWeight: FontWeight.w900,
                     color: AppColors.primary,
                   ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
                 if (subtitle != null)
                   Text(
                     subtitle!,
                     style: const TextStyle(
-                      color: Colors.grey, 
-                      fontSize: 11, 
+                      color: Colors.grey,
+                      fontSize: 11,
                       fontWeight: FontWeight.bold,
                     ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
               ],
             ),

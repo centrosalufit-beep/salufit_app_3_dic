@@ -1,7 +1,7 @@
 import 'dart:developer' as dev;
-import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:salufit_app/core/providers/firebase_providers.dart';
 import 'package:salufit_app/core/theme/app_colors.dart';
 import 'package:salufit_app/features/auth/presentation/activation_screen_helper.dart';
 import 'package:salufit_app/features/auth/providers/auth_providers.dart';
@@ -31,7 +31,8 @@ class _ActivationScreenState extends ConsumerState<ActivationScreen> {
       dev.log('>>> [ACTIVACION] Verificando estado via Cloud Function');
 
       // Tipado explícito <Map<String, dynamic>> para evitar avoid_dynamic_calls
-      final result = await FirebaseFunctions.instance
+      final result = await ref
+          .read(firebaseFunctionsProvider)
           .httpsCallable('checkAccountStatus')
           .call<Map<String, dynamic>>({
         'email': email,

@@ -1,7 +1,7 @@
-﻿import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:salufit_app/core/providers/firebase_providers.dart';
 import 'package:salufit_app/core/theme/app_colors.dart';
 import 'package:salufit_app/core/utils/safe_parsing_extensions.dart';
 import 'package:salufit_app/features/bookings/data/class_repository.dart';
@@ -237,7 +237,7 @@ class _ClientClassListScreenState extends ConsumerState<ClientClassListScreen> {
     try {
       await ref.read(classRepositoryProvider).inscribirUsuario(
         userId: widget.userId,
-        userEmail: FirebaseAuth.instance.currentUser?.email ?? '',
+        userEmail: ref.read(firebaseAuthProvider).currentUser?.email ?? '',
         classId: id,
       );
     } finally {

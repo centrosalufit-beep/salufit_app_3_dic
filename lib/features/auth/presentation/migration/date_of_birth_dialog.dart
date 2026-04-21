@@ -1,8 +1,9 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:salufit_app/core/config/app_config.dart';
+import 'package:salufit_app/core/providers/firebase_providers.dart';
 import 'package:salufit_app/core/theme/app_colors.dart';
 
 /// Popup obligatorio que solicita la fecha de nacimiento para verificar
@@ -10,14 +11,14 @@ import 'package:salufit_app/core/theme/app_colors.dart';
 ///
 /// Si el usuario es menor de la edad mínima, se bloquea su acceso y se
 /// le pide que un padre/madre/tutor contacte con el centro.
-class DateOfBirthDialog extends StatefulWidget {
+class DateOfBirthDialog extends ConsumerStatefulWidget {
   const DateOfBirthDialog({super.key});
 
   @override
-  State<DateOfBirthDialog> createState() => _DateOfBirthDialogState();
+  ConsumerState<DateOfBirthDialog> createState() => _DateOfBirthDialogState();
 }
 
-class _DateOfBirthDialogState extends State<DateOfBirthDialog> {
+class _DateOfBirthDialogState extends ConsumerState<DateOfBirthDialog> {
   DateTime? _selected;
   bool _loading = false;
   String? _error;
@@ -70,10 +71,10 @@ class _DateOfBirthDialogState extends State<DateOfBirthDialog> {
 
     setState(() => _loading = true);
     try {
-      final uid = FirebaseAuth.instance.currentUser?.uid;
+      final uid = ref.read(firebaseAuthProvider).currentUser?.uid;
       if (uid == null) throw Exception('Sesión no válida');
 
-      await FirebaseFirestore.instance.collection('users_app').doc(uid).update({
+      await ref.read(firebaseFirestoreProvider).collection('users_app').doc(uid).update({
         'dateOfBirth': Timestamp.fromDate(_selected!),
         'dateOfBirthSet': true,
         'ageAtRegistration': age,
@@ -97,14 +98,25 @@ class _DateOfBirthDialogState extends State<DateOfBirthDialog> {
     return PopScope(
       canPop: false,
       child: AlertDialog(
+        insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+        contentPadding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+        titlePadding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+        actionsPadding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
         ),
         title: const Row(
           children: [
-            Icon(Icons.cake, color: AppColors.primary),
+            Icon(Icons.cake, color: AppColors.primary, size: 22),
             SizedBox(width: 8),
-            Expanded(child: Text('Confirma tu edad')),
+            Expanded(
+              child: Text(
+                'Confirma tu edad',
+                style: TextStyle(fontSize: 18),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
           ],
         ),
         content: ConstrainedBox(

@@ -1,15 +1,17 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:salufit_app/core/providers/firebase_providers.dart';
 import 'package:salufit_app/core/theme/app_colors.dart';
 import 'package:salufit_app/core/utils/safe_parsing_extensions.dart';
 
-class ProfessionalTasksScreen extends StatelessWidget {
+class ProfessionalTasksScreen extends ConsumerWidget {
   const ProfessionalTasksScreen({required this.userId, super.key});
   final String userId;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Tareas'),
@@ -17,7 +19,7 @@ class ProfessionalTasksScreen extends StatelessWidget {
         foregroundColor: Colors.white,
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () => _showNewTaskDialog(context),
+        onPressed: () => _showNewTaskDialog(context, ref),
         backgroundColor: AppColors.primary,
         child: const Icon(Icons.add),
       ),
@@ -62,8 +64,9 @@ class ProfessionalTasksScreen extends StatelessWidget {
     );
   }
 
-  Future<void> _showNewTaskDialog(BuildContext context) async {
-    final profesionales = await _loadProfesionales();
+  Future<void> _showNewTaskDialog(BuildContext context, WidgetRef ref) async {
+    final db = ref.read(firebaseFirestoreProvider);
+    final profesionales = await _loadProfesionales(db);
     if (!context.mounted) return;
 
     String? asignadoAId;
@@ -178,10 +181,7 @@ class ProfessionalTasksScreen extends StatelessWidget {
     // Resolver nombre del creador
     var creadoPorNombre = userId;
     try {
-      final doc = await FirebaseFirestore.instance
-          .collection('users_app')
-          .doc(userId)
-          .get();
+      final doc = await db.collection('users_app').doc(userId).get();
       if (doc.exists) {
         final data = doc.data()!;
         creadoPorNombre = data.safeString('nombreCompleto').isNotEmpty
@@ -190,7 +190,7 @@ class ProfessionalTasksScreen extends StatelessWidget {
       }
     } catch (_) {}
 
-    await FirebaseFirestore.instance.collection('staff_tasks').add({
+    await db.collection('staff_tasks').add({
       'titulo': tituloCtrl.text.trim(),
       'descripcion': descCtrl.text.trim(),
       'creadoPorId': userId,
@@ -212,8 +212,8 @@ class ProfessionalTasksScreen extends StatelessWidget {
     }
   }
 
-  Future<List<Map<String, dynamic>>> _loadProfesionales() async {
-    final snap = await FirebaseFirestore.instance
+  Future<List<Map<String, dynamic>>> _loadProfesionales(FirebaseFirestore db) async {
+    final snap = await db
         .collection('users_app')
         .where(
           'rol',
@@ -238,14 +238,14 @@ class ProfessionalTasksScreen extends StatelessWidget {
 
 enum _TaskMode { pending, completed, sent }
 
-class _TaskList extends StatelessWidget {
+class _TaskList extends ConsumerWidget {
   const _TaskList({required this.userId, required this.mode});
   final String userId;
   final _TaskMode mode;
 
   @override
-  Widget build(BuildContext context) {
-    Query query = FirebaseFirestore.instance.collection('staff_tasks');
+  Widget build(BuildContext context, WidgetRef ref) {
+    Query query = ref.watch(firebaseFirestoreProvider).collection('staff_tasks');
 
     // Query simple sin orderBy compuesto (evita índices)
     switch (mode) {

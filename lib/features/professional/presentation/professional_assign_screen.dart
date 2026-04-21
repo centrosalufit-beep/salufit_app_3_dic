@@ -1,19 +1,20 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:salufit_app/core/providers/firebase_providers.dart';
 import 'package:salufit_app/core/theme/app_colors.dart';
 import 'package:salufit_app/core/utils/safe_parsing_extensions.dart';
 import 'package:salufit_app/features/patient_record/presentation/admin_exercise_library_screen.dart';
 
 /// Buscar paciente → seleccionar ejercicios → asignar.
-class ProfessionalAssignScreen extends StatefulWidget {
+class ProfessionalAssignScreen extends ConsumerStatefulWidget {
   const ProfessionalAssignScreen({super.key});
   @override
-  State<ProfessionalAssignScreen> createState() =>
+  ConsumerState<ProfessionalAssignScreen> createState() =>
       _ProfessionalAssignScreenState();
 }
 
-class _ProfessionalAssignScreenState extends State<ProfessionalAssignScreen> {
+class _ProfessionalAssignScreenState extends ConsumerState<ProfessionalAssignScreen> {
   String _query = '';
 
   Future<void> _assignToPatient(
@@ -28,12 +29,12 @@ class _ProfessionalAssignScreenState extends State<ProfessionalAssignScreen> {
         builder: (_) => AdminExerciseLibraryScreen(
           isSelectionMode: true,
           onExercisesSelected: (selectedList) async {
-            final batch = FirebaseFirestore.instance.batch();
+            final batch = ref.read(firebaseFirestoreProvider).batch();
             final staffId =
-                FirebaseAuth.instance.currentUser?.uid ?? 'profesional';
+                ref.read(firebaseAuthProvider).currentUser?.uid ?? 'profesional';
 
             for (final ex in selectedList) {
-              final docRef = FirebaseFirestore.instance
+              final docRef = ref.read(firebaseFirestoreProvider)
                   .collection('exercise_assignments')
                   .doc();
               batch.set(docRef, <String, Object>{
@@ -100,7 +101,7 @@ class _ProfessionalAssignScreenState extends State<ProfessionalAssignScreen> {
           // Lista de pacientes
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance
+              stream: ref.read(firebaseFirestoreProvider)
                   .collection('users_app')
                   .where('rol', isEqualTo: 'cliente')
                   .snapshots(),

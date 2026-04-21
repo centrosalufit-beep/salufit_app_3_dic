@@ -1,8 +1,9 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:salufit_app/core/config/app_config.dart';
+import 'package:salufit_app/core/providers/firebase_providers.dart';
 import 'package:salufit_app/core/theme/app_colors.dart';
 
 /// Popup obligatorio de consentimiento granular RGPD.
@@ -15,14 +16,16 @@ import 'package:salufit_app/core/theme/app_colors.dart';
 /// El consentimiento obligatorio siempre es "aceptar o salir". Los demás
 /// se guardan con la decisión del usuario para respetar el derecho a
 /// retirar el consentimiento en cualquier momento (RGPD Art. 7).
-class GranularConsentDialog extends StatefulWidget {
+class GranularConsentDialog extends ConsumerStatefulWidget {
   const GranularConsentDialog({super.key});
 
   @override
-  State<GranularConsentDialog> createState() => _GranularConsentDialogState();
+  ConsumerState<GranularConsentDialog> createState() =>
+      _GranularConsentDialogState();
 }
 
-class _GranularConsentDialogState extends State<GranularConsentDialog> {
+class _GranularConsentDialogState
+    extends ConsumerState<GranularConsentDialog> {
   bool _medicalData = false;
   bool _marketingConsent = false;
   bool _analyticsConsent = false;
@@ -40,10 +43,11 @@ class _GranularConsentDialogState extends State<GranularConsentDialog> {
       _error = null;
     });
     try {
-      final uid = FirebaseAuth.instance.currentUser?.uid;
+      final uid = ref.read(firebaseAuthProvider).currentUser?.uid;
       if (uid == null) throw Exception('Sesión no válida');
 
-      await FirebaseFirestore.instance.collection('users_app').doc(uid).update({
+      final db = ref.read(firebaseFirestoreProvider);
+      await db.collection('users_app').doc(uid).update({
         'consentVersion': AppConfig.consentVersionActual,
         'consentDate': FieldValue.serverTimestamp(),
         'consentGranular': {
@@ -54,7 +58,7 @@ class _GranularConsentDialogState extends State<GranularConsentDialog> {
       });
 
       // Auditoría del consentimiento (obligatorio RGPD Art. 7.1)
-      await FirebaseFirestore.instance.collection('audit_logs').add({
+      await db.collection('audit_logs').add({
         'tipo': 'CONSENT_GRANTED',
         'userId': uid,
         'timestamp': FieldValue.serverTimestamp(),
@@ -84,14 +88,25 @@ class _GranularConsentDialogState extends State<GranularConsentDialog> {
     return PopScope(
       canPop: false,
       child: AlertDialog(
+        insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+        contentPadding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+        titlePadding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+        actionsPadding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
         ),
         title: const Row(
           children: [
-            Icon(Icons.privacy_tip, color: AppColors.primary),
+            Icon(Icons.privacy_tip, color: AppColors.primary, size: 22),
             SizedBox(width: 8),
-            Expanded(child: Text('Tu privacidad')),
+            Expanded(
+              child: Text(
+                'Tu privacidad',
+                style: TextStyle(fontSize: 18),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
           ],
         ),
         content: ConstrainedBox(
@@ -229,19 +244,19 @@ class _ConsentTile extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 4,
+                  crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
-                    Flexible(
-                      child: Text(
-                        title,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w700,
-                          fontSize: 14,
-                        ),
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 14,
                       ),
                     ),
-                    if (required) ...[
-                      const SizedBox(width: 6),
+                    if (required)
                       Container(
                         padding: const EdgeInsets.symmetric(
                           horizontal: 6,
@@ -260,7 +275,6 @@ class _ConsentTile extends StatelessWidget {
                           ),
                         ),
                       ),
-                    ],
                   ],
                 ),
                 const SizedBox(height: 4),

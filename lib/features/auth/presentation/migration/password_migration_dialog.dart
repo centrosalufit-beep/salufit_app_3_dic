@@ -1,6 +1,8 @@
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:salufit_app/core/providers/firebase_providers.dart';
 import 'package:salufit_app/core/theme/app_colors.dart';
 import 'package:salufit_app/core/utils/password_validator.dart';
 
@@ -8,15 +10,16 @@ import 'package:salufit_app/core/utils/password_validator.dart';
 /// su contraseña a los nuevos requisitos (12+ chars, mayúscula, minúscula,
 /// número). Se dispara desde MigrationGate la primera vez que el usuario
 /// entra tras el despliegue.
-class PasswordMigrationDialog extends StatefulWidget {
+class PasswordMigrationDialog extends ConsumerStatefulWidget {
   const PasswordMigrationDialog({super.key});
 
   @override
-  State<PasswordMigrationDialog> createState() =>
+  ConsumerState<PasswordMigrationDialog> createState() =>
       _PasswordMigrationDialogState();
 }
 
-class _PasswordMigrationDialogState extends State<PasswordMigrationDialog> {
+class _PasswordMigrationDialogState
+    extends ConsumerState<PasswordMigrationDialog> {
   final _formKey = GlobalKey<FormState>();
   final _passwordCtrl = TextEditingController();
   final _confirmCtrl = TextEditingController();
@@ -47,7 +50,7 @@ class _PasswordMigrationDialogState extends State<PasswordMigrationDialog> {
       _serverError = null;
     });
     try {
-      final callable = FirebaseFunctions.instance.httpsCallable(
+      final callable = ref.read(firebaseFunctionsProvider).httpsCallable(
         'setStrongPassword',
       );
       await callable.call<Map<String, dynamic>>({
@@ -76,14 +79,25 @@ class _PasswordMigrationDialogState extends State<PasswordMigrationDialog> {
     return PopScope(
       canPop: false,
       child: AlertDialog(
+        insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+        contentPadding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+        titlePadding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+        actionsPadding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
         ),
         title: const Row(
           children: [
-            Icon(Icons.security, color: AppColors.primary),
+            Icon(Icons.security, color: AppColors.primary, size: 22),
             SizedBox(width: 8),
-            Expanded(child: Text('Actualiza tu contraseña')),
+            Expanded(
+              child: Text(
+                'Actualiza tu contraseña',
+                style: TextStyle(fontSize: 18),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
           ],
         ),
         content: ConstrainedBox(
@@ -157,13 +171,17 @@ class _PasswordMigrationDialogState extends State<PasswordMigrationDialog> {
                           ),
                         ),
                       ),
-                      const SizedBox(width: 10),
-                      Text(
-                        PasswordValidator.strengthLabel(_strength),
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: _strengthColor(_strength),
-                          fontWeight: FontWeight.w600,
+                      const SizedBox(width: 8),
+                      Flexible(
+                        child: Text(
+                          PasswordValidator.strengthLabel(_strength),
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: _strengthColor(_strength),
+                            fontWeight: FontWeight.w600,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
                     ],
@@ -245,11 +263,15 @@ class _Requirement extends StatelessWidget {
             color: ok ? Colors.green : Colors.grey.shade500,
           ),
           const SizedBox(width: 8),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 12,
-              color: ok ? Colors.green.shade800 : Colors.grey.shade700,
+          Expanded(
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                color: ok ? Colors.green.shade800 : Colors.grey.shade700,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
           ),
         ],

@@ -59,6 +59,9 @@ dev_dependencies:
   very_good_analysis: ^5.1.0
   integration_test:
     sdk: flutter
+  # Testing UI y mocks
+  fake_cloud_firestore: ^3.0.0
+  firebase_auth_mocks: ^0.14.0
 
 flutter:
   uses-material-design: true

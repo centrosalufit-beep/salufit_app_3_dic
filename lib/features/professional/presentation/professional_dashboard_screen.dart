@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:salufit_app/core/providers/firebase_providers.dart';
 import 'package:salufit_app/core/theme/app_colors.dart';
 import 'package:salufit_app/core/utils/safe_parsing_extensions.dart';
 import 'package:salufit_app/features/admin_dashboard/presentation/admin_crm_screen.dart';
@@ -11,7 +12,7 @@ import 'package:salufit_app/features/professional/presentation/professional_task
 import 'package:salufit_app/shared/widgets/salufit_header.dart';
 import 'package:salufit_app/shared/widgets/salufit_scaffold.dart';
 
-class ProfessionalDashboardScreen extends StatelessWidget {
+class ProfessionalDashboardScreen extends ConsumerWidget {
   const ProfessionalDashboardScreen({
     required this.userId,
     required this.userRole,
@@ -21,7 +22,7 @@ class ProfessionalDashboardScreen extends StatelessWidget {
   final String userRole;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return SalufitScaffold(
       body: SafeArea(
         child: SingleChildScrollView(
@@ -80,7 +81,7 @@ class ProfessionalDashboardScreen extends StatelessWidget {
               // Cerrar sesión
               Center(
                 child: TextButton.icon(
-                  onPressed: () => FirebaseAuth.instance.signOut(),
+                  onPressed: () => ref.read(firebaseAuthProvider).signOut(),
                   icon: const Icon(
                     Icons.power_settings_new,
                     color: Colors.redAccent,
@@ -104,20 +105,21 @@ class ProfessionalDashboardScreen extends StatelessWidget {
 // CAMPANA DE NOTIFICACIONES
 // ═══════════════════════════════════════════════════════════════
 
-class _NotificationBell extends StatelessWidget {
+class _NotificationBell extends ConsumerWidget {
   const _NotificationBell({required this.userId});
   final String userId;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final db = ref.watch(firebaseFirestoreProvider);
     return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
+      stream: db
           .collection('chats')
           .where('participants', arrayContains: userId)
           .snapshots(),
       builder: (context, chatSnap) {
         return StreamBuilder<QuerySnapshot>(
-          stream: FirebaseFirestore.instance
+          stream: db
               .collection('staff_tasks')
               .where('asignadoAId', isEqualTo: userId)
               .where('estado', isEqualTo: 'pendiente')
@@ -294,14 +296,15 @@ class _NotificationBell extends StatelessWidget {
 // TARJETA DE JORNADA (fichaje)
 // ═══════════════════════════════════════════════════════════════
 
-class _JornadaCard extends StatelessWidget {
+class _JornadaCard extends ConsumerWidget {
   const _JornadaCard({required this.userId});
   final String userId;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
+      stream: ref
+          .watch(firebaseFirestoreProvider)
           .collection('timeClockRecords')
           .where('userId', isEqualTo: userId)
           .limit(20)
@@ -341,53 +344,64 @@ class _JornadaCard extends StatelessWidget {
               ),
             ],
           ),
-          child: Row(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Icon(
-                isClockedIn ? Icons.timer : Icons.timer_off,
-                color: Colors.white,
-                size: 40,
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      isClockedIn ? 'JORNADA ACTIVA' : 'FUERA DE JORNADA',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w900,
-                        fontSize: 16,
-                      ),
+              Row(
+                children: [
+                  Icon(
+                    isClockedIn ? Icons.timer : Icons.timer_off,
+                    color: Colors.white,
+                    size: 36,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          isClockedIn ? 'JORNADA ACTIVA' : 'FUERA DE JORNADA',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w900,
+                            fontSize: 15,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          isClockedIn
+                              ? 'Conectado desde el centro'
+                              : 'Pulsa para fichar entrada',
+                          style: const TextStyle(
+                            color: Colors.white70,
+                            fontSize: 11,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 2),
-                    Text(
-                      isClockedIn
-                          ? 'Conectado desde el centro'
-                          : 'Pulsa para fichar entrada',
-                      style: const TextStyle(
-                        color: Colors.white70,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ],
-                ),
+                  ),
+                ],
               ),
+              const SizedBox(height: 12),
               ElevatedButton(
-                onPressed: () => _fichar(context, isClockedIn),
+                onPressed: () => _fichar(context, ref, isClockedIn),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.white,
                   foregroundColor:
                       isClockedIn ? Colors.red : const Color(0xFF009688),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 20,
-                    vertical: 12,
-                  ),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
                 ),
                 child: Text(
-                  isClockedIn ? 'SALIDA' : 'ENTRADA',
-                  style: const TextStyle(fontWeight: FontWeight.bold),
+                  isClockedIn ? 'SALIR DE JORNADA' : 'ENTRAR A JORNADA',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
+                    letterSpacing: 0.5,
+                  ),
                 ),
               ),
             ],
@@ -397,11 +411,11 @@ class _JornadaCard extends StatelessWidget {
     );
   }
 
-  Future<void> _fichar(BuildContext context, bool isClockedIn) async {
+  Future<void> _fichar(BuildContext context, WidgetRef ref, bool isClockedIn) async {
     try {
-      // Escritura directa a Firestore (validación WiFi la hace StaffService si se usa)
-      final userName = await _resolveUserName(userId);
-      await FirebaseFirestore.instance.collection('timeClockRecords').add({
+      final db = ref.read(firebaseFirestoreProvider);
+      final userName = await _resolveUserName(db, userId);
+      await db.collection('timeClockRecords').add({
         'userId': userId,
         'userName': userName,
         'timestamp': FieldValue.serverTimestamp(),
@@ -431,12 +445,9 @@ class _JornadaCard extends StatelessWidget {
     }
   }
 
-  Future<String> _resolveUserName(String uid) async {
+  Future<String> _resolveUserName(FirebaseFirestore db, String uid) async {
     try {
-      final doc = await FirebaseFirestore.instance
-          .collection('users_app')
-          .doc(uid)
-          .get();
+      final doc = await db.collection('users_app').doc(uid).get();
       if (doc.exists) {
         final data = doc.data()!;
         final full = data.safeString('nombreCompleto');
@@ -593,14 +604,15 @@ class _QuickAccessTile extends StatelessWidget {
 // PREVIEW DE TAREAS PENDIENTES
 // ═══════════════════════════════════════════════════════════════
 
-class _PendingTasksPreview extends StatelessWidget {
+class _PendingTasksPreview extends ConsumerWidget {
   const _PendingTasksPreview({required this.userId});
   final String userId;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
+      stream: ref
+          .watch(firebaseFirestoreProvider)
           .collection('staff_tasks')
           .where('asignadoAId', isEqualTo: userId)
           .where('estado', isEqualTo: 'pendiente')
@@ -617,16 +629,19 @@ class _PendingTasksPreview extends StatelessWidget {
           children: [
             Row(
               children: [
-                const Text(
-                  'TAREAS PENDIENTES',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 12,
-                    color: Colors.grey,
-                    letterSpacing: 1.2,
+                const Expanded(
+                  child: Text(
+                    'TAREAS PENDIENTES',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12,
+                      color: Colors.grey,
+                      letterSpacing: 1.2,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                const Spacer(),
                 TextButton(
                   onPressed: () => Navigator.push(
                     context,
@@ -635,7 +650,12 @@ class _PendingTasksPreview extends StatelessWidget {
                           ProfessionalTasksScreen(userId: userId),
                     ),
                   ),
-                  child: const Text('Ver todas'),
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    minimumSize: const Size(0, 32),
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                  child: const Text('Ver todas', style: TextStyle(fontSize: 12)),
                 ),
               ],
             ),
@@ -690,6 +710,8 @@ class _PendingTasksPreview extends StatelessWidget {
                                   ? Colors.red.shade700
                                   : Colors.black54,
                             ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ],
                       ),
@@ -698,6 +720,11 @@ class _PendingTasksPreview extends StatelessWidget {
                       icon: const Icon(
                         Icons.check_circle_outline,
                         color: Colors.green,
+                      ),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(
+                        minWidth: 32,
+                        minHeight: 32,
                       ),
                       onPressed: () => doc.reference.update({
                         'estado': 'completada',
@@ -719,15 +746,16 @@ class _PendingTasksPreview extends StatelessWidget {
 // MINI CRM CARD
 // ═══════════════════════════════════════════════════════════════
 
-class _MiniCrmCard extends StatelessWidget {
+class _MiniCrmCard extends ConsumerWidget {
   const _MiniCrmCard({required this.userId});
   final String userId;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final now = DateTime.now();
     return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
+      stream: ref
+          .watch(firebaseFirestoreProvider)
           .collection('crm_entries')
           .where('profesionalId', isEqualTo: userId)
           .where('mes', isEqualTo: now.month)
@@ -775,9 +803,9 @@ class _MiniCrmCard extends StatelessWidget {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
-                  _miniStat('⭐', '$resenas', 'Reseñas'),
-                  _miniStat('🔗', '$refs', 'Referencias'),
-                  _miniStat('🏋️', '$grupales/4', 'Grupales'),
+                  Expanded(child: _miniStat('⭐', '$resenas', 'Reseñas')),
+                  Expanded(child: _miniStat('🔗', '$refs', 'Referencias')),
+                  Expanded(child: _miniStat('🏋️', '$grupales/4', 'Grupales')),
                 ],
               ),
             ],
@@ -795,10 +823,15 @@ class _MiniCrmCard extends StatelessWidget {
         Text(
           value,
           style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
         ),
         Text(
           label,
           style: const TextStyle(fontSize: 10, color: Colors.grey),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          textAlign: TextAlign.center,
         ),
       ],
     );

@@ -1,6 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:salufit_app/core/providers/firebase_providers.dart';
 import 'package:salufit_app/core/theme/app_colors.dart';
 import 'package:salufit_app/core/utils/safe_parsing_extensions.dart';
 import 'package:salufit_app/shared/widgets/salufit_header.dart';
@@ -93,6 +95,11 @@ class _ClientDocumentsScreenState extends State<ClientDocumentsScreen>
               labelColor: AppColors.primary,
               unselectedLabelColor: Colors.grey,
               indicatorColor: AppColors.primary,
+              labelStyle: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+              ),
+              unselectedLabelStyle: const TextStyle(fontSize: 12),
               tabs: const [
                 Tab(
                   icon: Icon(Icons.show_chart, size: 18),
@@ -100,7 +107,7 @@ class _ClientDocumentsScreenState extends State<ClientDocumentsScreen>
                 ),
                 Tab(
                   icon: Icon(Icons.verified, size: 18),
-                  text: 'CONSENTIMIENTOS',
+                  text: 'DOCUMENTOS',
                 ),
               ],
             ),
@@ -124,14 +131,15 @@ class _ClientDocumentsScreenState extends State<ClientDocumentsScreen>
 // TAB 1: MÉTRICAS — MI EVOLUCIÓN
 // ═══════════════════════════════════════════════════════════════
 
-class _MetricsTab extends StatelessWidget {
+class _MetricsTab extends ConsumerWidget {
   const _MetricsTab({required this.userId});
   final String userId;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
+      stream: ref
+          .watch(firebaseFirestoreProvider)
           .collection('patient_metrics')
           .where('userId', isEqualTo: userId)
           .limit(200)
@@ -263,32 +271,41 @@ class _MetricEvolutionCard extends StatelessWidget {
             // Header
             Row(
               children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 3,
-                  ),
-                  decoration: BoxDecoration(
-                    color: catColor.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Text(
-                    categoria.toUpperCase(),
-                    style: TextStyle(
-                      fontSize: 9,
-                      fontWeight: FontWeight.w900,
-                      color: catColor,
-                      letterSpacing: 0.5,
+                Flexible(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 3,
+                    ),
+                    decoration: BoxDecoration(
+                      color: catColor.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      categoria.toUpperCase(),
+                      style: TextStyle(
+                        fontSize: 9,
+                        fontWeight: FontWeight.w900,
+                        color: catColor,
+                        letterSpacing: 0.5,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                 ),
-                const Spacer(),
-                Text(
-                  deltaText,
-                  style: TextStyle(
-                    color: deltaColor,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 13,
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Text(
+                    deltaText,
+                    textAlign: TextAlign.end,
+                    style: TextStyle(
+                      color: deltaColor,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
               ],
@@ -301,18 +318,27 @@ class _MetricEvolutionCard extends StatelessWidget {
                 fontWeight: FontWeight.w900,
                 fontSize: 16,
               ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
             ),
             const SizedBox(height: 4),
             Row(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                Text(
-                  lastValue.toStringAsFixed(lastValue == lastValue.roundToDouble() ? 0 : 1),
-                  style: TextStyle(
-                    fontSize: 32,
-                    fontWeight: FontWeight.w900,
-                    color: catColor,
-                    height: 1,
+                Flexible(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.bottomLeft,
+                    child: Text(
+                      lastValue.toStringAsFixed(lastValue == lastValue.roundToDouble() ? 0 : 1),
+                      style: TextStyle(
+                        fontSize: 32,
+                        fontWeight: FontWeight.w900,
+                        color: catColor,
+                        height: 1,
+                      ),
+                      maxLines: 1,
+                    ),
                   ),
                 ),
                 const SizedBox(width: 4),
@@ -338,15 +364,20 @@ class _MetricEvolutionCard extends StatelessWidget {
               children: [
                 Icon(Icons.person_outline, size: 14, color: Colors.grey.shade400),
                 const SizedBox(width: 4),
-                Text(
-                  profesional,
-                  style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
+                Expanded(
+                  child: Text(
+                    profesional,
+                    style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
-                const Spacer(),
                 if (lastDate != null)
                   Text(
                     DateFormat('dd/MM/yyyy').format(lastDate),
                     style: TextStyle(fontSize: 11, color: Colors.grey.shade400),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
               ],
             ),
@@ -477,14 +508,15 @@ class _SparklinePainter extends CustomPainter {
 // TAB 2: CONSENTIMIENTOS FIRMADOS
 // ═══════════════════════════════════════════════════════════════
 
-class _SignedConsentsTab extends StatelessWidget {
+class _SignedConsentsTab extends ConsumerWidget {
   const _SignedConsentsTab({required this.userId});
   final String userId;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
+      stream: ref
+          .watch(firebaseFirestoreProvider)
           .collection('documents')
           .where('userId', isEqualTo: userId)
           .limit(50)

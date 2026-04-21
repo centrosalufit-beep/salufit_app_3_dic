@@ -2,12 +2,12 @@
 import 'dart:convert';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:qr_flutter/qr_flutter.dart';
+import 'package:salufit_app/core/providers/firebase_providers.dart';
 import 'package:salufit_app/core/theme/app_colors.dart';
 import 'package:salufit_app/core/utils/safe_parsing_extensions.dart';
 import 'package:salufit_app/features/auth/domain/user_model.dart';
@@ -35,7 +35,7 @@ class _ClientProfileScreenState extends ConsumerState<ClientProfileScreen> {
     setState(() => _isActionLoading = true);
     try {
       final now = DateTime.now();
-      final snapshot = await FirebaseFirestore.instance
+      final snapshot = await ref.read(firebaseFirestoreProvider)
           .collection('groupClasses')
           .where('fechaHoraInicio', isGreaterThan: Timestamp.fromDate(now))
           .orderBy('fechaHoraInicio')
@@ -116,8 +116,8 @@ class _ClientProfileScreenState extends ConsumerState<ClientProfileScreen> {
   @override
   Widget build(BuildContext context) {
     final profileAsync = ref.watch(userProfileProvider);
-    final passesStream = FirebaseFirestore.instance.collection('passes').where('userId', isEqualTo: widget.userId).where('activo', isEqualTo: true).snapshots();
-    final bookingsStream = FirebaseFirestore.instance.collection('bookings').where('userId', isEqualTo: widget.userId).limit(20).snapshots();
+    final passesStream = ref.read(firebaseFirestoreProvider).collection('passes').where('userId', isEqualTo: widget.userId).where('activo', isEqualTo: true).snapshots();
+    final bookingsStream = ref.read(firebaseFirestoreProvider).collection('bookings').where('userId', isEqualTo: widget.userId).limit(20).snapshots();
 
     return profileAsync.when(
       loading: () => const SalufitScaffold(body: Center(child: CircularProgressIndicator())),
@@ -186,7 +186,7 @@ class _ClientProfileScreenState extends ConsumerState<ClientProfileScreen> {
                                   return const SizedBox();
                                 }
                                 return FutureBuilder<DocumentSnapshot>(
-                                  future: FirebaseFirestore.instance.collection('groupClasses').doc(classId).get(),
+                                  future: ref.read(firebaseFirestoreProvider).collection('groupClasses').doc(classId).get(),
                                   builder: (context, classSnap) {
                                     if (!classSnap.hasData || !classSnap.data!.exists) {
                                       return const SizedBox();
@@ -408,9 +408,9 @@ class _ClientProfileScreenState extends ConsumerState<ClientProfileScreen> {
 
     setState(() => _isActionLoading = true);
     try {
-      final uid = FirebaseAuth.instance.currentUser?.uid;
+      final uid = ref.read(firebaseAuthProvider).currentUser?.uid;
       if (uid == null) return;
-      final db = FirebaseFirestore.instance;
+      final db = ref.read(firebaseFirestoreProvider);
 
       final profile = (await db.collection('users_app').doc(uid).get()).data() ?? {};
       final bookings = (await db.collection('bookings').where('userId', isEqualTo: uid).get()).docs.map((d) => d.data()).toList();
@@ -551,10 +551,10 @@ class _ClientProfileScreenState extends ConsumerState<ClientProfileScreen> {
     // Paso 3: Ejecutar eliminacion
     setState(() => _isActionLoading = true);
     try {
-      final user = FirebaseAuth.instance.currentUser;
+      final user = ref.read(firebaseAuthProvider).currentUser;
       if (user == null) return;
       final uid = user.uid;
-      final db = FirebaseFirestore.instance;
+      final db = ref.read(firebaseFirestoreProvider);
 
       // Registro de auditoria ANTES de borrar
       await db.collection('audit_logs').add({
@@ -596,16 +596,16 @@ class _ClientProfileScreenState extends ConsumerState<ClientProfileScreen> {
   }
 }
 
-class GoldenGiftCard extends StatefulWidget {
+class GoldenGiftCard extends ConsumerStatefulWidget {
   const GoldenGiftCard({required this.userId, required this.onNavigate, super.key});
   final String userId;
   final void Function(String) onNavigate;
 
   @override
-  State<GoldenGiftCard> createState() => _GoldenGiftCardState();
+  ConsumerState<GoldenGiftCard> createState() => _GoldenGiftCardState();
 }
 
-class _GoldenGiftCardState extends State<GoldenGiftCard> {
+class _GoldenGiftCardState extends ConsumerState<GoldenGiftCard> {
   bool _isOpened = false;
   String _recommendedKeyword = 'entrena';
   String _recommendationText = 'Prueba una clase de Entrenamiento.';
@@ -628,7 +628,7 @@ class _GoldenGiftCardState extends State<GoldenGiftCard> {
   }
 
   Future<void> _calculateSmartBenefit() async {
-    final bookings = await FirebaseFirestore.instance.collection('bookings').where('userId', isEqualTo: widget.userId).limit(20).get();
+    final bookings = await ref.read(firebaseFirestoreProvider).collection('bookings').where('userId', isEqualTo: widget.userId).limit(20).get();
     final history = bookings.docs.map((d) => d.data().safeString('groupClassId')).toList();
     
     if (!history.any((id) => id.contains('medita'))) {

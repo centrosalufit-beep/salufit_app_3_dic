@@ -1,7 +1,7 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:salufit_app/core/config/app_config.dart';
+import 'package:salufit_app/core/providers/firebase_providers.dart';
 import 'package:salufit_app/features/auth/presentation/migration/date_of_birth_dialog.dart';
 import 'package:salufit_app/features/auth/presentation/migration/granular_consent_dialog.dart';
 import 'package:salufit_app/features/auth/presentation/migration/password_migration_dialog.dart';
@@ -39,7 +39,8 @@ class _MigrationGateState extends ConsumerState<MigrationGate> {
 
   Future<void> _runMigrations() async {
     try {
-      final doc = await FirebaseFirestore.instance
+      final doc = await ref
+          .read(firebaseFirestoreProvider)
           .collection('users_app')
           .doc(widget.userId)
           .get();

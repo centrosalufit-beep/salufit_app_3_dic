@@ -1,7 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:salufit_app/core/providers/firebase_providers.dart';
 import 'package:salufit_app/features/admin_dashboard/presentation/admin_analysis_screen.dart';
 import 'package:salufit_app/features/admin_dashboard/presentation/admin_crm_screen.dart';
 import 'package:salufit_app/features/admin_dashboard/presentation/admin_library_hub_screen.dart';
@@ -13,13 +14,13 @@ import 'package:salufit_app/features/patient_record/presentation/admin_patient_d
 import 'package:salufit_app/features/patient_record/presentation/admin_patient_list_screen.dart';
 import 'package:salufit_app/features/professional/presentation/professional_desktop_dashboard_screen.dart';
 
-class DesktopScaffold extends StatefulWidget {
+class DesktopScaffold extends ConsumerStatefulWidget {
   const DesktopScaffold({required this.userId, required this.userRole, super.key});
   final String userId; final String userRole;
-  @override State<DesktopScaffold> createState() => _DesktopScaffoldState();
+  @override ConsumerState<DesktopScaffold> createState() => _DesktopScaffoldState();
 }
 
-class _DesktopScaffoldState extends State<DesktopScaffold> {
+class _DesktopScaffoldState extends ConsumerState<DesktopScaffold> {
   int _selectedIndex = 0;
   void _openPatient(String uid, String name) {
     Navigator.push(context, MaterialPageRoute<void>(builder: (_) => AdminPatientDetailScreen(userId: uid, userName: name, viewerRole: widget.userRole)));
@@ -111,7 +112,7 @@ class _DesktopScaffoldState extends State<DesktopScaffold> {
                         tooltip: 'Cerrar sesión',
                         onPressed: () async {
                           HapticFeedback.mediumImpact();
-                          await FirebaseAuth.instance.signOut();
+                          await ref.read(firebaseAuthProvider).signOut();
                         },
                       ),
                     ),
@@ -149,20 +150,20 @@ class _DesktopScaffoldState extends State<DesktopScaffold> {
   }
 }
 
-class _AdminClockSwitch extends StatefulWidget {
+class _AdminClockSwitch extends ConsumerStatefulWidget {
   const _AdminClockSwitch({required this.userId});
   final String userId;
   @override
-  State<_AdminClockSwitch> createState() => _AdminClockSwitchState();
+  ConsumerState<_AdminClockSwitch> createState() => _AdminClockSwitchState();
 }
 
-class _AdminClockSwitchState extends State<_AdminClockSwitch> {
+class _AdminClockSwitchState extends ConsumerState<_AdminClockSwitch> {
   String? _cachedName;
 
   Future<String> _resolveUserName() async {
     if (_cachedName != null) return _cachedName!;
     try {
-      final doc = await FirebaseFirestore.instance
+      final doc = await ref.read(firebaseFirestoreProvider)
           .collection('users_app')
           .doc(widget.userId)
           .get();
@@ -188,7 +189,7 @@ class _AdminClockSwitchState extends State<_AdminClockSwitch> {
       }
     } catch (_) {}
     // Fallback: Firebase Auth displayName o email
-    final user = FirebaseAuth.instance.currentUser;
+    final user = ref.read(firebaseAuthProvider).currentUser;
     _cachedName = user?.displayName ?? user?.email ?? widget.userId;
     return _cachedName!;
   }
@@ -196,7 +197,7 @@ class _AdminClockSwitchState extends State<_AdminClockSwitch> {
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
+      stream: ref.read(firebaseFirestoreProvider)
           .collection('timeClockRecords')
           .where('userId', isEqualTo: widget.userId)
           .limit(20)
@@ -229,7 +230,7 @@ class _AdminClockSwitchState extends State<_AdminClockSwitch> {
                 activeThumbColor: Colors.tealAccent,
                 onChanged: (v) async {
                   final userName = await _resolveUserName();
-                  await FirebaseFirestore.instance
+                  await ref.read(firebaseFirestoreProvider)
                       .collection('timeClockRecords')
                       .add({
                     'userId': widget.userId,
@@ -251,15 +252,15 @@ class _AdminClockSwitchState extends State<_AdminClockSwitch> {
 
 /// Campana con badge rojo cuando hay mensajes sin leer.
 /// Escucha la colección `chats` donde el usuario es participante.
-class _UnreadBellBadge extends StatelessWidget {
+class _UnreadBellBadge extends ConsumerWidget {
   const _UnreadBellBadge({required this.userId, required this.onTap});
   final String userId;
   final VoidCallback onTap;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
+      stream: ref.watch(firebaseFirestoreProvider)
           .collection('chats')
           .where('participants', arrayContains: userId)
           .snapshots(),

@@ -1,8 +1,8 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:salufit_app/core/providers/firebase_providers.dart';
 import 'package:salufit_app/core/theme/app_colors.dart';
 import 'package:salufit_app/features/admin_dashboard/presentation/qr_scanner_screen.dart';
 import 'package:salufit_app/features/auth/providers/auth_providers.dart';
@@ -122,7 +122,7 @@ class _MobileScaffoldState extends ConsumerState<MobileScaffold> {
     final scannedUid = scanned.trim();
 
     // Obtener datos del cliente para mostrar en la confirmación
-    final clientDoc = await FirebaseFirestore.instance
+    final clientDoc = await ref.read(firebaseFirestoreProvider)
         .collection('users_app')
         .doc(scannedUid)
         .get();
@@ -191,7 +191,7 @@ class _MobileScaffoldState extends ConsumerState<MobileScaffold> {
 
     // Llamar a la Cloud Function
     try {
-      final callable = FirebaseFunctions.instance.httpsCallable(
+      final callable = ref.read(firebaseFunctionsProvider).httpsCallable(
         'consumirTokenPorQR',
       );
       final result = await callable.call<Map<String, dynamic>>({

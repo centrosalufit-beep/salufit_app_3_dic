@@ -1,10 +1,10 @@
 import 'dart:io';
 
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:salufit_app/core/config/app_config.dart';
+import 'package:salufit_app/core/providers/firebase_providers.dart';
 import 'package:salufit_app/core/theme/app_colors.dart';
 import 'package:salufit_app/features/auth/data/auth_repository.dart';
 import 'package:salufit_app/features/auth/presentation/auth_wrapper.dart';
@@ -53,7 +53,7 @@ class _TermsAcceptanceScreenState extends ConsumerState<TermsAcceptanceScreen> {
   }
 
   Future<void> _handleAcceptance() async {
-    final uid = FirebaseAuth.instance.currentUser?.uid;
+    final uid = ref.read(firebaseAuthProvider).currentUser?.uid;
     if (uid == null) return;
 
     setState(() => _isLoading = true);

@@ -1,9 +1,11 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:salufit_app/core/providers/firebase_providers.dart';
 import 'package:salufit_app/core/utils/safe_parsing_extensions.dart';
 import 'package:salufit_app/features/professional/presentation/professional_tasks_screen.dart';
 
-class ProfessionalDesktopDashboardScreen extends StatelessWidget {
+class ProfessionalDesktopDashboardScreen extends ConsumerWidget {
   const ProfessionalDesktopDashboardScreen({
     required this.userId,
     required this.userRole,
@@ -14,7 +16,7 @@ class ProfessionalDesktopDashboardScreen extends StatelessWidget {
   final String userRole;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: SafeArea(
@@ -98,14 +100,15 @@ class _WelcomeHeader extends StatelessWidget {
   }
 }
 
-class _JornadaCardDesktop extends StatelessWidget {
+class _JornadaCardDesktop extends ConsumerWidget {
   const _JornadaCardDesktop({required this.userId});
   final String userId;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
+      stream: ref
+          .watch(firebaseFirestoreProvider)
           .collection('timeClockRecords')
           .where('userId', isEqualTo: userId)
           .limit(20)
@@ -213,12 +216,12 @@ class _JornadaCardDesktop extends StatelessWidget {
   }
 }
 
-class _PendingTasksPanel extends StatelessWidget {
+class _PendingTasksPanel extends ConsumerWidget {
   const _PendingTasksPanel({required this.userId});
   final String userId;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -234,7 +237,8 @@ class _PendingTasksPanel extends StatelessWidget {
         ],
       ),
       child: StreamBuilder<QuerySnapshot>(
-        stream: FirebaseFirestore.instance
+        stream: ref
+            .watch(firebaseFirestoreProvider)
             .collection('staff_tasks')
             .where('asignadoAId', isEqualTo: userId)
             .where('estado', isEqualTo: 'pendiente')
@@ -356,12 +360,12 @@ class _PendingTasksPanel extends StatelessWidget {
   }
 }
 
-class _MiniCrmPanel extends StatelessWidget {
+class _MiniCrmPanel extends ConsumerWidget {
   const _MiniCrmPanel({required this.userId});
   final String userId;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final now = DateTime.now();
     return Container(
       padding: const EdgeInsets.all(20),
@@ -378,7 +382,8 @@ class _MiniCrmPanel extends StatelessWidget {
         ],
       ),
       child: StreamBuilder<QuerySnapshot>(
-        stream: FirebaseFirestore.instance
+        stream: ref
+            .watch(firebaseFirestoreProvider)
             .collection('crm_entries')
             .where('profesionalId', isEqualTo: userId)
             .where('mes', isEqualTo: now.month)
