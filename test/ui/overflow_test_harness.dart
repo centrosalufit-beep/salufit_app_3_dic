@@ -14,15 +14,60 @@ class DeviceSize {
 
   Size get size => Size(width, height);
 
+  // ═══════════════════════════════════════════════════════════════
+  // iOS
+  // ═══════════════════════════════════════════════════════════════
   static const iPhoneSE = DeviceSize('iPhone SE', 320, 568);
   static const iPhone15 = DeviceSize('iPhone 15 Pro', 393, 852);
-  static const androidSmall = DeviceSize('Android Small (Galaxy A03)', 360, 640);
-  static const androidStandard = DeviceSize('Android Standard (Pixel 7)', 412, 915);
-  static const ipad = DeviceSize('iPad Mini', 768, 1024);
-  static const desktop = DeviceSize('Desktop Windows (.exe)', 1440, 900);
+  static const iPhone15Max = DeviceSize('iPhone 15 Pro Max', 430, 932);
+  static const ipadMini = DeviceSize('iPad Mini', 768, 1024);
+  static const ipadPro13 = DeviceSize('iPad Pro 13"', 1024, 1366);
 
-  static const allForMobileScreens = [iPhoneSE, iPhone15, androidSmall, androidStandard, ipad];
-  static const allForDesktopScreens = [desktop];
+  // ═══════════════════════════════════════════════════════════════
+  // Android — teléfonos populares en España
+  // ═══════════════════════════════════════════════════════════════
+  static const androidSmall = DeviceSize('Galaxy A03 / A04 (budget)', 360, 640);
+  static const androidStandard = DeviceSize('Pixel 7 (mid)', 412, 915);
+  static const androidUltra = DeviceSize('Galaxy S23 Ultra', 384, 832);
+  static const androidFold = DeviceSize('Galaxy Z Fold (cerrado)', 280, 653);
+  static const androidCompact = DeviceSize('Galaxy Z Flip (cover)', 330, 420);
+
+  // ═══════════════════════════════════════════════════════════════
+  // Android — tablets
+  // ═══════════════════════════════════════════════════════════════
+  static const androidTabletSmall = DeviceSize('Galaxy Tab A8', 800, 1280);
+  static const androidTabletLarge = DeviceSize('Galaxy Tab S9+', 1024, 1600);
+
+  // ═══════════════════════════════════════════════════════════════
+  // Desktop
+  // ═══════════════════════════════════════════════════════════════
+  static const desktop = DeviceSize('Desktop Windows (.exe)', 1440, 900);
+  static const desktopSmall = DeviceSize('Windows portátil 13"', 1280, 720);
+
+  /// Todos los form factors móviles (iOS + Android)
+  static const allForMobileScreens = [
+    iPhoneSE,
+    iPhone15,
+    iPhone15Max,
+    androidSmall,
+    androidStandard,
+    androidUltra,
+    androidFold,
+    ipadMini,
+    androidTabletSmall,
+  ];
+
+  /// Set reducido para tests rápidos (solo los más comunes)
+  static const coreDevices = [
+    iPhoneSE,
+    iPhone15,
+    androidSmall,
+    androidStandard,
+    ipadMini,
+  ];
+
+  /// Desktop para .exe Windows
+  static const allForDesktopScreens = [desktop, desktopSmall];
 }
 
 /// Ejecuta un widget en todos los tamaños y reporta overflow usando
