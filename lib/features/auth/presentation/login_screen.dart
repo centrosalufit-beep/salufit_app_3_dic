@@ -52,34 +52,44 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     const SizedBox(height: 10),
                     const _PremiumSlogan(),
                     const SizedBox(height: 35),
-                    TextFormField(
-                      controller: _emailController,
-                      keyboardType: TextInputType.emailAddress,
-                      decoration: InputDecoration(
-                        labelText: 'Correo Electrónico',
-                        prefixIcon: const Icon(Icons.email_outlined, color: AppColors.primary),
-                        filled: true,
-                        fillColor: Colors.white.withValues(alpha: 0.9),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    Semantics(
+                      identifier: 'login_email_field',
+                      textField: true,
+                      child: TextFormField(
+                        controller: _emailController,
+                        keyboardType: TextInputType.emailAddress,
+                        autofillHints: const [AutofillHints.email, AutofillHints.username],
+                        decoration: InputDecoration(
+                          labelText: 'Correo Electrónico',
+                          prefixIcon: const Icon(Icons.email_outlined, color: AppColors.primary),
+                          filled: true,
+                          fillColor: Colors.white.withValues(alpha: 0.9),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        validator: (v) => (v == null || !v.contains('@')) ? 'Correo inválido' : null,
                       ),
-                      validator: (v) => (v == null || !v.contains('@')) ? 'Correo inválido' : null,
                     ),
                     const SizedBox(height: 20),
-                    TextFormField(
-                      controller: _passwordController,
-                      obscureText: !_isPasswordVisible,
-                      decoration: InputDecoration(
-                        labelText: 'Contraseña',
-                        prefixIcon: const Icon(Icons.lock_outline, color: AppColors.primary),
-                        suffixIcon: IconButton(
-                          icon: Icon(_isPasswordVisible ? Icons.visibility_off : Icons.visibility),
-                          onPressed: () => setState(() => _isPasswordVisible = !_isPasswordVisible),
+                    Semantics(
+                      identifier: 'login_password_field',
+                      textField: true,
+                      child: TextFormField(
+                        controller: _passwordController,
+                        obscureText: !_isPasswordVisible,
+                        autofillHints: const [AutofillHints.password],
+                        decoration: InputDecoration(
+                          labelText: 'Contraseña',
+                          prefixIcon: const Icon(Icons.lock_outline, color: AppColors.primary),
+                          suffixIcon: IconButton(
+                            icon: Icon(_isPasswordVisible ? Icons.visibility_off : Icons.visibility),
+                            onPressed: () => setState(() => _isPasswordVisible = !_isPasswordVisible),
+                          ),
+                          filled: true,
+                          fillColor: Colors.white.withValues(alpha: 0.9),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                         ),
-                        filled: true,
-                        fillColor: Colors.white.withValues(alpha: 0.9),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                        validator: (v) => (v == null || v.isEmpty) ? 'Introduce tu contraseña' : null,
                       ),
-                      validator: (v) => (v == null || v.isEmpty) ? 'Introduce tu contraseña' : null,
                     ),
                     const SizedBox(height: 30),
                     SizedBox(
