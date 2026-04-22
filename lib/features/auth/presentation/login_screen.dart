@@ -1,5 +1,6 @@
 ﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:salufit_app/core/services/test_lab_detector.dart';
 import 'package:salufit_app/core/theme/app_colors.dart';
 import 'package:salufit_app/features/auth/presentation/activation_screen.dart';
 import 'package:salufit_app/features/auth/presentation/controllers/login_controller.dart';
@@ -17,6 +18,30 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _isPasswordVisible = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _maybeAutoLoginForTestLab();
+  }
+
+  // Robo tests no pueden inyectar texto en TextEditingController (Flutter filtra
+  // VIEW_TEXT_CHANGED de accesibilidad). Si detectamos Firebase Test Lab hacemos
+  // login automático con la cuenta demo — no afecta a usuarios reales.
+  Future<void> _maybeAutoLoginForTestLab() async {
+    final isTestLab = await TestLabDetector.isFirebaseTestLab();
+    if (!mounted || !isTestLab) return;
+    debugPrint('[TestLab] Auto-login disparado para reviewer demo');
+    _emailController.text = 'reviewer@centrosalufit.com';
+    _passwordController.text = 'salufit';
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      ref.read(loginControllerProvider.notifier).login(
+            'reviewer@centrosalufit.com',
+            'salufit',
+          );
+    });
+  }
 
   @override
   void dispose() {
@@ -54,6 +79,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     const SizedBox(height: 35),
                     Semantics(
                       identifier: 'login_email_field',
+                      label: 'login_email_field',
                       textField: true,
                       child: TextFormField(
                         controller: _emailController,
@@ -72,6 +98,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     const SizedBox(height: 20),
                     Semantics(
                       identifier: 'login_password_field',
+                      label: 'login_password_field',
                       textField: true,
                       child: TextFormField(
                         controller: _passwordController,
@@ -92,33 +119,38 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       ),
                     ),
                     const SizedBox(height: 30),
-                    SizedBox(
-                      height: 55,
-                      child: ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.primary,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        ),
-                        onPressed: loginState.isLoading
-                            ? null
-                            : () {
-                                if (_formKey.currentState!.validate()) {
-                                  ref.read(loginControllerProvider.notifier).login(
-                                        _emailController.text.trim(),
-                                        _passwordController.text.trim(),
-                                      );
-                                }
-                              },
-                        child: loginState.isLoading
-                            ? const CircularProgressIndicator(color: Colors.white)
-                            : const Text(
-                                'INICIAR SESIÓN',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 18,
+                    Semantics(
+                      identifier: 'login_submit_button',
+                      label: 'login_submit_button',
+                      button: true,
+                      child: SizedBox(
+                        height: 55,
+                        child: ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.primary,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                          onPressed: loginState.isLoading
+                              ? null
+                              : () {
+                                  if (_formKey.currentState!.validate()) {
+                                    ref.read(loginControllerProvider.notifier).login(
+                                          _emailController.text.trim(),
+                                          _passwordController.text.trim(),
+                                        );
+                                  }
+                                },
+                          child: loginState.isLoading
+                              ? const CircularProgressIndicator(color: Colors.white)
+                              : const Text(
+                                  'INICIAR SESIÓN',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 18,
+                                  ),
                                 ),
-                              ),
+                        ),
                       ),
                     ),
                     const SizedBox(height: 24),
