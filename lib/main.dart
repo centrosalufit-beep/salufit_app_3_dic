@@ -1,5 +1,7 @@
+import 'package:firebase_analytics/firebase_analytics.dart';
 import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -17,24 +19,36 @@ void main() async {
     DeviceOrientation.portraitDown,
   ]);
 
-  // Capturar errores de Flutter (widgets, rendering)
-  FlutterError.onError = (details) {
-    debugPrint('FlutterError: ${details.exceptionAsString()}');
-    FlutterError.presentError(details);
-  };
-
-  // Capturar errores asíncronos no manejados
-  PlatformDispatcher.instance.onError = (error, stack) {
-    debugPrint('PlatformError: $error');
-    return true; // No propagar — evita crash
-  };
-
   try {
     await initializeDateFormatting('es');
 
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
+
+    // Crashlytics: reporta errores Flutter y asíncronos automáticamente.
+    // En debug no envía nada (para no polucionar el dashboard).
+    await FirebaseCrashlytics.instance
+        .setCrashlyticsCollectionEnabled(!kDebugMode);
+
+    FlutterError.onError = (details) {
+      if (kDebugMode) {
+        FlutterError.presentError(details);
+      } else {
+        FirebaseCrashlytics.instance.recordFlutterFatalError(details);
+      }
+    };
+
+    PlatformDispatcher.instance.onError = (error, stack) {
+      if (!kDebugMode) {
+        FirebaseCrashlytics.instance.recordError(error, stack);
+      }
+      return true;
+    };
+
+    // Analytics: solo en producción, respetando consent futuro.
+    await FirebaseAnalytics.instance
+        .setAnalyticsCollectionEnabled(!kDebugMode);
 
     if (kDebugMode) {
       await FirebaseAppCheck.instance.activate(
@@ -44,8 +58,12 @@ void main() async {
     } else {
       await FirebaseAppCheck.instance.activate();
     }
-  } catch (e) {
+  } catch (e, stack) {
     debugPrint('Error Crítico en main: $e');
+    // Si Firebase ya se inicializó pero algo falló después, reporta.
+    try {
+      FirebaseCrashlytics.instance.recordError(e, stack);
+    } catch (_) {}
   }
 
   runApp(

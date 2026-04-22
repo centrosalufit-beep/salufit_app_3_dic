@@ -3,6 +3,7 @@ plugins {
     id "kotlin-android"
     id "dev.flutter.flutter-gradle-plugin"
     id "com.google.gms.google-services"
+    id "com.google.firebase.crashlytics"
 }
 
 def localProperties = new Properties()
@@ -23,7 +24,7 @@ if (flutterVersionName == null) {
     flutterVersionName = '1.0'
 }
 
-// --- CONFIGURACIÃ“N DE FIRMA ---
+// --- CONFIGURACI_N DE FIRMA ---
 def keystoreProperties = new Properties()
 def keystorePropertiesFile = rootProject.file('key.properties')
 if (keystorePropertiesFile.exists()) {
@@ -35,7 +36,7 @@ android {
     namespace "com.salufit.app"
     compileSdk flutter.compileSdkVersion
     
-    // ðŸ› ï¸ ACTUALIZACIÃ“N: Usamos la versiÃ³n 27 porque los plugins la exigen
+    //   _ ACTUALIZACI_N: Usamos la versi_n 27 porque los plugins la exigen
 
     compileOptions {
         coreLibraryDesugaringEnabled true
@@ -84,7 +85,7 @@ android {
             shrinkResources true
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
             
-            // ðŸ› ï¸ MANTENEMOS ESTO: Es el parche para que el NDK 27 no falle en Mac
+            //   _ MANTENEMOS ESTO: Es el parche para que el NDK 27 no falle en Mac
             ndk {
                 debugSymbolLevel 'SYMBOL_TABLE'
             }
