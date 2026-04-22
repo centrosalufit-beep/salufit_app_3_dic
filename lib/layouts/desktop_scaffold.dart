@@ -47,6 +47,143 @@ class _DesktopScaffoldState extends ConsumerState<DesktopScaffold> {
       if (isAdmin) const AdminLibraryHubScreen(),
     ];
 
+    // Construir los destinations una sola vez para reutilizar en Rail y Drawer
+    final destinations = <_NavItem>[
+      _NavItem(icon: isAdmin ? Icons.analytics : Icons.space_dashboard_outlined, label: 'Dashboard'),
+      const _NavItem(icon: Icons.calendar_month, label: 'Clases'),
+      const _NavItem(icon: Icons.people, label: 'Pacientes'),
+      if (isAdmin) const _NavItem(icon: Icons.confirmation_number, label: 'Bonos'),
+      const _NavItem(icon: Icons.assignment, label: 'Recursos'),
+      const _NavItem(icon: Icons.forum, label: 'Equipo'),
+      const _NavItem(icon: Icons.leaderboard, label: 'CRM'),
+      if (isAdmin) const _NavItem(icon: Icons.badge, label: 'RRHH'),
+      if (isAdmin) const _NavItem(icon: Icons.auto_stories, label: 'Librería'),
+    ];
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // En móvil/pantalla estrecha usamos Drawer + AppBar (hamburguesa).
+        // En escritorio mantenemos el layout original con sidebar fijo.
+        final isNarrow = constraints.maxWidth < 800;
+        if (isNarrow) {
+          return _buildNarrowLayout(destinations, pages);
+        }
+        return _buildWideLayout(destinations, pages, isAdmin);
+      },
+    );
+  }
+
+  Widget _buildNarrowLayout(List<_NavItem> destinations, List<Widget> pages) {
+    final currentLabel = destinations[_selectedIndex.clamp(0, destinations.length - 1)].label;
+    return Scaffold(
+      appBar: AppBar(
+        backgroundColor: const Color(0xFF1E293B),
+        foregroundColor: Colors.white,
+        title: Text(currentLabel),
+        actions: [
+          _UnreadBellBadge(
+            userId: widget.userId,
+            onTap: () {
+              final equipoIndex = destinations.indexWhere((d) => d.label == 'Equipo');
+              if (equipoIndex >= 0) setState(() => _selectedIndex = equipoIndex);
+            },
+          ),
+          const SizedBox(width: 4),
+        ],
+      ),
+      drawer: Drawer(
+        backgroundColor: const Color(0xFF1E293B),
+        child: SafeArea(
+          child: Column(
+            children: [
+              const SizedBox(height: 20),
+              Image.asset(
+                'assets/logo_salufit.png',
+                height: 60,
+                color: Colors.white,
+                colorBlendMode: BlendMode.srcIn,
+                errorBuilder: (_, __, ___) => const Icon(Icons.favorite, color: Colors.white, size: 60),
+              ),
+              const SizedBox(height: 20),
+              _AdminClockSwitch(userId: widget.userId),
+              const SizedBox(height: 12),
+              const Divider(color: Colors.white24, height: 1),
+              Expanded(
+                child: ListView.builder(
+                  padding: EdgeInsets.zero,
+                  itemCount: destinations.length,
+                  itemBuilder: (ctx, i) {
+                    final d = destinations[i];
+                    final selected = _selectedIndex == i;
+                    return ListTile(
+                      leading: Icon(
+                        d.icon,
+                        color: selected ? Colors.tealAccent : Colors.white70,
+                      ),
+                      title: Text(
+                        d.label,
+                        style: TextStyle(
+                          color: selected ? Colors.white : Colors.white70,
+                          fontWeight: selected ? FontWeight.w900 : FontWeight.normal,
+                        ),
+                      ),
+                      selected: selected,
+                      selectedTileColor: const Color(0xFF004D40),
+                      onTap: () {
+                        setState(() => _selectedIndex = i);
+                        Navigator.of(ctx).pop();
+                      },
+                    );
+                  },
+                ),
+              ),
+              const Divider(color: Colors.white24, height: 1),
+              ListTile(
+                leading: const Icon(Icons.power_settings_new, color: Colors.redAccent),
+                title: const Text('Cerrar sesión', style: TextStyle(color: Colors.redAccent)),
+                onTap: () async {
+                  HapticFeedback.mediumImpact();
+                  await ref.read(firebaseAuthProvider).signOut();
+                },
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        ),
+      ),
+      body: Container(
+        decoration: const BoxDecoration(
+          image: DecorationImage(image: AssetImage('assets/login_bg.jpg'), fit: BoxFit.cover),
+        ),
+        child: Stack(
+          children: [
+            Center(
+              child: Opacity(
+                opacity: 0.05,
+                child: Image.asset('assets/logo_salufit.png', width: 300, errorBuilder: (_, __, ___) => const SizedBox()),
+              ),
+            ),
+            Positioned.fill(
+              child: Theme(
+                data: Theme.of(context).copyWith(
+                  scaffoldBackgroundColor: Colors.transparent,
+                  appBarTheme: const AppBarTheme(
+                    backgroundColor: Color(0xFF1E293B),
+                    elevation: 0,
+                    foregroundColor: Colors.white,
+                  ),
+                  cardColor: Colors.white.withValues(alpha: 0.95),
+                ),
+                child: pages[_selectedIndex.clamp(0, pages.length - 1)],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildWideLayout(List<_NavItem> destinations, List<Widget> pages, bool isAdmin) {
     return Scaffold(
       body: Container(
         decoration: const BoxDecoration(image: DecorationImage(image: AssetImage('assets/login_bg.jpg'), fit: BoxFit.cover)),
@@ -71,7 +208,7 @@ class _DesktopScaffoldState extends ConsumerState<DesktopScaffold> {
                           ),
                           child: IntrinsicHeight(
                             child: NavigationRail(
-                              selectedIndex: _selectedIndex,
+                              selectedIndex: _selectedIndex.clamp(0, destinations.length - 1),
                               onDestinationSelected: (i) => setState(() => _selectedIndex = i),
                               labelType: NavigationRailLabelType.all,
                               backgroundColor: Colors.transparent,
@@ -80,20 +217,14 @@ class _DesktopScaffoldState extends ConsumerState<DesktopScaffold> {
                               unselectedIconTheme: const IconThemeData(color: Colors.white60),
                               selectedLabelTextStyle: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11),
                               unselectedLabelTextStyle: const TextStyle(color: Colors.white60, fontSize: 10),
-                              destinations: [
-                                NavigationRailDestination(
-                                  icon: Icon(isAdmin ? Icons.analytics : Icons.space_dashboard_outlined),
-                                  label: const Text('Dashboard'),
-                                ),
-                                const NavigationRailDestination(icon: Icon(Icons.calendar_month), label: Text('Clases')),
-                                const NavigationRailDestination(icon: Icon(Icons.people), label: Text('Pacientes')),
-                                if (isAdmin) const NavigationRailDestination(icon: Icon(Icons.confirmation_number), label: Text('Bonos')),
-                                const NavigationRailDestination(icon: Icon(Icons.assignment), label: Text('Recursos')),
-                                const NavigationRailDestination(icon: Icon(Icons.forum), label: Text('Equipo')),
-                                const NavigationRailDestination(icon: Icon(Icons.leaderboard), label: Text('CRM')),
-                                if (isAdmin) const NavigationRailDestination(icon: Icon(Icons.badge), label: Text('RRHH')),
-                                if (isAdmin) const NavigationRailDestination(icon: Icon(Icons.auto_stories), label: Text('Librería')),
-                              ],
+                              destinations: destinations
+                                  .map(
+                                    (d) => NavigationRailDestination(
+                                      icon: Icon(d.icon),
+                                      label: Text(d.label),
+                                    ),
+                                  )
+                                  .toList(),
                             ),
                           ),
                         ),
@@ -101,7 +232,10 @@ class _DesktopScaffoldState extends ConsumerState<DesktopScaffold> {
                     ),
                     _UnreadBellBadge(
                       userId: widget.userId,
-                      onTap: () => setState(() => _selectedIndex = 5),
+                      onTap: () {
+                        final equipoIndex = destinations.indexWhere((d) => d.label == 'Equipo');
+                        if (equipoIndex >= 0) setState(() => _selectedIndex = equipoIndex);
+                      },
                     ),
                     const SizedBox(height: 8),
                     Semantics(
@@ -137,7 +271,7 @@ class _DesktopScaffoldState extends ConsumerState<DesktopScaffold> {
                         ),
                         cardColor: Colors.white.withValues(alpha: 0.9),
                       ),
-                      child: pages[_selectedIndex],
+                      child: pages[_selectedIndex.clamp(0, pages.length - 1)],
                     ),
                   ),
                 ],
@@ -148,6 +282,12 @@ class _DesktopScaffoldState extends ConsumerState<DesktopScaffold> {
       ),
     );
   }
+}
+
+class _NavItem {
+  const _NavItem({required this.icon, required this.label});
+  final IconData icon;
+  final String label;
 }
 
 class _AdminClockSwitch extends ConsumerStatefulWidget {
