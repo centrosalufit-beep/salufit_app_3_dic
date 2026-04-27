@@ -5,6 +5,7 @@ import 'package:salufit_app/core/providers/firebase_providers.dart';
 import 'package:salufit_app/core/theme/app_colors.dart';
 import 'package:salufit_app/features/auth/presentation/activation_screen_helper.dart';
 import 'package:salufit_app/features/auth/providers/auth_providers.dart';
+import 'package:salufit_app/l10n/generated/app_localizations.dart';
 import 'package:salufit_app/shared/widgets/salufit_scaffold.dart';
 
 class ActivationScreen extends ConsumerStatefulWidget {
@@ -23,6 +24,7 @@ class _ActivationScreenState extends ConsumerState<ActivationScreen> {
   Future<void> _procesoActivacion() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _isLoading = true);
+    final t = AppLocalizations.of(context);
 
     final email = _emailController.text.trim().toLowerCase();
     final idH = _historyController.text.trim().padLeft(6, '0');
@@ -30,7 +32,6 @@ class _ActivationScreenState extends ConsumerState<ActivationScreen> {
     try {
       dev.log('>>> [ACTIVACION] Verificando estado via Cloud Function');
 
-      // Tipado explícito <Map<String, dynamic>> para evitar avoid_dynamic_calls
       final result = await ref
           .read(firebaseFunctionsProvider)
           .httpsCallable('checkAccountStatus')
@@ -50,7 +51,7 @@ class _ActivationScreenState extends ConsumerState<ActivationScreen> {
       }
 
       if (status == 'NOT_FOUND') {
-        throw Exception('Los datos no coinciden con nuestra base de datos.');
+        throw Exception(t.activationDataMismatch);
       }
 
       await ref.read(authServiceProvider).sendPasswordResetEmail(email);
@@ -64,7 +65,7 @@ class _ActivationScreenState extends ConsumerState<ActivationScreen> {
         SnackBar(
           content: Text(
             e.toString().contains('permission-denied')
-                ? 'Error de comunicación con el servidor.'
+                ? t.activationServerError
                 : e.toString().replaceAll('Exception: ', ''),
           ),
           backgroundColor: Colors.redAccent,
@@ -76,15 +77,14 @@ class _ActivationScreenState extends ConsumerState<ActivationScreen> {
   }
 
   void _showSuccessDialog(String email) {
+    final t = AppLocalizations.of(context);
     showDialog<void>(
       context: context,
       barrierDismissible: false,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-        title: const Text('¡Identidad Verificada!'),
-        content: Text(
-          'Hemos enviado un enlace a $email para crear tu contraseña.',
-        ),
+        title: Text(t.activationVerifiedTitle),
+        content: Text(t.activationVerifiedMessage(email)),
         actions: [
           ElevatedButton(
             style: ElevatedButton.styleFrom(
@@ -94,9 +94,9 @@ class _ActivationScreenState extends ConsumerState<ActivationScreen> {
               Navigator.pop(ctx);
               Navigator.pop(context);
             },
-            child: const Text(
-              'ENTENDIDO',
-              style: TextStyle(color: Colors.white),
+            child: Text(
+              t.commonGotIt.toUpperCase(),
+              style: const TextStyle(color: Colors.white),
             ),
           ),
         ],
@@ -106,12 +106,13 @@ class _ActivationScreenState extends ConsumerState<ActivationScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context);
     return SalufitScaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-        title: const Text(
-          'Activar Cuenta',
-          style: TextStyle(fontWeight: FontWeight.bold),
+        title: Text(
+          t.activationTitle,
+          style: const TextStyle(fontWeight: FontWeight.bold),
         ),
         backgroundColor: Colors.white,
         foregroundColor: AppColors.primary,
@@ -124,17 +125,17 @@ class _ActivationScreenState extends ConsumerState<ActivationScreen> {
           children: [
             const Icon(Icons.verified_user_outlined, size: 80, color: AppColors.primary),
             const SizedBox(height: 20),
-            const Text(
-              'Introduce tus datos para vincular tu ficha médica con la App.',
+            Text(
+              t.activationLinkPrompt,
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 16, color: Colors.black54),
+              style: const TextStyle(fontSize: 16, color: Colors.black54),
             ),
             const SizedBox(height: 30),
             TextFormField(
               controller: _historyController,
               keyboardType: TextInputType.number,
               decoration: InputDecoration(
-                labelText: 'Nº Historia',
+                labelText: t.activationHistoryNumber,
                 prefixIcon: const Icon(
                   Icons.assignment_ind_outlined,
                   color: AppColors.primary,
@@ -144,21 +145,21 @@ class _ActivationScreenState extends ConsumerState<ActivationScreen> {
                 ),
               ),
               validator: (value) =>
-                  (value == null || value.isEmpty) ? 'Campo obligatorio' : null,
+                  (value == null || value.isEmpty) ? t.commonRequired : null,
             ),
             const SizedBox(height: 20),
             TextFormField(
               controller: _emailController,
               keyboardType: TextInputType.emailAddress,
               decoration: InputDecoration(
-                labelText: 'Email',
+                labelText: t.loginEmailLabel,
                 prefixIcon: const Icon(Icons.email_outlined, color: AppColors.primary),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
               ),
               validator: (value) =>
-                  (value == null || !value.contains('@')) ? 'Email inválido' : null,
+                  (value == null || !value.contains('@')) ? t.loginInvalidEmail : null,
             ),
             const SizedBox(height: 40),
             SizedBox(
@@ -175,9 +176,9 @@ class _ActivationScreenState extends ConsumerState<ActivationScreen> {
                 onPressed: _isLoading ? null : _procesoActivacion,
                 child: _isLoading
                     ? const CircularProgressIndicator(color: Colors.white)
-                    : const Text(
-                        'VERIFICAR MI IDENTIDAD',
-                        style: TextStyle(
+                    : Text(
+                        t.activationVerifyIdentity,
+                        style: const TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
                         ),

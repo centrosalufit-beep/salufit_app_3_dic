@@ -5,10 +5,13 @@ import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/date_symbol_data_local.dart';
+import 'package:salufit_app/core/providers/locale_provider.dart';
 import 'package:salufit_app/features/auth/presentation/auth_wrapper.dart';
 import 'package:salufit_app/firebase_options.dart';
+import 'package:salufit_app/l10n/generated/app_localizations.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -73,12 +76,24 @@ void main() async {
   );
 }
 
-class SalufitApp extends StatelessWidget {
+class SalufitApp extends ConsumerStatefulWidget {
   const SalufitApp({super.key});
 
   @override
+  ConsumerState<SalufitApp> createState() => _SalufitAppState();
+}
+
+class _SalufitAppState extends ConsumerState<SalufitApp> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(localeControllerProvider.notifier).initialize();
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
-    // Edge-to-edge: barras transparentes para Android 15+
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     SystemChrome.setSystemUIOverlayStyle(
       const SystemUiOverlayStyle(
@@ -88,6 +103,8 @@ class SalufitApp extends StatelessWidget {
       ),
     );
 
+    final locale = ref.watch(localeControllerProvider);
+
     return MaterialApp(
       title: 'Salufit 2026',
       debugShowCheckedModeBanner: false,
@@ -95,16 +112,25 @@ class SalufitApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF009688)),
         useMaterial3: true,
       ),
-      // ErrorWidget para evitar pantalla roja en producción
+      locale: locale,
+      supportedLocales: kSupportedLocales,
+      localizationsDelegates: const [
+        AppLocalizations.delegate,
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
       builder: (context, child) {
         ErrorWidget.builder = (details) => Material(
               child: Center(
                 child: Padding(
                   padding: const EdgeInsets.all(24),
-                  child: Text(
-                    'Ha ocurrido un error.\nPor favor, reinicia la aplicación.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(color: Colors.grey.shade600, fontSize: 16),
+                  child: Builder(
+                    builder: (innerCtx) => Text(
+                      AppLocalizations.of(innerCtx).errorGeneric,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: Colors.grey.shade600, fontSize: 16),
+                    ),
                   ),
                 ),
               ),

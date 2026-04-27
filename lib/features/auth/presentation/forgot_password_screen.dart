@@ -1,7 +1,8 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:salufit_app/core/theme/app_colors.dart';
 import 'package:salufit_app/features/auth/data/auth_repository.dart';
+import 'package:salufit_app/l10n/generated/app_localizations.dart';
 
 class ForgotPasswordScreen extends ConsumerStatefulWidget {
   const ForgotPasswordScreen({super.key});
@@ -23,29 +24,30 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
 
   Future<void> _handleReset() async {
     if (!_formKey.currentState!.validate()) return;
-    
+
     setState(() => _isLoading = true);
+    final t = AppLocalizations.of(context);
     try {
-      // CORRECCIÓN: Ahora sí usamos el repositorio (Adiós unused_import)
       final email = _emailController.text.trim();
       await ref.read(authRepositoryProvider).sendPasswordResetEmail(email);
-      
-      // CORRECCIÓN: Inferencia de tipo Future<void> (Adiós inference_failure)
-      await Future<void>.delayed(const Duration(seconds: 1)); 
-      
+      await Future<void>.delayed(const Duration(seconds: 1));
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('✅ Enlace enviado. Revisa tu bandeja de entrada.'),
+          SnackBar(
+            content: Text(t.forgotSuccess),
             backgroundColor: Colors.green,
           ),
         );
         Navigator.pop(context);
       }
-    } catch (e) {
+    } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Ha ocurrido un error. Intentalo de nuevo.'), backgroundColor: Colors.red),
+          SnackBar(
+            content: Text(t.errorTryAgain),
+            backgroundColor: Colors.red,
+          ),
         );
       }
     } finally {
@@ -55,9 +57,10 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context);
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Recuperar Contraseña'),
+        title: Text(t.forgotTitle),
         backgroundColor: Colors.transparent,
         elevation: 0,
         foregroundColor: AppColors.primary,
@@ -69,7 +72,6 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
             child: Image.asset('assets/login_bg.jpg', fit: BoxFit.cover),
           ),
           Positioned.fill(child: Container(color: Colors.black.withValues(alpha: 0.4))),
-          
           Center(
             child: SingleChildScrollView(
               padding: const EdgeInsets.all(24),
@@ -86,21 +88,21 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
                     children: [
                       const Icon(Icons.lock_reset, size: 80, color: AppColors.primary),
                       const SizedBox(height: 16),
-                      const Text(
-                        'Introduce tu email para enviarte las instrucciones de recuperación.',
+                      Text(
+                        t.forgotInstructions,
                         textAlign: TextAlign.center,
-                        style: TextStyle(fontSize: 16),
+                        style: const TextStyle(fontSize: 16),
                       ),
                       const SizedBox(height: 24),
                       TextFormField(
                         controller: _emailController,
                         keyboardType: TextInputType.emailAddress,
                         decoration: InputDecoration(
-                          labelText: 'Correo Electrónico',
+                          labelText: t.loginEmailLabel,
                           prefixIcon: const Icon(Icons.email_outlined, color: AppColors.primary),
                           border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                         ),
-                        validator: (v) => (v == null || !v.contains('@')) ? 'Email no válido' : null,
+                        validator: (v) => (v == null || !v.contains('@')) ? t.loginInvalidEmail : null,
                       ),
                       const SizedBox(height: 24),
                       SizedBox(
@@ -112,9 +114,12 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                           ),
                           onPressed: _isLoading ? null : _handleReset,
-                          child: _isLoading 
-                            ? const CircularProgressIndicator(color: Colors.white)
-                            : const Text('ENVIAR ENLACE', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                          child: _isLoading
+                              ? const CircularProgressIndicator(color: Colors.white)
+                              : Text(
+                                  t.forgotSubmit,
+                                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                                ),
                         ),
                       ),
                     ],

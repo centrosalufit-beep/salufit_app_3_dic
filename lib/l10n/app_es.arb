@@ -1,0 +1,307 @@
+{
+  "@@locale": "es",
+  "appTitle": "Salufit",
+  "@appTitle": {
+    "description": "Application title"
+  },
+  "appSlogan": "Tu salud en manos PROFESIONALES",
+  "@appSlogan": {
+    "description": "Login screen slogan"
+  },
+  "loginEmailLabel": "Correo Electrónico",
+  "loginPasswordLabel": "Contraseña",
+  "loginInvalidEmail": "Correo inválido",
+  "loginEmptyPassword": "Introduce tu contraseña",
+  "loginSubmit": "INICIAR SESIÓN",
+  "loginFirstTime": "Primera vez",
+  "loginForgotPassword": "¿Olvidaste contraseña?",
+  "loginGenericError": "No se pudo iniciar sesión. Revisa tus credenciales.",
+
+  "languagePickerTitle": "Idioma",
+  "languageSpanish": "Español",
+  "languageEnglish": "English",
+  "languageFrench": "Français",
+  "languageGerman": "Deutsch",
+  "languageDutch": "Nederlands",
+
+  "commonOk": "Aceptar",
+  "commonCancel": "Cancelar",
+  "commonSave": "Guardar",
+  "commonClose": "Cerrar",
+  "commonContinue": "Continuar",
+  "commonRetry": "Reintentar",
+  "commonError": "Error",
+  "commonLoading": "Cargando…",
+  "commonYes": "Sí",
+  "commonNo": "No",
+  "commonNext": "Siguiente",
+  "commonBack": "Atrás",
+  "commonDelete": "Eliminar",
+  "commonEdit": "Editar",
+  "commonAdd": "Añadir",
+  "commonSearch": "Buscar",
+  "commonRequired": "Campo obligatorio",
+  "commonNoData": "Sin datos",
+
+  "errorGeneric": "Ha ocurrido un error.\nPor favor, reinicia la aplicación.",
+  "errorNoConnection": "Sin conexión a internet",
+  "errorTryAgain": "Inténtalo de nuevo",
+
+  "logoutConfirmTitle": "Cerrar sesión",
+  "logoutConfirmMessage": "¿Seguro que quieres cerrar sesión?",
+  "logoutAction": "Cerrar sesión",
+
+  "navHome": "Inicio",
+  "navClasses": "Clases",
+  "navProfile": "Perfil",
+  "navDocuments": "Documentos",
+  "navMaterial": "Material",
+  "navChat": "Chat",
+  "navBookings": "Reservas",
+  "navSettings": "Ajustes",
+
+  "dashboardWelcome": "Hola, {name}",
+  "@dashboardWelcome": {
+    "placeholders": {
+      "name": {"type": "String"}
+    }
+  },
+  "dashboardYourPasses": "Tus bonos",
+  "dashboardYourClasses": "Tus clases",
+  "dashboardUpcomingClass": "Próxima clase",
+  "dashboardNoUpcoming": "No tienes clases programadas",
+  "dashboardSeeAll": "Ver todo",
+
+  "passesAvailable": "{count, plural, =0{Sin bonos} =1{1 bono disponible} other{{count} bonos disponibles}}",
+  "@passesAvailable": {
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "passesExpiresOn": "Caduca el {date}",
+  "@passesExpiresOn": {
+    "placeholders": {
+      "date": {"type": "String"}
+    }
+  },
+
+  "classBookSubmit": "Reservar plaza",
+  "classBookSuccess": "Plaza reservada",
+  "classBookError": "No se pudo reservar la plaza",
+  "classCancelSubmit": "Cancelar reserva",
+  "classCancelConfirm": "¿Cancelar tu reserva?",
+  "classFull": "Clase completa",
+  "classMyReservation": "Tu reserva",
+  "classCapacity": "{occupied}/{capacity} plazas",
+  "@classCapacity": {
+    "placeholders": {
+      "occupied": {"type": "int"},
+      "capacity": {"type": "int"}
+    }
+  },
+  "classWaitlist": "Lista de espera",
+  "classWaitlistJoin": "Unirme a la lista de espera",
+  "classWaitlistPosition": "Posición en lista: {position}",
+  "@classWaitlistPosition": {
+    "placeholders": {
+      "position": {"type": "int"}
+    }
+  },
+
+  "profileTitle": "Mi perfil",
+  "profileFullName": "Nombre completo",
+  "profilePhone": "Teléfono",
+  "profileBirthdate": "Fecha de nacimiento",
+  "profileGender": "Género",
+  "profileEditTitle": "Editar perfil",
+  "profileSaved": "Perfil guardado",
+  "profileLanguage": "Idioma de la aplicación",
+
+  "documentsTitle": "Documentos",
+  "documentsEmpty": "No tienes documentos disponibles",
+  "documentsView": "Ver documento",
+  "documentsSign": "Firmar",
+  "documentsSigned": "Firmado",
+
+  "materialTitle": "Material",
+  "materialEmpty": "No tienes material asignado",
+  "materialView": "Ver material",
+
+  "chatTitle": "Chat",
+  "chatEmpty": "No tienes conversaciones activas",
+  "chatTypeMessage": "Escribe un mensaje…",
+  "chatSend": "Enviar",
+  "chatNew": "Nueva conversación",
+  "chatYou": "Tú",
+
+  "termsTitle": "Términos y condiciones",
+  "termsAcceptButton": "Acepto los términos",
+  "termsReadFirst": "Debes leer y aceptar los términos para continuar",
+  "privacyTitle": "Política de privacidad",
+  "privacyAcceptButton": "Acepto la política de privacidad",
+
+  "activationTitle": "Activar cuenta",
+  "activationCodePrompt": "Introduce el código de activación que te hemos enviado",
+  "activationCodeLabel": "Código",
+  "activationSubmit": "Activar",
+  "activationInvalidCode": "Código no válido",
+  "activationSendAgain": "Reenviar código",
+  "activationFirstTime": "Es mi primera vez en Salufit",
+
+  "forgotTitle": "Recuperar contraseña",
+  "forgotInstructions": "Introduce tu correo y te enviaremos un enlace para restablecer la contraseña",
+  "forgotSubmit": "Enviar enlace",
+  "forgotSuccess": "Te hemos enviado un correo. Revisa tu bandeja de entrada.",
+  "forgotErrorEmail": "Comprueba el correo introducido",
+
+  "passwordMigrationTitle": "Establece una contraseña nueva",
+  "passwordMigrationMessage": "Por seguridad, te pedimos crear una nueva contraseña.",
+  "passwordMigrationLabel": "Nueva contraseña",
+  "passwordMigrationConfirm": "Confirmar contraseña",
+  "passwordMigrationMismatch": "Las contraseñas no coinciden",
+  "passwordMigrationMinLength": "Debe tener al menos 8 caracteres",
+  "passwordMigrationSubmit": "Guardar contraseña",
+
+  "consentGranularTitle": "Tus preferencias de privacidad",
+  "consentMarketing": "Comunicaciones comerciales",
+  "consentAnalytics": "Mejora del servicio (analítica)",
+  "consentMedical": "Tratamiento de datos clínicos",
+  "consentSubmit": "Guardar preferencias",
+
+  "birthDateDialogTitle": "Fecha de nacimiento",
+  "birthDateDialogPrompt": "Confirma tu fecha de nacimiento para continuar",
+  "birthDateDialogSubmit": "Confirmar",
+
+  "updateRequiredTitle": "Actualización necesaria",
+  "updateRequiredMessage": "Hay una nueva versión disponible. Por favor, actualiza la app para continuar.",
+  "updateRequiredAction": "Actualizar",
+
+  "qrWalkInTitle": "Acceso por QR",
+  "qrWalkInPrompt": "Escanea el código QR del centro para registrar tu entrada",
+  "qrWalkInSuccess": "Acceso registrado",
+
+  "scheduleEmpty": "No hay clases en este día",
+  "scheduleToday": "Hoy",
+  "scheduleTomorrow": "Mañana",
+  "scheduleYesterday": "Ayer",
+
+  "errorPassesEmpty": "No tienes bonos disponibles para esta clase",
+  "errorClassFull": "La clase está completa",
+  "errorAlreadyBooked": "Ya tienes una reserva en esta clase",
+  "errorBookingClosed": "Las reservas para esta clase están cerradas",
+
+  "appOfflineBanner": "Sin conexión. Algunos datos pueden no estar actualizados.",
+  "syncingData": "Sincronizando datos…",
+
+  "commonGotIt": "Entendido",
+  "commonAccept": "Aceptar",
+  "commonDecline": "Rechazar",
+  "commonGoBack": "Volver",
+  "commonConfirm": "Confirmar",
+
+  "activationLinkPrompt": "Introduce tus datos para vincular tu ficha médica con la App.",
+  "activationHistoryNumber": "Nº Historia",
+  "activationVerifyIdentity": "VERIFICAR MI IDENTIDAD",
+  "activationVerifiedTitle": "¡Identidad verificada!",
+  "activationVerifiedMessage": "Hemos enviado un enlace a {email} para crear tu contraseña.",
+  "@activationVerifiedMessage": {
+    "placeholders": {
+      "email": {"type": "String"}
+    }
+  },
+  "activationServerError": "Error de comunicación con el servidor.",
+  "activationDataMismatch": "Los datos no coinciden con nuestra base de datos.",
+  "activationAlreadyRegisteredTitle": "Ya estás registrado",
+  "activationAlreadyRegisteredMessage": "Esta ficha ya tiene una cuenta activa. Si has olvidado la contraseña, te enviaremos un enlace para recuperarla.",
+  "activationAlreadyRegisteredAction": "Enviar enlace",
+
+  "termsAcceptanceTitle": "Términos y privacidad",
+  "termsAcceptancePrompt": "Para continuar, lee y acepta los siguientes documentos:",
+  "termsAcceptanceTerms": "He leído y acepto los Términos y Condiciones",
+  "termsAcceptancePrivacy": "He leído y acepto la Política de Privacidad",
+  "termsAcceptanceContinue": "Continuar",
+  "termsAcceptanceRequired": "Debes aceptar ambos documentos para continuar",
+  "termsViewLink": "Ver documento",
+
+  "consentMarketingDescription": "Recibir información comercial y promociones del centro.",
+  "consentAnalyticsDescription": "Permitir analíticas anónimas para mejorar la app.",
+  "consentMedicalDescription": "Tratamiento de tus datos clínicos según RGPD/HIPAA.",
+  "consentRequiredMedical": "El tratamiento de datos clínicos es necesario para usar el servicio.",
+
+  "updateRequiredAppStore": "Abrir App Store",
+  "updateRequiredPlayStore": "Abrir Play Store",
+
+  "permissionDeniedTitle": "Permiso denegado",
+  "permissionDeniedMessage": "Concede el permiso desde los ajustes del sistema para continuar.",
+  "permissionOpenSettings": "Abrir ajustes",
+
+  "homeWelcome": "Bienvenido/a, {name}",
+  "@homeWelcome": {
+    "placeholders": {
+      "name": {"type": "String"}
+    }
+  },
+  "homeFitTrack": "Tu seguimiento",
+  "homeQuickActions": "Acciones rápidas",
+  "homeBookClass": "Reservar clase",
+  "homeMyDocuments": "Mis documentos",
+  "homeMyMaterial": "Mi material",
+  "homeContactPro": "Contactar con mi profesional",
+
+  "classListTitle": "Clases del centro",
+  "classListEmptyDay": "No hay clases programadas",
+  "classListLoading": "Cargando clases…",
+  "classDetailsDuration": "Duración: {minutes} min",
+  "@classDetailsDuration": {
+    "placeholders": {
+      "minutes": {"type": "int"}
+    }
+  },
+  "classDetailsCoach": "Profesional: {name}",
+  "@classDetailsCoach": {
+    "placeholders": {
+      "name": {"type": "String"}
+    }
+  },
+  "classDetailsLocation": "Sala: {room}",
+  "@classDetailsLocation": {
+    "placeholders": {
+      "room": {"type": "String"}
+    }
+  },
+  "classDetailsTime": "Horario: {time}",
+  "@classDetailsTime": {
+    "placeholders": {
+      "time": {"type": "String"}
+    }
+  },
+
+  "tokenSyncing": "Actualizando bonos…",
+  "tokenError": "No se pudieron cargar tus bonos",
+
+  "documentsSignPrompt": "Necesitamos tu firma para este documento",
+  "documentsSignSuccess": "Documento firmado correctamente",
+
+  "qrAccessTitle": "Acceso por QR",
+  "qrAccessRetry": "Volver a escanear",
+
+  "chatNoMessages": "Aún no hay mensajes",
+  "chatComposeHint": "Escribe tu mensaje…",
+  "chatSendError": "No se pudo enviar el mensaje",
+  "chatProfessional": "Profesional",
+  "chatStaff": "Equipo Salufit",
+
+  "profileLogoutAction": "Cerrar sesión",
+  "profileSection": "Sección",
+  "profileSectionAccount": "Cuenta",
+  "profileSectionApp": "Aplicación",
+  "profileSectionPrivacy": "Privacidad y datos",
+  "profileVersionLabel": "Versión",
+
+  "settingsLanguageSubtitle": "Selecciona el idioma de la aplicación",
+  "settingsLanguageChanged": "Idioma actualizado",
+
+  "validationFieldRequired": "Este campo es obligatorio",
+  "validationEmailInvalid": "Correo electrónico no válido",
+  "validationPasswordWeak": "La contraseña no es lo suficientemente segura"
+}
