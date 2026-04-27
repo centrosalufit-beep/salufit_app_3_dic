@@ -11,6 +11,7 @@
  */
 
 import { onRequest } from "firebase-functions/v2/https";
+import { onDocumentWritten } from "firebase-functions/v2/firestore";
 import * as functions from "firebase-functions";
 import * as admin from "firebase-admin";
 
@@ -616,3 +617,106 @@ export const cancelarReserva = onRequest(async (req, res) => {
         res.status(400).json({ error: e.message });
     }
 });
+
+// ═══════════════════════════════════════════════════════════════
+// VIDEO FEEDBACK ROJO — PUSH AL PROFESIONAL
+// ═══════════════════════════════════════════════════════════════
+// Trigger Firestore: cuando se crea o actualiza una staff_tasks con
+// type='video_difficulty_red' y pushPending=true, envía notificación
+// FCM al profesional asignado y marca pushPending=false. La app cliente
+// (Flutter) escribe el campo pushPending=true al crear/incrementar la
+// tarea desde el reproductor de vídeos del paciente.
+export const sendVideoFeedbackPush = onDocumentWritten(
+    {
+        document: "staff_tasks/{taskId}",
+        region: "europe-southwest1",
+    },
+    async (event) => {
+        const afterSnap = event.data?.after;
+        const after = afterSnap?.data();
+        if (!afterSnap || !after) return;
+        if (after.type !== "video_difficulty_red") return;
+        if (after.pushPending !== true) return;
+
+        const asignadoAId = after.asignadoAId as string | undefined;
+        if (!asignadoAId) {
+            await afterSnap.ref.update({
+                pushPending: false,
+                pushError: "missing_asignadoAId",
+            });
+            return;
+        }
+
+        // Lookup del token FCM del profesional
+        let fcmToken = "";
+        try {
+            const userDoc = await db
+                .collection("users_app")
+                .doc(asignadoAId)
+                .get();
+            fcmToken = (userDoc.data()?.fcmToken as string | undefined) ?? "";
+        } catch (e) {
+            functions.logger.error("Error leyendo fcmToken", e);
+        }
+
+        if (!fcmToken) {
+            await afterSnap.ref.update({
+                pushPending: false,
+                pushError: "no_token",
+            });
+            return;
+        }
+
+        const exerciseName =
+            (after.exerciseName as string | undefined) || "un ejercicio";
+        const clientName =
+            (after.clientName as string | undefined) || "Un cliente";
+        const reportCount = (after.reportCount as number | undefined) ?? 1;
+
+        const title =
+            reportCount > 1
+                ? `⚠️ ${clientName} reporta dificultad (${reportCount}x)`
+                : `⚠️ ${clientName} marca rojo en ${exerciseName}`;
+        const body =
+            "Toca para revisar. Considera ajustar la progresión o sustituir el ejercicio.";
+
+        try {
+            await admin.messaging().send({
+                token: fcmToken,
+                notification: { title, body },
+                data: {
+                    type: "video_difficulty_red",
+                    taskId: event.params.taskId,
+                    clientId: (after.clientId as string | undefined) ?? "",
+                    exerciseId: (after.exerciseId as string | undefined) ?? "",
+                    assignmentId:
+                        (after.assignmentId as string | undefined) ?? "",
+                    reportCount: String(reportCount),
+                },
+                android: {
+                    priority: "high",
+                    notification: {
+                        channelId: "salufit_default",
+                        priority: "high",
+                    },
+                },
+                apns: {
+                    payload: {
+                        aps: { sound: "default", badge: 1 },
+                    },
+                },
+            });
+            await afterSnap.ref.update({
+                pushPending: false,
+                pushSentAt: admin.firestore.FieldValue.serverTimestamp(),
+            });
+        } catch (err: any) {
+            functions.logger.error("FCM send error", err);
+            await afterSnap.ref.update({
+                pushPending: false,
+                pushError: String(err?.message ?? err),
+            });
+        }
+    },
+);
+

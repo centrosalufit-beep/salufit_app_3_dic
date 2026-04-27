@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import 'package:salufit_app/core/providers/firebase_providers.dart';
 import 'package:salufit_app/core/theme/app_colors.dart';
 import 'package:salufit_app/core/utils/safe_parsing_extensions.dart';
+import 'package:salufit_app/features/patient_record/presentation/video_player_screen.dart';
 
 class ProfessionalTasksScreen extends ConsumerWidget {
   const ProfessionalTasksScreen({required this.userId, super.key});
@@ -565,27 +566,54 @@ class _TaskCard extends StatelessWidget {
             ],
           ),
         ),
+        actionsAlignment: MainAxisAlignment.spaceBetween,
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('CERRAR'),
+          TextButton.icon(
+            icon: const Icon(Icons.play_circle_outline, size: 18),
+            label: const Text('VER VÍDEO'),
+            style: TextButton.styleFrom(foregroundColor: AppColors.primary),
+            onPressed: () {
+              Navigator.pop(ctx);
+              Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => VideoPlayerScreen(
+                    videoUrl: data.safeString('videoUrl'),
+                    title: exerciseName.isNotEmpty
+                        ? exerciseName
+                        : 'Ejercicio',
+                    assignmentId: data.safeString('assignmentId'),
+                  ),
+                ),
+              );
+            },
           ),
-          if (isPending)
-            ElevatedButton.icon(
-              icon: const Icon(Icons.check_circle_outline, size: 18),
-              label: const Text('MARCAR RESUELTA'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.green,
-                foregroundColor: Colors.white,
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('CERRAR'),
               ),
-              onPressed: () async {
-                await docRef.update({
-                  'estado': 'completada',
-                  'completadaEl': FieldValue.serverTimestamp(),
-                });
-                if (ctx.mounted) Navigator.pop(ctx);
-              },
-            ),
+              if (isPending) ...[
+                const SizedBox(width: 4),
+                ElevatedButton.icon(
+                  icon: const Icon(Icons.check_circle_outline, size: 18),
+                  label: const Text('MARCAR RESUELTA'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.green,
+                    foregroundColor: Colors.white,
+                  ),
+                  onPressed: () async {
+                    await docRef.update({
+                      'estado': 'completada',
+                      'completadaEl': FieldValue.serverTimestamp(),
+                    });
+                    if (ctx.mounted) Navigator.pop(ctx);
+                  },
+                ),
+              ],
+            ],
+          ),
         ],
       ),
     );
