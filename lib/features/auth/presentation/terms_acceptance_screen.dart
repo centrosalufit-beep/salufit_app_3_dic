@@ -9,6 +9,7 @@ import 'package:salufit_app/core/theme/app_colors.dart';
 import 'package:salufit_app/features/auth/data/auth_repository.dart';
 import 'package:salufit_app/features/auth/presentation/auth_wrapper.dart';
 import 'package:salufit_app/features/auth/providers/auth_providers.dart';
+import 'package:salufit_app/l10n/generated/app_localizations.dart';
 import 'package:salufit_app/shared/widgets/salufit_scaffold.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -55,6 +56,7 @@ class _TermsAcceptanceScreenState extends ConsumerState<TermsAcceptanceScreen> {
   Future<void> _handleAcceptance() async {
     final uid = ref.read(firebaseAuthProvider).currentUser?.uid;
     if (uid == null) return;
+    final t = AppLocalizations.of(context);
 
     setState(() => _isLoading = true);
     try {
@@ -74,8 +76,8 @@ class _TermsAcceptanceScreenState extends ConsumerState<TermsAcceptanceScreen> {
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Ha ocurrido un error. Inténtalo de nuevo.'),
+          SnackBar(
+            content: Text(t.termsErrorRetry),
             backgroundColor: Colors.red,
           ),
         );
@@ -87,6 +89,7 @@ class _TermsAcceptanceScreenState extends ConsumerState<TermsAcceptanceScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context);
     final allChecked = _termsAccepted && _privacyAccepted;
     final allRead = _termsRead && _privacyRead;
 
@@ -96,171 +99,159 @@ class _TermsAcceptanceScreenState extends ConsumerState<TermsAcceptanceScreen> {
         child: ListView(
           padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 20),
           children: [
-              const SizedBox(height: 20),
-              const Icon(Icons.verified_user_rounded, size: 70, color: AppColors.primary),
-              const SizedBox(height: 20),
-              const Text(
-                'VALIDACIÓN DE ACCESO',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, letterSpacing: 1.2),
+            const SizedBox(height: 20),
+            const Icon(Icons.verified_user_rounded, size: 70, color: AppColors.primary),
+            const SizedBox(height: 20),
+            Text(
+              t.termsValidationTitle,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900, letterSpacing: 1.2),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              t.termsValidationSubtitle,
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.grey.shade700, fontSize: 13),
+            ),
+            const SizedBox(height: 20),
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: Colors.amber.shade50,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.amber.shade300),
               ),
-              const SizedBox(height: 10),
-              Text(
-                'Lee y acepta nuestras políticas oficiales para continuar.',
-                textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.grey.shade700, fontSize: 13),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(Icons.medical_services_outlined,
+                      color: Colors.amber.shade800, size: 22),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      t.termsMedicalDisclaimer,
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        color: Colors.amber.shade900,
+                        height: 1.4,
+                      ),
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(height: 20),
-
-              // --- DISCLAIMER MÉDICO (App Store 5.1.2) ---
+            ),
+            const SizedBox(height: 20),
+            _buildLegalButton(
+              label: t.termsReadTermsButton,
+              url: _urlTerminos,
+              isTerms: true,
+              wasRead: _termsRead,
+            ),
+            const SizedBox(height: 10),
+            _buildLegalButton(
+              label: t.termsReadPrivacyButton,
+              url: _urlPrivacidad,
+              isTerms: false,
+              wasRead: _privacyRead,
+            ),
+            const SizedBox(height: 30),
+            _buildCheckRow(
+              text: t.termsAcceptTermsCheckbox,
+              value: _termsAccepted,
+              enabled: _termsRead,
+              onChanged: (v) => setState(() => _termsAccepted = v!),
+            ),
+            _buildCheckRow(
+              text: t.termsAcceptPrivacyCheckbox,
+              value: _privacyAccepted,
+              enabled: _privacyRead,
+              onChanged: (v) => setState(() => _privacyAccepted = v!),
+            ),
+            if (!allRead) ...[
+              const SizedBox(height: 12),
               Container(
-                padding: const EdgeInsets.all(14),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                 decoration: BoxDecoration(
-                  color: Colors.amber.shade50,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.amber.shade300),
+                  color: Colors.orange.shade50,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.orange.shade200),
                 ),
                 child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(Icons.medical_services_outlined,
-                        color: Colors.amber.shade800, size: 22),
+                    Icon(Icons.info_outline, color: Colors.orange.shade800, size: 20),
                     const SizedBox(width: 10),
                     Expanded(
                       child: Text(
-                        'AVISO MÉDICO: La información y evaluaciones de esta '
-                        'aplicación son complementarias a tu seguimiento en '
-                        'consulta. No sustituyen el diagnóstico, tratamiento '
-                        'o consejo de un profesional sanitario titulado. '
-                        'Ante cualquier síntoma grave consulta a tu médico.',
-                        style: TextStyle(
-                          fontSize: 11.5,
-                          color: Colors.amber.shade900,
-                          height: 1.4,
-                        ),
+                        t.termsReadFirstWarning,
+                        style: TextStyle(fontSize: 12, color: Colors.orange.shade900, fontWeight: FontWeight.w600),
                       ),
                     ),
                   ],
                 ),
               ),
-              const SizedBox(height: 20),
-
-              // --- Boton Terminos ---
-              _buildLegalButton(
-                label: 'LEER TÉRMINOS Y CONDICIONES',
-                url: _urlTerminos,
-                isTerms: true,
-                wasRead: _termsRead,
-              ),
-              const SizedBox(height: 10),
-
-              // --- Boton Privacidad ---
-              _buildLegalButton(
-                label: 'LEER POLÍTICA DE PRIVACIDAD',
-                url: _urlPrivacidad,
-                isTerms: false,
-                wasRead: _privacyRead,
-              ),
-              const SizedBox(height: 30),
-
-              // --- Casillas (bloqueadas hasta leer) ---
-              _buildCheckRow(
-                text: 'Acepto los Términos y Condiciones',
-                value: _termsAccepted,
-                enabled: _termsRead,
-                onChanged: (v) => setState(() => _termsAccepted = v!),
-              ),
-              _buildCheckRow(
-                text: 'Acepto la Política de Privacidad',
-                value: _privacyAccepted,
-                enabled: _privacyRead,
-                onChanged: (v) => setState(() => _privacyAccepted = v!),
-              ),
-
-              if (!allRead) ...[
-                const SizedBox(height: 12),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                  decoration: BoxDecoration(
-                    color: Colors.orange.shade50,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: Colors.orange.shade200),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(Icons.info_outline, color: Colors.orange.shade800, size: 20),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          'Debes leer ambos documentos antes de poder aceptar.',
-                          style: TextStyle(fontSize: 12, color: Colors.orange.shade900, fontWeight: FontWeight.w600),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-
-              const SizedBox(height: 30),
-
-              // --- Mensaje de soporte ---
-              AnimatedOpacity(
-                duration: const Duration(milliseconds: 300),
-                opacity: allChecked ? 0.0 : 1.0,
-                child: Column(
-                  children: [
-                    const Text(
-                      'Es necesario aceptar ambas políticas para entrar.',
-                      style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 12),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Si no estás de acuerdo, contacta con la clínica:',
-                      style: TextStyle(color: Colors.grey.shade700, fontSize: 11),
-                    ),
-                    const SizedBox(height: 4),
-                    GestureDetector(
-                      onTap: _contactClinic,
-                      child: const Text(
-                        'Soporte Salufit: ${AppConfig.telefonoSoporte}',
-                        style: TextStyle(
-                          color: AppColors.primary,
-                          fontSize: 13,
-                          fontWeight: FontWeight.bold,
-                          decoration: TextDecoration.underline,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 20),
-
-              // --- Botones de accion ---
-              if (_isLoading)
-                const Center(child: CircularProgressIndicator())
-              else ...[
-                ElevatedButton(
-                  onPressed: allChecked ? _handleAcceptance : null,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    foregroundColor: Colors.white,
-                    disabledBackgroundColor: Colors.grey.shade200,
-                    padding: const EdgeInsets.all(18),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-                  ),
-                  child: const Text('CONFIRMAR Y ACCEDER', style: TextStyle(fontWeight: FontWeight.bold)),
-                ),
-                const SizedBox(height: 15),
-                TextButton(
-                  onPressed: () => ref.read(authServiceProvider).signOut(),
-                  child: const Text('SALIR', style: TextStyle(color: Colors.grey, fontSize: 12)),
-                ),
-              ],
             ],
-          ),
+            const SizedBox(height: 30),
+            AnimatedOpacity(
+              duration: const Duration(milliseconds: 300),
+              opacity: allChecked ? 0.0 : 1.0,
+              child: Column(
+                children: [
+                  Text(
+                    t.termsRequiredBoth,
+                    style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 12),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    t.termsContactClinicLine,
+                    style: TextStyle(color: Colors.grey.shade700, fontSize: 11),
+                  ),
+                  const SizedBox(height: 4),
+                  GestureDetector(
+                    onTap: _contactClinic,
+                    child: Text(
+                      t.termsSupportLine(AppConfig.telefonoSoporte),
+                      style: const TextStyle(
+                        color: AppColors.primary,
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        decoration: TextDecoration.underline,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 20),
+            if (_isLoading)
+              const Center(child: CircularProgressIndicator())
+            else ...[
+              ElevatedButton(
+                onPressed: allChecked ? _handleAcceptance : null,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                  disabledBackgroundColor: Colors.grey.shade200,
+                  padding: const EdgeInsets.all(18),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                ),
+                child: Text(
+                  t.termsConfirmAccess,
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
+              const SizedBox(height: 15),
+              TextButton(
+                onPressed: () => ref.read(authServiceProvider).signOut(),
+                child: Text(
+                  t.termsExit,
+                  style: const TextStyle(color: Colors.grey, fontSize: 12),
+                ),
+              ),
+            ],
+          ],
         ),
-      );
+      ),
+    );
   }
 
   Widget _buildLegalButton({

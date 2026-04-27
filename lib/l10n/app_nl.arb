@@ -241,5 +241,31 @@
 
   "validationFieldRequired": "Dit veld is verplicht",
   "validationEmailInvalid": "Ongeldig e-mailadres",
-  "validationPasswordWeak": "Het wachtwoord is niet sterk genoeg"
+  "validationPasswordWeak": "Het wachtwoord is niet sterk genoeg",
+
+  "activationAccountDetectedTitle": "Account gedetecteerd",
+  "activationAccountDetectedMessage": "Het lijkt erop dat u al een actief account heeft met het e-mailadres {email}.\n\nAls u uw wachtwoord niet meer weet, tik op de knop hieronder en we sturen u een link.",
+  "activationLinkSentTo": "Link verzonden naar {email}",
+  "activationLinkSendError": "Fout bij het verzenden van de link.",
+  "activationResetPassword": "WACHTWOORD HERSTELLEN",
+
+  "termsValidationTitle": "TOEGANGSVALIDATIE",
+  "termsValidationSubtitle": "Lees en accepteer ons officiële beleid om door te gaan.",
+  "termsMedicalDisclaimer": "MEDISCHE KENNISGEVING: De informatie en evaluaties in deze applicatie zijn aanvullend op uw consultatie. Ze vervangen niet de diagnose, behandeling of het advies van een gekwalificeerde zorgverlener. Bij ernstige symptomen raadpleeg uw arts.",
+  "termsReadTermsButton": "ALGEMENE VOORWAARDEN LEZEN",
+  "termsReadPrivacyButton": "PRIVACYBELEID LEZEN",
+  "termsAcceptTermsCheckbox": "Ik accepteer de Algemene Voorwaarden",
+  "termsAcceptPrivacyCheckbox": "Ik accepteer het Privacybeleid",
+  "termsReadFirstWarning": "U moet beide documenten lezen voordat u kunt accepteren.",
+  "termsRequiredBoth": "U moet beide beleidsregels accepteren om door te gaan.",
+  "termsContactClinicLine": "Als u het niet eens bent, neem contact op met de kliniek:",
+  "termsSupportLine": "Salufit-ondersteuning: {phone}",
+  "termsConfirmAccess": "BEVESTIGEN EN TOEGANG",
+  "termsExit": "AFSLUITEN",
+  "termsErrorRetry": "Er is een fout opgetreden. Probeer het opnieuw.",
+
+  "updateYourVersion": "Uw versie",
+  "updateRequiredVersionLabel": "Vereist",
+  "updateContactSupport": "Neem contact op met de administratie als u hulp nodig heeft.",
+  "updateMessageLong": "Er is een nieuwe versie van Salufit beschikbaar. U moet bijwerken om de applicatie te blijven gebruiken."
 }

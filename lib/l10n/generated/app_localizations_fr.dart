@@ -682,4 +682,88 @@ class AppLocalizationsFr extends AppLocalizations {
   @override
   String get validationPasswordWeak =>
       'Le mot de passe n\'est pas assez sécurisé';
+
+  @override
+  String get activationAccountDetectedTitle => 'Compte détecté';
+
+  @override
+  String activationAccountDetectedMessage(String email) {
+    return 'Il semble que vous ayez déjà un compte actif avec l\'adresse $email.\n\nSi vous ne vous souvenez pas de votre mot de passe, appuyez sur le bouton ci-dessous et nous vous enverrons un lien.';
+  }
+
+  @override
+  String activationLinkSentTo(String email) {
+    return 'Lien envoyé à $email';
+  }
+
+  @override
+  String get activationLinkSendError => 'Erreur lors de l\'envoi du lien.';
+
+  @override
+  String get activationResetPassword => 'RÉINITIALISER LE MOT DE PASSE';
+
+  @override
+  String get termsValidationTitle => 'VALIDATION D\'ACCÈS';
+
+  @override
+  String get termsValidationSubtitle =>
+      'Veuillez lire et accepter nos politiques officielles pour continuer.';
+
+  @override
+  String get termsMedicalDisclaimer =>
+      'AVIS MÉDICAL : Les informations et évaluations de cette application sont complémentaires à votre suivi en consultation. Elles ne remplacent pas le diagnostic, le traitement ou les conseils d\'un professionnel de santé qualifié. En cas de symptômes graves, consultez votre médecin.';
+
+  @override
+  String get termsReadTermsButton => 'LIRE LES CONDITIONS GÉNÉRALES';
+
+  @override
+  String get termsReadPrivacyButton => 'LIRE LA POLITIQUE DE CONFIDENTIALITÉ';
+
+  @override
+  String get termsAcceptTermsCheckbox => 'J\'accepte les Conditions Générales';
+
+  @override
+  String get termsAcceptPrivacyCheckbox =>
+      'J\'accepte la Politique de Confidentialité';
+
+  @override
+  String get termsReadFirstWarning =>
+      'Vous devez lire les deux documents avant de pouvoir accepter.';
+
+  @override
+  String get termsRequiredBoth =>
+      'Vous devez accepter les deux politiques pour entrer.';
+
+  @override
+  String get termsContactClinicLine =>
+      'Si vous n\'êtes pas d\'accord, contactez la clinique :';
+
+  @override
+  String termsSupportLine(String phone) {
+    return 'Support Salufit : $phone';
+  }
+
+  @override
+  String get termsConfirmAccess => 'CONFIRMER ET ACCÉDER';
+
+  @override
+  String get termsExit => 'QUITTER';
+
+  @override
+  String get termsErrorRetry =>
+      'Une erreur s\'est produite. Veuillez réessayer.';
+
+  @override
+  String get updateYourVersion => 'Votre version';
+
+  @override
+  String get updateRequiredVersionLabel => 'Requise';
+
+  @override
+  String get updateContactSupport =>
+      'Contactez l\'administration si vous avez besoin d\'aide.';
+
+  @override
+  String get updateMessageLong =>
+      'Une nouvelle version de Salufit est disponible. Vous devez mettre à jour pour continuer à utiliser l\'application.';
 }

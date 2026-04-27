@@ -241,5 +241,31 @@
 
   "validationFieldRequired": "This field is required",
   "validationEmailInvalid": "Invalid email address",
-  "validationPasswordWeak": "The password is not strong enough"
+  "validationPasswordWeak": "The password is not strong enough",
+
+  "activationAccountDetectedTitle": "Account detected",
+  "activationAccountDetectedMessage": "You already seem to have an active account with the email {email}.\n\nIf you don't remember your password, tap the button below and we'll send you a link.",
+  "activationLinkSentTo": "Link sent to {email}",
+  "activationLinkSendError": "Error sending the link.",
+  "activationResetPassword": "RESET PASSWORD",
+
+  "termsValidationTitle": "ACCESS VALIDATION",
+  "termsValidationSubtitle": "Please read and accept our official policies to continue.",
+  "termsMedicalDisclaimer": "MEDICAL NOTICE: The information and assessments in this application are complementary to your in-clinic follow-up. They do not replace the diagnosis, treatment or advice of a qualified healthcare professional. For any serious symptoms, consult your doctor.",
+  "termsReadTermsButton": "READ TERMS AND CONDITIONS",
+  "termsReadPrivacyButton": "READ PRIVACY POLICY",
+  "termsAcceptTermsCheckbox": "I accept the Terms and Conditions",
+  "termsAcceptPrivacyCheckbox": "I accept the Privacy Policy",
+  "termsReadFirstWarning": "You must read both documents before you can accept.",
+  "termsRequiredBoth": "You must accept both policies to continue.",
+  "termsContactClinicLine": "If you don't agree, contact the clinic:",
+  "termsSupportLine": "Salufit support: {phone}",
+  "termsConfirmAccess": "CONFIRM AND ACCESS",
+  "termsExit": "EXIT",
+  "termsErrorRetry": "An error has occurred. Please try again.",
+
+  "updateYourVersion": "Your version",
+  "updateRequiredVersionLabel": "Required",
+  "updateContactSupport": "Contact administration if you need help.",
+  "updateMessageLong": "A new version of Salufit is available. You must update to keep using the application."
 }

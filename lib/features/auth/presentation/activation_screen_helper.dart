@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:salufit_app/features/auth/providers/auth_providers.dart';
+import 'package:salufit_app/l10n/generated/app_localizations.dart';
 
 class ActivationUIHelper {
   static void showAlreadyRegisteredDialog(
@@ -8,30 +9,33 @@ class ActivationUIHelper {
     WidgetRef ref,
     String email,
   ) {
-    // Agregamos <void> para corregir inference_failure_on_function_invocation
+    final t = AppLocalizations.of(context);
     showDialog<void>(
       context: context,
       barrierDismissible: false,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-        title: const Row(
+        title: Row(
           children: [
-            Icon(Icons.account_circle, color: Color(0xFF009688)),
-            SizedBox(width: 10),
+            const Icon(Icons.account_circle, color: Color(0xFF009688)),
+            const SizedBox(width: 10),
             Text(
-              'Cuenta Detectada',
-              style: TextStyle(fontWeight: FontWeight.bold),
+              t.activationAccountDetectedTitle,
+              style: const TextStyle(fontWeight: FontWeight.bold),
             ),
           ],
         ),
         content: Text(
-          'Parece que ya tienes una cuenta activa con el correo $email.\n\nSi no recuerdas tu contraseña, pulsa el botón de abajo y te enviaremos un enlace.',
+          t.activationAccountDetectedMessage(email),
           style: const TextStyle(fontSize: 15),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('CANCELAR', style: TextStyle(color: Colors.grey)),
+            child: Text(
+              t.commonCancel.toUpperCase(),
+              style: const TextStyle(color: Colors.grey),
+            ),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
@@ -47,24 +51,24 @@ class ActivationUIHelper {
                 if (!context.mounted) return;
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content: Text('Enlace enviado a $email'),
+                    content: Text(t.activationLinkSentTo(email)),
                     backgroundColor: Colors.green,
                     duration: const Duration(seconds: 5),
                   ),
                 );
-              } catch (e) {
+              } catch (_) {
                 if (!context.mounted) return;
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Error al enviar el enlace.'),
+                  SnackBar(
+                    content: Text(t.activationLinkSendError),
                     backgroundColor: Colors.redAccent,
                   ),
                 );
               }
             },
-            child: const Text(
-              'RESTABLECER CONTRASEÑA',
-              style: TextStyle(color: Colors.white),
+            child: Text(
+              t.activationResetPassword,
+              style: const TextStyle(color: Colors.white),
             ),
           ),
         ],

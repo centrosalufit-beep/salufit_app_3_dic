@@ -672,4 +672,87 @@ class AppLocalizationsNl extends AppLocalizations {
 
   @override
   String get validationPasswordWeak => 'Het wachtwoord is niet sterk genoeg';
+
+  @override
+  String get activationAccountDetectedTitle => 'Account gedetecteerd';
+
+  @override
+  String activationAccountDetectedMessage(String email) {
+    return 'Het lijkt erop dat u al een actief account heeft met het e-mailadres $email.\n\nAls u uw wachtwoord niet meer weet, tik op de knop hieronder en we sturen u een link.';
+  }
+
+  @override
+  String activationLinkSentTo(String email) {
+    return 'Link verzonden naar $email';
+  }
+
+  @override
+  String get activationLinkSendError => 'Fout bij het verzenden van de link.';
+
+  @override
+  String get activationResetPassword => 'WACHTWOORD HERSTELLEN';
+
+  @override
+  String get termsValidationTitle => 'TOEGANGSVALIDATIE';
+
+  @override
+  String get termsValidationSubtitle =>
+      'Lees en accepteer ons officiële beleid om door te gaan.';
+
+  @override
+  String get termsMedicalDisclaimer =>
+      'MEDISCHE KENNISGEVING: De informatie en evaluaties in deze applicatie zijn aanvullend op uw consultatie. Ze vervangen niet de diagnose, behandeling of het advies van een gekwalificeerde zorgverlener. Bij ernstige symptomen raadpleeg uw arts.';
+
+  @override
+  String get termsReadTermsButton => 'ALGEMENE VOORWAARDEN LEZEN';
+
+  @override
+  String get termsReadPrivacyButton => 'PRIVACYBELEID LEZEN';
+
+  @override
+  String get termsAcceptTermsCheckbox => 'Ik accepteer de Algemene Voorwaarden';
+
+  @override
+  String get termsAcceptPrivacyCheckbox => 'Ik accepteer het Privacybeleid';
+
+  @override
+  String get termsReadFirstWarning =>
+      'U moet beide documenten lezen voordat u kunt accepteren.';
+
+  @override
+  String get termsRequiredBoth =>
+      'U moet beide beleidsregels accepteren om door te gaan.';
+
+  @override
+  String get termsContactClinicLine =>
+      'Als u het niet eens bent, neem contact op met de kliniek:';
+
+  @override
+  String termsSupportLine(String phone) {
+    return 'Salufit-ondersteuning: $phone';
+  }
+
+  @override
+  String get termsConfirmAccess => 'BEVESTIGEN EN TOEGANG';
+
+  @override
+  String get termsExit => 'AFSLUITEN';
+
+  @override
+  String get termsErrorRetry =>
+      'Er is een fout opgetreden. Probeer het opnieuw.';
+
+  @override
+  String get updateYourVersion => 'Uw versie';
+
+  @override
+  String get updateRequiredVersionLabel => 'Vereist';
+
+  @override
+  String get updateContactSupport =>
+      'Neem contact op met de administratie als u hulp nodig heeft.';
+
+  @override
+  String get updateMessageLong =>
+      'Er is een nieuwe versie van Salufit beschikbaar. U moet bijwerken om de applicatie te blijven gebruiken.';
 }

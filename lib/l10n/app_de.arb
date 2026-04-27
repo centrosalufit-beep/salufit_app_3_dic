@@ -241,5 +241,31 @@
 
   "validationFieldRequired": "Dieses Feld ist erforderlich",
   "validationEmailInvalid": "Ungültige E-Mail-Adresse",
-  "validationPasswordWeak": "Das Passwort ist nicht sicher genug"
+  "validationPasswordWeak": "Das Passwort ist nicht sicher genug",
+
+  "activationAccountDetectedTitle": "Konto erkannt",
+  "activationAccountDetectedMessage": "Es scheint, Sie haben bereits ein aktives Konto mit der E-Mail {email}.\n\nWenn Sie Ihr Passwort nicht mehr wissen, tippen Sie unten auf die Schaltfläche und wir senden Ihnen einen Link.",
+  "activationLinkSentTo": "Link gesendet an {email}",
+  "activationLinkSendError": "Fehler beim Senden des Links.",
+  "activationResetPassword": "PASSWORT ZURÜCKSETZEN",
+
+  "termsValidationTitle": "ZUGANGSPRÜFUNG",
+  "termsValidationSubtitle": "Bitte lesen und akzeptieren Sie unsere offiziellen Richtlinien, um fortzufahren.",
+  "termsMedicalDisclaimer": "MEDIZINISCHER HINWEIS: Die Informationen und Bewertungen in dieser App sind eine Ergänzung zu Ihrer ärztlichen Betreuung. Sie ersetzen weder die Diagnose, Behandlung noch den Rat eines qualifizierten medizinischen Fachpersonals. Bei schwerwiegenden Symptomen konsultieren Sie bitte Ihren Arzt.",
+  "termsReadTermsButton": "ALLGEMEINE GESCHÄFTSBEDINGUNGEN LESEN",
+  "termsReadPrivacyButton": "DATENSCHUTZERKLÄRUNG LESEN",
+  "termsAcceptTermsCheckbox": "Ich akzeptiere die Allgemeinen Geschäftsbedingungen",
+  "termsAcceptPrivacyCheckbox": "Ich akzeptiere die Datenschutzerklärung",
+  "termsReadFirstWarning": "Sie müssen beide Dokumente lesen, bevor Sie akzeptieren können.",
+  "termsRequiredBoth": "Sie müssen beide Richtlinien akzeptieren, um fortzufahren.",
+  "termsContactClinicLine": "Wenn Sie nicht einverstanden sind, kontaktieren Sie die Klinik:",
+  "termsSupportLine": "Salufit-Support: {phone}",
+  "termsConfirmAccess": "BESTÄTIGEN UND ZUGREIFEN",
+  "termsExit": "BEENDEN",
+  "termsErrorRetry": "Ein Fehler ist aufgetreten. Bitte versuchen Sie es erneut.",
+
+  "updateYourVersion": "Ihre Version",
+  "updateRequiredVersionLabel": "Erforderlich",
+  "updateContactSupport": "Kontaktieren Sie die Verwaltung, wenn Sie Hilfe benötigen.",
+  "updateMessageLong": "Eine neue Version von Salufit ist verfügbar. Sie müssen aktualisieren, um die App weiter nutzen zu können."
 }

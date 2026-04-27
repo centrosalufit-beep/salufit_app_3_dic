@@ -663,4 +663,84 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get validationPasswordWeak => 'The password is not strong enough';
+
+  @override
+  String get activationAccountDetectedTitle => 'Account detected';
+
+  @override
+  String activationAccountDetectedMessage(String email) {
+    return 'You already seem to have an active account with the email $email.\n\nIf you don\'t remember your password, tap the button below and we\'ll send you a link.';
+  }
+
+  @override
+  String activationLinkSentTo(String email) {
+    return 'Link sent to $email';
+  }
+
+  @override
+  String get activationLinkSendError => 'Error sending the link.';
+
+  @override
+  String get activationResetPassword => 'RESET PASSWORD';
+
+  @override
+  String get termsValidationTitle => 'ACCESS VALIDATION';
+
+  @override
+  String get termsValidationSubtitle =>
+      'Please read and accept our official policies to continue.';
+
+  @override
+  String get termsMedicalDisclaimer =>
+      'MEDICAL NOTICE: The information and assessments in this application are complementary to your in-clinic follow-up. They do not replace the diagnosis, treatment or advice of a qualified healthcare professional. For any serious symptoms, consult your doctor.';
+
+  @override
+  String get termsReadTermsButton => 'READ TERMS AND CONDITIONS';
+
+  @override
+  String get termsReadPrivacyButton => 'READ PRIVACY POLICY';
+
+  @override
+  String get termsAcceptTermsCheckbox => 'I accept the Terms and Conditions';
+
+  @override
+  String get termsAcceptPrivacyCheckbox => 'I accept the Privacy Policy';
+
+  @override
+  String get termsReadFirstWarning =>
+      'You must read both documents before you can accept.';
+
+  @override
+  String get termsRequiredBoth => 'You must accept both policies to continue.';
+
+  @override
+  String get termsContactClinicLine =>
+      'If you don\'t agree, contact the clinic:';
+
+  @override
+  String termsSupportLine(String phone) {
+    return 'Salufit support: $phone';
+  }
+
+  @override
+  String get termsConfirmAccess => 'CONFIRM AND ACCESS';
+
+  @override
+  String get termsExit => 'EXIT';
+
+  @override
+  String get termsErrorRetry => 'An error has occurred. Please try again.';
+
+  @override
+  String get updateYourVersion => 'Your version';
+
+  @override
+  String get updateRequiredVersionLabel => 'Required';
+
+  @override
+  String get updateContactSupport => 'Contact administration if you need help.';
+
+  @override
+  String get updateMessageLong =>
+      'A new version of Salufit is available. You must update to keep using the application.';
 }

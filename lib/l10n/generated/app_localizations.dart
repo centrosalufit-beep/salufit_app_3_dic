@@ -1327,6 +1327,144 @@ abstract class AppLocalizations {
   /// In es, this message translates to:
   /// **'La contraseña no es lo suficientemente segura'**
   String get validationPasswordWeak;
+
+  /// No description provided for @activationAccountDetectedTitle.
+  ///
+  /// In es, this message translates to:
+  /// **'Cuenta detectada'**
+  String get activationAccountDetectedTitle;
+
+  /// No description provided for @activationAccountDetectedMessage.
+  ///
+  /// In es, this message translates to:
+  /// **'Parece que ya tienes una cuenta activa con el correo {email}.\n\nSi no recuerdas tu contraseña, pulsa el botón de abajo y te enviaremos un enlace.'**
+  String activationAccountDetectedMessage(String email);
+
+  /// No description provided for @activationLinkSentTo.
+  ///
+  /// In es, this message translates to:
+  /// **'Enlace enviado a {email}'**
+  String activationLinkSentTo(String email);
+
+  /// No description provided for @activationLinkSendError.
+  ///
+  /// In es, this message translates to:
+  /// **'Error al enviar el enlace.'**
+  String get activationLinkSendError;
+
+  /// No description provided for @activationResetPassword.
+  ///
+  /// In es, this message translates to:
+  /// **'RESTABLECER CONTRASEÑA'**
+  String get activationResetPassword;
+
+  /// No description provided for @termsValidationTitle.
+  ///
+  /// In es, this message translates to:
+  /// **'VALIDACIÓN DE ACCESO'**
+  String get termsValidationTitle;
+
+  /// No description provided for @termsValidationSubtitle.
+  ///
+  /// In es, this message translates to:
+  /// **'Lee y acepta nuestras políticas oficiales para continuar.'**
+  String get termsValidationSubtitle;
+
+  /// No description provided for @termsMedicalDisclaimer.
+  ///
+  /// In es, this message translates to:
+  /// **'AVISO MÉDICO: La información y evaluaciones de esta aplicación son complementarias a tu seguimiento en consulta. No sustituyen el diagnóstico, tratamiento o consejo de un profesional sanitario titulado. Ante cualquier síntoma grave consulta a tu médico.'**
+  String get termsMedicalDisclaimer;
+
+  /// No description provided for @termsReadTermsButton.
+  ///
+  /// In es, this message translates to:
+  /// **'LEER TÉRMINOS Y CONDICIONES'**
+  String get termsReadTermsButton;
+
+  /// No description provided for @termsReadPrivacyButton.
+  ///
+  /// In es, this message translates to:
+  /// **'LEER POLÍTICA DE PRIVACIDAD'**
+  String get termsReadPrivacyButton;
+
+  /// No description provided for @termsAcceptTermsCheckbox.
+  ///
+  /// In es, this message translates to:
+  /// **'Acepto los Términos y Condiciones'**
+  String get termsAcceptTermsCheckbox;
+
+  /// No description provided for @termsAcceptPrivacyCheckbox.
+  ///
+  /// In es, this message translates to:
+  /// **'Acepto la Política de Privacidad'**
+  String get termsAcceptPrivacyCheckbox;
+
+  /// No description provided for @termsReadFirstWarning.
+  ///
+  /// In es, this message translates to:
+  /// **'Debes leer ambos documentos antes de poder aceptar.'**
+  String get termsReadFirstWarning;
+
+  /// No description provided for @termsRequiredBoth.
+  ///
+  /// In es, this message translates to:
+  /// **'Es necesario aceptar ambas políticas para entrar.'**
+  String get termsRequiredBoth;
+
+  /// No description provided for @termsContactClinicLine.
+  ///
+  /// In es, this message translates to:
+  /// **'Si no estás de acuerdo, contacta con la clínica:'**
+  String get termsContactClinicLine;
+
+  /// No description provided for @termsSupportLine.
+  ///
+  /// In es, this message translates to:
+  /// **'Soporte Salufit: {phone}'**
+  String termsSupportLine(String phone);
+
+  /// No description provided for @termsConfirmAccess.
+  ///
+  /// In es, this message translates to:
+  /// **'CONFIRMAR Y ACCEDER'**
+  String get termsConfirmAccess;
+
+  /// No description provided for @termsExit.
+  ///
+  /// In es, this message translates to:
+  /// **'SALIR'**
+  String get termsExit;
+
+  /// No description provided for @termsErrorRetry.
+  ///
+  /// In es, this message translates to:
+  /// **'Ha ocurrido un error. Inténtalo de nuevo.'**
+  String get termsErrorRetry;
+
+  /// No description provided for @updateYourVersion.
+  ///
+  /// In es, this message translates to:
+  /// **'Tu versión'**
+  String get updateYourVersion;
+
+  /// No description provided for @updateRequiredVersionLabel.
+  ///
+  /// In es, this message translates to:
+  /// **'Requerida'**
+  String get updateRequiredVersionLabel;
+
+  /// No description provided for @updateContactSupport.
+  ///
+  /// In es, this message translates to:
+  /// **'Contacta con administración si necesitas ayuda.'**
+  String get updateContactSupport;
+
+  /// No description provided for @updateMessageLong.
+  ///
+  /// In es, this message translates to:
+  /// **'Hay una nueva versión de Salufit disponible. Debes actualizar para continuar usando la aplicación.'**
+  String get updateMessageLong;
 }
 
 class _AppLocalizationsDelegate

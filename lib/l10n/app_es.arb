@@ -303,5 +303,46 @@
 
   "validationFieldRequired": "Este campo es obligatorio",
   "validationEmailInvalid": "Correo electrónico no válido",
-  "validationPasswordWeak": "La contraseña no es lo suficientemente segura"
+  "validationPasswordWeak": "La contraseña no es lo suficientemente segura",
+
+  "activationAccountDetectedTitle": "Cuenta detectada",
+  "activationAccountDetectedMessage": "Parece que ya tienes una cuenta activa con el correo {email}.\n\nSi no recuerdas tu contraseña, pulsa el botón de abajo y te enviaremos un enlace.",
+  "@activationAccountDetectedMessage": {
+    "placeholders": {
+      "email": {"type": "String"}
+    }
+  },
+  "activationLinkSentTo": "Enlace enviado a {email}",
+  "@activationLinkSentTo": {
+    "placeholders": {
+      "email": {"type": "String"}
+    }
+  },
+  "activationLinkSendError": "Error al enviar el enlace.",
+  "activationResetPassword": "RESTABLECER CONTRASEÑA",
+
+  "termsValidationTitle": "VALIDACIÓN DE ACCESO",
+  "termsValidationSubtitle": "Lee y acepta nuestras políticas oficiales para continuar.",
+  "termsMedicalDisclaimer": "AVISO MÉDICO: La información y evaluaciones de esta aplicación son complementarias a tu seguimiento en consulta. No sustituyen el diagnóstico, tratamiento o consejo de un profesional sanitario titulado. Ante cualquier síntoma grave consulta a tu médico.",
+  "termsReadTermsButton": "LEER TÉRMINOS Y CONDICIONES",
+  "termsReadPrivacyButton": "LEER POLÍTICA DE PRIVACIDAD",
+  "termsAcceptTermsCheckbox": "Acepto los Términos y Condiciones",
+  "termsAcceptPrivacyCheckbox": "Acepto la Política de Privacidad",
+  "termsReadFirstWarning": "Debes leer ambos documentos antes de poder aceptar.",
+  "termsRequiredBoth": "Es necesario aceptar ambas políticas para entrar.",
+  "termsContactClinicLine": "Si no estás de acuerdo, contacta con la clínica:",
+  "termsSupportLine": "Soporte Salufit: {phone}",
+  "@termsSupportLine": {
+    "placeholders": {
+      "phone": {"type": "String"}
+    }
+  },
+  "termsConfirmAccess": "CONFIRMAR Y ACCEDER",
+  "termsExit": "SALIR",
+  "termsErrorRetry": "Ha ocurrido un error. Inténtalo de nuevo.",
+
+  "updateYourVersion": "Tu versión",
+  "updateRequiredVersionLabel": "Requerida",
+  "updateContactSupport": "Contacta con administración si necesitas ayuda.",
+  "updateMessageLong": "Hay una nueva versión de Salufit disponible. Debes actualizar para continuar usando la aplicación."
 }

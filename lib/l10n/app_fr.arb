@@ -241,5 +241,31 @@
 
   "validationFieldRequired": "Ce champ est obligatoire",
   "validationEmailInvalid": "Adresse e-mail invalide",
-  "validationPasswordWeak": "Le mot de passe n'est pas assez sécurisé"
+  "validationPasswordWeak": "Le mot de passe n'est pas assez sécurisé",
+
+  "activationAccountDetectedTitle": "Compte détecté",
+  "activationAccountDetectedMessage": "Il semble que vous ayez déjà un compte actif avec l'adresse {email}.\n\nSi vous ne vous souvenez pas de votre mot de passe, appuyez sur le bouton ci-dessous et nous vous enverrons un lien.",
+  "activationLinkSentTo": "Lien envoyé à {email}",
+  "activationLinkSendError": "Erreur lors de l'envoi du lien.",
+  "activationResetPassword": "RÉINITIALISER LE MOT DE PASSE",
+
+  "termsValidationTitle": "VALIDATION D'ACCÈS",
+  "termsValidationSubtitle": "Veuillez lire et accepter nos politiques officielles pour continuer.",
+  "termsMedicalDisclaimer": "AVIS MÉDICAL : Les informations et évaluations de cette application sont complémentaires à votre suivi en consultation. Elles ne remplacent pas le diagnostic, le traitement ou les conseils d'un professionnel de santé qualifié. En cas de symptômes graves, consultez votre médecin.",
+  "termsReadTermsButton": "LIRE LES CONDITIONS GÉNÉRALES",
+  "termsReadPrivacyButton": "LIRE LA POLITIQUE DE CONFIDENTIALITÉ",
+  "termsAcceptTermsCheckbox": "J'accepte les Conditions Générales",
+  "termsAcceptPrivacyCheckbox": "J'accepte la Politique de Confidentialité",
+  "termsReadFirstWarning": "Vous devez lire les deux documents avant de pouvoir accepter.",
+  "termsRequiredBoth": "Vous devez accepter les deux politiques pour entrer.",
+  "termsContactClinicLine": "Si vous n'êtes pas d'accord, contactez la clinique :",
+  "termsSupportLine": "Support Salufit : {phone}",
+  "termsConfirmAccess": "CONFIRMER ET ACCÉDER",
+  "termsExit": "QUITTER",
+  "termsErrorRetry": "Une erreur s'est produite. Veuillez réessayer.",
+
+  "updateYourVersion": "Votre version",
+  "updateRequiredVersionLabel": "Requise",
+  "updateContactSupport": "Contactez l'administration si vous avez besoin d'aide.",
+  "updateMessageLong": "Une nouvelle version de Salufit est disponible. Vous devez mettre à jour pour continuer à utiliser l'application."
 }

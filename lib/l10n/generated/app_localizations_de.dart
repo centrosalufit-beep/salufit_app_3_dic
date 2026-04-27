@@ -676,4 +676,89 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get validationPasswordWeak => 'Das Passwort ist nicht sicher genug';
+
+  @override
+  String get activationAccountDetectedTitle => 'Konto erkannt';
+
+  @override
+  String activationAccountDetectedMessage(String email) {
+    return 'Es scheint, Sie haben bereits ein aktives Konto mit der E-Mail $email.\n\nWenn Sie Ihr Passwort nicht mehr wissen, tippen Sie unten auf die Schaltfläche und wir senden Ihnen einen Link.';
+  }
+
+  @override
+  String activationLinkSentTo(String email) {
+    return 'Link gesendet an $email';
+  }
+
+  @override
+  String get activationLinkSendError => 'Fehler beim Senden des Links.';
+
+  @override
+  String get activationResetPassword => 'PASSWORT ZURÜCKSETZEN';
+
+  @override
+  String get termsValidationTitle => 'ZUGANGSPRÜFUNG';
+
+  @override
+  String get termsValidationSubtitle =>
+      'Bitte lesen und akzeptieren Sie unsere offiziellen Richtlinien, um fortzufahren.';
+
+  @override
+  String get termsMedicalDisclaimer =>
+      'MEDIZINISCHER HINWEIS: Die Informationen und Bewertungen in dieser App sind eine Ergänzung zu Ihrer ärztlichen Betreuung. Sie ersetzen weder die Diagnose, Behandlung noch den Rat eines qualifizierten medizinischen Fachpersonals. Bei schwerwiegenden Symptomen konsultieren Sie bitte Ihren Arzt.';
+
+  @override
+  String get termsReadTermsButton => 'ALLGEMEINE GESCHÄFTSBEDINGUNGEN LESEN';
+
+  @override
+  String get termsReadPrivacyButton => 'DATENSCHUTZERKLÄRUNG LESEN';
+
+  @override
+  String get termsAcceptTermsCheckbox =>
+      'Ich akzeptiere die Allgemeinen Geschäftsbedingungen';
+
+  @override
+  String get termsAcceptPrivacyCheckbox =>
+      'Ich akzeptiere die Datenschutzerklärung';
+
+  @override
+  String get termsReadFirstWarning =>
+      'Sie müssen beide Dokumente lesen, bevor Sie akzeptieren können.';
+
+  @override
+  String get termsRequiredBoth =>
+      'Sie müssen beide Richtlinien akzeptieren, um fortzufahren.';
+
+  @override
+  String get termsContactClinicLine =>
+      'Wenn Sie nicht einverstanden sind, kontaktieren Sie die Klinik:';
+
+  @override
+  String termsSupportLine(String phone) {
+    return 'Salufit-Support: $phone';
+  }
+
+  @override
+  String get termsConfirmAccess => 'BESTÄTIGEN UND ZUGREIFEN';
+
+  @override
+  String get termsExit => 'BEENDEN';
+
+  @override
+  String get termsErrorRetry =>
+      'Ein Fehler ist aufgetreten. Bitte versuchen Sie es erneut.';
+
+  @override
+  String get updateYourVersion => 'Ihre Version';
+
+  @override
+  String get updateRequiredVersionLabel => 'Erforderlich';
+
+  @override
+  String get updateContactSupport =>
+      'Kontaktieren Sie die Verwaltung, wenn Sie Hilfe benötigen.';
+
+  @override
+  String get updateMessageLong =>
+      'Eine neue Version von Salufit ist verfügbar. Sie müssen aktualisieren, um die App weiter nutzen zu können.';
 }
