@@ -90,7 +90,14 @@ service cloud.firestore {
 
     match /exercise_assignments/{id} {
       allow read: if isStaff() || (isAuthenticated() && resource.data.userId == request.auth.uid);
-      allow write: if isStaff();
+      allow create, delete: if isStaff();
+      // El cliente puede actualizar SOLO el campo `feedback` de SU assignment
+      // (semáforo de dificultad + pulgares).
+      allow update: if isStaff()
+                    || (isAuthenticated()
+                        && resource.data.userId == request.auth.uid
+                        && request.resource.data.diff(resource.data).affectedKeys()
+                            .hasOnly(['feedback']));
     }
 
     match /documents/{id} {
@@ -221,7 +228,33 @@ service cloud.firestore {
     // TAREAS DE STAFF
     // ═══════════════════════════════════════════════════════════════
     match /staff_tasks/{id} {
-      allow read, create, update: if isStaff();
+      allow read: if isStaff();
+      // El cliente puede crear tareas de tipo `video_difficulty_red`
+      // automáticas desde el reproductor cuando marca rojo, siempre que
+      // él mismo sea el `clientId` de la tarea.
+      allow create: if isStaff()
+                    || (isAuthenticated()
+                        && request.resource.data.type == 'video_difficulty_red'
+                        && request.resource.data.clientId == request.auth.uid);
+      // El cliente puede ACTUALIZAR su propia tarea video_difficulty_red
+      // existente solo para incrementar el contador de reportes y
+      // refrescar la fecha (deduplicación). No puede cambiar otros campos.
+      allow update: if isStaff()
+                    || (isAuthenticated()
+                        && resource.data.type == 'video_difficulty_red'
+                        && resource.data.clientId == request.auth.uid
+                        && request.resource.data.diff(resource.data).affectedKeys()
+                            .hasOnly(['reportCount', 'lastReportAt', 'pushPending']));
+      allow delete: if isAdmin();
+    }
+
+    // Stats agregados de feedback por ejercicio (counters likes/dislikes
+    // y por nivel de dificultad). Lectura: staff (panel admin). Escritura:
+    // cualquier autenticado, ya que la app cliente actualiza counters via
+    // FieldValue.increment al votar en el reproductor.
+    match /exerciseStats/{exerciseId} {
+      allow read: if isStaff();
+      allow create, update: if isAuthenticated();
       allow delete: if isAdmin();
     }
 
