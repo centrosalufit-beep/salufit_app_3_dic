@@ -289,10 +289,12 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     }
   }
 
-  // Crea o actualiza una tarea en `internal_tasks` cuando el cliente marca
-  // dificultad ROJA. Deduplica por (clientId, exerciseId) si ya existe una
-  // tarea con status='pendiente'; si existe pero está 'resuelta', crea una
-  // nueva (problema reapareció). Visibilidad: profesional asignador + admin.
+  // Crea o actualiza una tarea en `staff_tasks` cuando el cliente marca
+  // dificultad ROJA. La colección staff_tasks es la que ya consume la
+  // pantalla ProfessionalTasksScreen, así el profesional ve estas tareas
+  // en el mismo sitio que las que ya creaba manualmente.
+  // Deduplica por (type, clientId, exerciseId, estado='pendiente').
+  // Si la tarea estaba 'completada', crea una nueva (problema reapareció).
   Future<void> _crearOActualizarTareaDificultadRoja(
     DocumentReference<Map<String, dynamic>> assignmentRef,
   ) async {
@@ -315,46 +317,81 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
         return;
       }
 
-      final tasksCol = FirebaseFirestore.instance.collection('internal_tasks');
+      // Lookup nombres para que la card lo muestre sin extra reads
+      final db = FirebaseFirestore.instance;
+      final clientName = await _resolverNombreUsuario(db, clientId);
+      final assignedToName = await _resolverNombreUsuario(db, assignedBy);
+
+      final tasksCol = db.collection('staff_tasks');
 
       // Buscar tarea pendiente existente para deduplicar.
       final existing = await tasksCol
           .where('type', isEqualTo: 'video_difficulty_red')
           .where('clientId', isEqualTo: clientId)
           .where('exerciseId', isEqualTo: exerciseId)
-          .where('status', isEqualTo: 'pendiente')
+          .where('estado', isEqualTo: 'pendiente')
           .limit(1)
           .get();
 
       if (existing.docs.isNotEmpty) {
-        // Actualizar contador y fecha del último reporte
         await existing.docs.first.reference.update({
           'reportCount': FieldValue.increment(1),
           'lastReportAt': FieldValue.serverTimestamp(),
           'pushPending': true,
         });
       } else {
-        // Crear nueva tarea
+        final fechaLimite =
+            DateTime.now().add(const Duration(days: 7));
         await tasksCol.add({
+          // Campos compatibles con _TaskList existente:
+          'titulo': 'Dificultad alta reportada en $exerciseName',
+          'descripcion':
+              '$clientName ha marcado este ejercicio en rojo (muy difícil). '
+              'Revisa si conviene ajustar la progresión o sustituirlo.',
+          'creadoPorId': 'system',
+          'creadoPorNombre': 'Sistema (feedback automático)',
+          'asignadoAId': assignedBy,
+          'asignadoANombre': assignedToName,
+          'fechaLimite': Timestamp.fromDate(fechaLimite),
+          'estado': 'pendiente',
+          'fechaCreacion': FieldValue.serverTimestamp(),
+          // Campos extra propios de este tipo de tarea
           'type': 'video_difficulty_red',
           'clientId': clientId,
+          'clientName': clientName,
           'exerciseId': exerciseId,
           'exerciseName': exerciseName,
           'videoUrl': widget.videoUrl,
           'assignmentId': widget.assignmentId,
-          'assignedBy': assignedBy,
-          'visibleTo': [assignedBy], // admin se considera por rol, no por uid
-          'status': 'pendiente',
           'reportCount': 1,
           'firstReportAt': FieldValue.serverTimestamp(),
           'lastReportAt': FieldValue.serverTimestamp(),
-          'createdAt': FieldValue.serverTimestamp(),
           'pushPending': true,
         });
       }
     } catch (e, st) {
       debugPrint('❌ Error creando tarea dificultad roja: $e');
       debugPrintStack(stackTrace: st);
+    }
+  }
+
+  Future<String> _resolverNombreUsuario(
+    FirebaseFirestore db,
+    String uid,
+  ) async {
+    try {
+      final doc = await db.collection('users_app').doc(uid).get();
+      if (!doc.exists) return uid;
+      final data = doc.data() ?? {};
+      final completo = (data['nombreCompleto'] as String?) ?? '';
+      if (completo.trim().isNotEmpty) return completo;
+      final nombre = (data['nombre'] as String?) ?? '';
+      final apellidos = (data['apellidos'] as String?) ?? '';
+      final combo = '$nombre $apellidos'.trim();
+      if (combo.isNotEmpty) return combo;
+      return (data['email'] as String?) ?? uid;
+    } catch (_) {
+      return uid;
     }
   }
 

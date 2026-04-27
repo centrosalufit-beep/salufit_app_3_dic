@@ -324,6 +324,9 @@ class _TaskCard extends StatelessWidget {
     final limite = data.safeDateTime('fechaLimite');
     final isOverdue = isPending && limite.isBefore(DateTime.now());
     final dateFormat = DateFormat('dd/MM/yyyy');
+    final type = data.safeString('type');
+    final isVideoFeedback = type == 'video_difficulty_red';
+    final reportCount = data.safeInt('reportCount');
 
     final subtitle = switch (mode) {
       _TaskMode.pending =>
@@ -334,38 +337,87 @@ class _TaskCard extends StatelessWidget {
         'Para: ${data.safeString('asignadoANombre')} · ${isPending ? "Pendiente" : "Completada"}',
     };
 
+    final feedbackTone = isVideoFeedback ? Colors.red.shade50 : null;
+    final cardColor = isOverdue ? Colors.red.shade50 : feedbackTone;
+
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
-      color: isOverdue ? Colors.red.shade50 : null,
+      color: cardColor,
       child: ListTile(
-        leading: CircleAvatar(
-          backgroundColor: isPending
-              ? isOverdue
-                  ? Colors.red.shade100
-                  : Colors.orange.shade100
-              : Colors.green.shade100,
-          child: Icon(
-            isPending ? Icons.pending_actions : Icons.check_circle,
-            color: isPending
-                ? isOverdue
-                    ? Colors.red
-                    : Colors.orange
-                : Colors.green,
-          ),
+        onTap: isVideoFeedback
+            ? () => _showVideoFeedbackDetail(context, data, doc.reference)
+            : null,
+        leading: _buildLeadingAvatar(
+          isPending: isPending,
+          isOverdue: isOverdue,
+          isVideoFeedback: isVideoFeedback,
+          reportCount: reportCount,
         ),
-        title: Text(
-          titulo,
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            decoration:
-                isPending ? null : TextDecoration.lineThrough,
-          ),
+        title: Row(
+          children: [
+            Expanded(
+              child: Text(
+                titulo,
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  decoration:
+                      isPending ? null : TextDecoration.lineThrough,
+                ),
+              ),
+            ),
+            if (isVideoFeedback)
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: Colors.red.shade100,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.videocam_outlined,
+                        size: 12, color: Colors.red.shade700),
+                    const SizedBox(width: 4),
+                    Text(
+                      'Feedback',
+                      style: TextStyle(
+                        fontSize: 9,
+                        color: Colors.red.shade700,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+          ],
         ),
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(subtitle, style: const TextStyle(fontSize: 11)),
-            if (desc.isNotEmpty)
+            if (isVideoFeedback) ...[
+              const SizedBox(height: 2),
+              Text(
+                'Cliente: ${data.safeString('clientName')} · Ejercicio: ${data.safeString('exerciseName')}',
+                style: TextStyle(
+                  fontSize: 11,
+                  color: Colors.red.shade700,
+                  fontWeight: FontWeight.w600,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              if (reportCount > 1)
+                Text(
+                  '⚠️ Reportado $reportCount veces',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: Colors.red.shade900,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+            ] else if (desc.isNotEmpty)
               Text(
                 desc,
                 style: const TextStyle(fontSize: 11, color: Colors.grey),
@@ -377,12 +429,193 @@ class _TaskCard extends StatelessWidget {
         trailing: mode == _TaskMode.pending
             ? IconButton(
                 icon: const Icon(Icons.check_circle_outline, color: Colors.green),
+                tooltip: 'Marcar como completada',
                 onPressed: () => doc.reference.update({
                   'estado': 'completada',
                   'completadaEl': FieldValue.serverTimestamp(),
                 }),
               )
             : null,
+      ),
+    );
+  }
+
+  Widget _buildLeadingAvatar({
+    required bool isPending,
+    required bool isOverdue,
+    required bool isVideoFeedback,
+    required int reportCount,
+  }) {
+    if (isVideoFeedback && isPending) {
+      return Stack(
+        alignment: Alignment.center,
+        children: [
+          CircleAvatar(
+            backgroundColor: Colors.red.shade100,
+            child: Icon(Icons.warning_amber_rounded,
+                color: Colors.red.shade700),
+          ),
+          if (reportCount > 1)
+            Positioned(
+              right: -4,
+              top: -4,
+              child: Container(
+                padding: const EdgeInsets.all(4),
+                decoration: const BoxDecoration(
+                  color: Colors.red,
+                  shape: BoxShape.circle,
+                ),
+                constraints: const BoxConstraints(
+                  minWidth: 20,
+                  minHeight: 20,
+                ),
+                child: Text(
+                  '$reportCount',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            ),
+        ],
+      );
+    }
+    return CircleAvatar(
+      backgroundColor: isPending
+          ? isOverdue
+              ? Colors.red.shade100
+              : Colors.orange.shade100
+          : Colors.green.shade100,
+      child: Icon(
+        isPending ? Icons.pending_actions : Icons.check_circle,
+        color: isPending
+            ? isOverdue
+                ? Colors.red
+                : Colors.orange
+            : Colors.green,
+      ),
+    );
+  }
+
+  Future<void> _showVideoFeedbackDetail(
+    BuildContext context,
+    Map<String, dynamic> data,
+    DocumentReference docRef,
+  ) async {
+    final clientName = data.safeString('clientName');
+    final exerciseName = data.safeString('exerciseName');
+    final reportCount = data.safeInt('reportCount');
+    final firstReport = data.safeDateTime('firstReportAt');
+    final lastReport = data.safeDateTime('lastReportAt');
+    final isPending = data.safeString('estado') == 'pendiente';
+    final dateFormat = DateFormat('dd/MM/yyyy HH:mm');
+
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            Icon(Icons.warning_amber_rounded, color: Colors.red.shade700),
+            const SizedBox(width: 10),
+            const Expanded(child: Text('Dificultad alta reportada')),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _detailRow(Icons.person_outline, 'Cliente', clientName),
+              _detailRow(Icons.fitness_center, 'Ejercicio', exerciseName),
+              _detailRow(
+                Icons.repeat,
+                'Reportes',
+                reportCount > 1
+                    ? '$reportCount veces'
+                    : 'Primer reporte',
+              ),
+              _detailRow(
+                Icons.first_page,
+                'Primer reporte',
+                dateFormat.format(firstReport),
+              ),
+              _detailRow(
+                Icons.last_page,
+                'Último reporte',
+                dateFormat.format(lastReport),
+              ),
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.amber.shade50,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.amber.shade200),
+                ),
+                child: const Text(
+                  'Sugerido: contacta al cliente para revisar la progresión '
+                  'o sustituir el ejercicio por otro adecuado.',
+                  style: TextStyle(fontSize: 12),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('CERRAR'),
+          ),
+          if (isPending)
+            ElevatedButton.icon(
+              icon: const Icon(Icons.check_circle_outline, size: 18),
+              label: const Text('MARCAR RESUELTA'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.green,
+                foregroundColor: Colors.white,
+              ),
+              onPressed: () async {
+                await docRef.update({
+                  'estado': 'completada',
+                  'completadaEl': FieldValue.serverTimestamp(),
+                });
+                if (ctx.mounted) Navigator.pop(ctx);
+              },
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _detailRow(IconData icon, String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          Icon(icon, size: 16, color: Colors.grey.shade600),
+          const SizedBox(width: 8),
+          SizedBox(
+            width: 110,
+            child: Text(
+              label,
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(fontSize: 12),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
       ),
     );
   }
