@@ -1,0 +1,7 @@
+"CFBundleDisplayName" = "Salufit";
+"NSCameraUsageDescription" = "Salufit benötigt Zugriff auf Ihre Kamera, um Übungsvideos, Profilfotos hochzuladen oder Dokumente zu scannen.";
+"NSFaceIDUsageDescription" = "Salufit verwendet FaceID, damit Sie sich schnell und sicher anmelden können.";
+"NSLocationAlwaysAndWhenInUseUsageDescription" = "Salufit benötigt Ihren Standort, um die Anmeldung zu bestätigen, wenn das WLAN des Zentrums nicht verfügbar ist.";
+"NSLocationWhenInUseUsageDescription" = "Salufit benötigt Ihren Standort, um die Anmeldung zu bestätigen, wenn das WLAN des Zentrums nicht verfügbar ist.";
+"NSMicrophoneUsageDescription" = "Salufit benötigt Zugriff auf das Mikrofon, um Audio in Erklärvideos aufzunehmen.";
+"NSPhotoLibraryUsageDescription" = "Salufit benötigt Zugriff auf Ihre Galerie, damit Sie Dateien, Röntgenbilder oder Bilder für Ihr Profil auswählen können.";

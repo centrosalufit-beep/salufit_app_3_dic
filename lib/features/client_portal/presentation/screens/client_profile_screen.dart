@@ -15,6 +15,8 @@ import 'package:salufit_app/features/auth/providers/auth_providers.dart';
 import 'package:salufit_app/features/auth/providers/user_profile_provider.dart';
 import 'package:salufit_app/features/bookings/data/class_repository.dart';
 import 'package:salufit_app/features/home/presentation/home_providers.dart';
+import 'package:salufit_app/l10n/generated/app_localizations.dart';
+import 'package:salufit_app/shared/widgets/language_flag_picker.dart';
 import 'package:salufit_app/shared/widgets/salufit_header.dart';
 import 'package:salufit_app/shared/widgets/salufit_scaffold.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -134,7 +136,7 @@ class _ClientProfileScreenState extends ConsumerState<ClientProfileScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        SalufitHeader(title: name, subtitle: 'MI PERFIL SALUFIT'),
+                        SalufitHeader(title: name, subtitle: AppLocalizations.of(context).profileTitle.toUpperCase()),
                         StreamBuilder<QuerySnapshot>(
                           stream: passesStream,
                           builder: (context, snap) {
@@ -167,7 +169,7 @@ class _ClientProfileScreenState extends ConsumerState<ClientProfileScreen> {
                             onNavigate: _handleSmartNavigation,
                           ),
                         ),
-                        _buildSectionTitle('MIS PRÓXIMAS RESERVAS'),
+                        _buildSectionTitle(AppLocalizations.of(context).dashboardYourClasses.toUpperCase()),
                         StreamBuilder<QuerySnapshot>(
                           stream: bookingsStream,
                           builder: (context, snap) {
@@ -209,6 +211,41 @@ class _ClientProfileScreenState extends ConsumerState<ClientProfileScreen> {
                               },
                             );
                           },
+                        ),
+                        _buildSectionTitle(AppLocalizations.of(context).profileLanguage.toUpperCase()),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+                          child: Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(20),
+                              boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 2))],
+                            ),
+                            child: Column(
+                              children: [
+                                Text(
+                                  AppLocalizations.of(context).settingsLanguageSubtitle,
+                                  style: const TextStyle(fontSize: 12, color: Colors.black54),
+                                  textAlign: TextAlign.center,
+                                ),
+                                const SizedBox(height: 12),
+                                LanguageFlagPicker(
+                                  onChanged: (_) {
+                                    if (mounted) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                          content: Text(AppLocalizations.of(context).settingsLanguageChanged),
+                                          backgroundColor: AppColors.primary,
+                                          duration: const Duration(seconds: 2),
+                                        ),
+                                      );
+                                    }
+                                  },
+                                ),
+                              ],
+                            ),
+                          ),
                         ),
                         Padding(padding: const EdgeInsets.fromLTRB(20, 30, 20, 10), child: _buildLogoutButton()),
                         Padding(padding: const EdgeInsets.fromLTRB(20, 0, 20, 10), child: _buildDeleteAccountButton()),
@@ -385,7 +422,22 @@ class _ClientProfileScreenState extends ConsumerState<ClientProfileScreen> {
     );
   }
 
-  Widget _buildLogoutButton() => OutlinedButton.icon(onPressed: () async { setState(() => _isActionLoading = true); await ref.read(authServiceProvider).signOut(); }, icon: const Icon(Icons.logout, color: Colors.orange), label: const Text('CERRAR SESION', style: TextStyle(color: Colors.orange, fontWeight: FontWeight.w900)), style: OutlinedButton.styleFrom(padding: const EdgeInsets.all(18), side: const BorderSide(color: Colors.orange, width: 1.5), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15))));
+  Widget _buildLogoutButton() => OutlinedButton.icon(
+    onPressed: () async {
+      setState(() => _isActionLoading = true);
+      await ref.read(authServiceProvider).signOut();
+    },
+    icon: const Icon(Icons.logout, color: Colors.orange),
+    label: Text(
+      AppLocalizations.of(context).profileLogoutAction.toUpperCase(),
+      style: const TextStyle(color: Colors.orange, fontWeight: FontWeight.w900),
+    ),
+    style: OutlinedButton.styleFrom(
+      padding: const EdgeInsets.all(18),
+      side: const BorderSide(color: Colors.orange, width: 1.5),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+    ),
+  );
 
   Widget _buildExportDataLink() => GestureDetector(
     onTap: _handleExportData,

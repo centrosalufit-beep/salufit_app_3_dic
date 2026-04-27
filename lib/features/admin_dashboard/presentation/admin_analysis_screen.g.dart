@@ -33,7 +33,7 @@ final class AdminAnalysisProvider
   AdminAnalysis create() => AdminAnalysis();
 }
 
-String _$adminAnalysisHash() => r'250d339981742ced33c51b8d9945a82ce11633d4';
+String _$adminAnalysisHash() => r'8c1eb1620f59b6e62433ea4d32f635da5fde5a7c';
 
 abstract class _$AdminAnalysis extends $AsyncNotifier<List<AnalysisMetric>> {
   FutureOr<List<AnalysisMetric>> build();
