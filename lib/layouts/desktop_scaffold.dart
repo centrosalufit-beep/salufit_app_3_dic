@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:salufit_app/core/providers/firebase_providers.dart';
 import 'package:salufit_app/features/admin_dashboard/presentation/admin_analysis_screen.dart';
 import 'package:salufit_app/features/admin_dashboard/presentation/admin_crm_screen.dart';
+import 'package:salufit_app/features/admin_dashboard/presentation/admin_exercise_feedback_screen.dart';
 import 'package:salufit_app/features/admin_dashboard/presentation/admin_library_hub_screen.dart';
 import 'package:salufit_app/features/admin_dashboard/presentation/admin_renewal_screen.dart';
 import 'package:salufit_app/features/admin_dashboard/presentation/admin_rrhh_screen.dart';
@@ -45,6 +46,7 @@ class _DesktopScaffoldState extends ConsumerState<DesktopScaffold> {
       AdminCrmScreen(userId: widget.userId, userRole: widget.userRole),
       if (isAdmin) const AdminRRHHScreen(),
       if (isAdmin) const AdminLibraryHubScreen(),
+      if (isAdmin) const AdminExerciseFeedbackScreen(),
     ];
 
     return Scaffold(
@@ -93,6 +95,7 @@ class _DesktopScaffoldState extends ConsumerState<DesktopScaffold> {
                                 const NavigationRailDestination(icon: Icon(Icons.leaderboard), label: Text('CRM')),
                                 if (isAdmin) const NavigationRailDestination(icon: Icon(Icons.badge), label: Text('RRHH')),
                                 if (isAdmin) const NavigationRailDestination(icon: Icon(Icons.auto_stories), label: Text('Librería')),
+                                if (isAdmin) const NavigationRailDestination(icon: Icon(Icons.thumbs_up_down_outlined), label: Text('Feedback')),
                               ],
                             ),
                           ),

@@ -1,4 +1,5 @@
 // lib/features/patient_record/presentation/video_player_screen.dart
+// ignore_for_file: use_if_null_to_convert_nulls_to_bools
 
 import 'dart:async';
 
@@ -174,15 +175,31 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     HapticFeedback.lightImpact(); // Feedback táctil
     final esRojo = campo == 'dificultad' && valor == 'dificil';
 
+    final assignmentRef = FirebaseFirestore.instance
+        .collection('exercise_assignments')
+        .doc(widget.assignmentId);
+
+    // Lee voto previo para calcular delta de stats agregados por ejercicio.
+    bool? prevLeGusta;
+    var prevDificultad = '';
+    var exerciseId = '';
+    var exerciseName = widget.title;
+    try {
+      final snap = await assignmentRef.get();
+      final data = snap.data() ?? {};
+      final feedback = (data['feedback'] as Map<String, dynamic>?) ?? const {};
+      prevLeGusta = feedback['gustado'] as bool?;
+      prevDificultad = (feedback['dificultad'] as String?) ?? '';
+      exerciseId = (data['exerciseId'] ?? data['ejercicioId'] ?? '') as String;
+      exerciseName =
+          (data['nombre'] ?? data['exerciseName'] ?? widget.title) as String;
+    } catch (_) {}
+
     final updates = <String, Object?>{
       'feedback.$campo': valor,
       'feedback.fecha': FieldValue.serverTimestamp(),
       'feedback.alerta': (campo == 'gustado' && valor == false) || esRojo,
     };
-
-    final assignmentRef = FirebaseFirestore.instance
-        .collection('exercise_assignments')
-        .doc(widget.assignmentId);
     await assignmentRef.update(updates);
 
     setState(() {
@@ -194,9 +211,81 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
       }
     });
 
+    // Stats agregados por ejercicio (panel admin de feedback).
+    if (exerciseId.isNotEmpty) {
+      unawaited(_actualizarExerciseStats(
+        exerciseId: exerciseId,
+        exerciseName: exerciseName,
+        campo: campo,
+        valor: valor,
+        prevLeGusta: prevLeGusta,
+        prevDificultad: prevDificultad,
+      ));
+    }
+
     // Trigger tarea para el profesional cuando el cliente marca rojo.
     if (esRojo) {
       unawaited(_crearOActualizarTareaDificultadRoja(assignmentRef));
+    }
+  }
+
+  // Aplica deltas a `exerciseStats/{exerciseId}` para que el panel admin
+  // pueda listar los ejercicios ordenados por número de dislikes / dificiles.
+  // Si el cliente cambia su voto (like ↔ dislike o cambio de dificultad),
+  // se decrementa el contador anterior y se incrementa el nuevo.
+  Future<void> _actualizarExerciseStats({
+    required String exerciseId,
+    required String exerciseName,
+    required String campo,
+    required Object valor,
+    required bool? prevLeGusta,
+    required String prevDificultad,
+  }) async {
+    try {
+      final ref = FirebaseFirestore.instance
+          .collection('exerciseStats')
+          .doc(exerciseId);
+
+      final deltas = <String, Object>{
+        'exerciseName': exerciseName,
+        'lastUpdatedAt': FieldValue.serverTimestamp(),
+      };
+
+      if (campo == 'gustado' && valor is bool) {
+        // Si el voto previo coincide con el nuevo, no hay nada que actualizar.
+        if (prevLeGusta == valor) return;
+        if (valor) {
+          deltas['likes'] = FieldValue.increment(1);
+          if (prevLeGusta == false) {
+            deltas['dislikes'] = FieldValue.increment(-1);
+          }
+        } else {
+          deltas['dislikes'] = FieldValue.increment(1);
+          if (prevLeGusta == true) {
+            deltas['likes'] = FieldValue.increment(-1);
+          }
+        }
+      } else if (campo == 'dificultad' && valor is String) {
+        if (prevDificultad == valor) return; // sin cambio real
+        // Mapear valor → key del contador
+        final keyByValor = {
+          'facil': 'difFacil',
+          'medio': 'difMedio',
+          'dificil': 'difDificil',
+        };
+        final newKey = keyByValor[valor];
+        final prevKey = keyByValor[prevDificultad];
+        if (newKey != null) {
+          deltas[newKey] = FieldValue.increment(1);
+        }
+        if (prevKey != null && prevKey != newKey) {
+          deltas[prevKey] = FieldValue.increment(-1);
+        }
+      }
+
+      await ref.set(deltas, SetOptions(merge: true));
+    } catch (e) {
+      debugPrint('exerciseStats update error: $e');
     }
   }
 
