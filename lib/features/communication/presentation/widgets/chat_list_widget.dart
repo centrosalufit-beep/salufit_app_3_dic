@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:salufit_app/core/utils/safe_parsing_extensions.dart';
 import 'package:salufit_app/features/communication/presentation/chat_detail_screen.dart';
+import 'package:salufit_app/l10n/generated/app_localizations.dart';
 
 class ChatListWidget extends StatelessWidget {
   const ChatListWidget({
@@ -19,6 +20,7 @@ class ChatListWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context);
     final q = FirebaseFirestore.instance.collection('users_app');
     final query = isStaffOnly
         ? q.where(
@@ -46,7 +48,7 @@ class ChatListWidget extends StatelessWidget {
                 ? data.safeString('nombreCompleto')
                 : data.safeString('nombre').isNotEmpty
                     ? data.safeString('nombre')
-                    : 'Miembro';
+                    : t.chatMemberDefault;
             final rol =
                 data.safeString('rol', defaultValue: 'staff').toUpperCase();
             final isAdmin = rol.contains('ADMIN');
@@ -121,7 +123,7 @@ class ChatListWidget extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        isAdmin ? 'ADMINISTRACIÓN' : 'PROFESIONAL',
+                        isAdmin ? t.chatRoleAdminUpper : t.chatRoleProfessionalUpper,
                         style: TextStyle(
                           color: isAdmin ? Colors.orange : Colors.tealAccent,
                           fontSize: 10,

@@ -766,4 +766,147 @@ class AppLocalizationsFr extends AppLocalizations {
   @override
   String get updateMessageLong =>
       'Une nouvelle version de Salufit est disponible. Vous devez mettre à jour pour continuer à utiliser l\'application.';
+
+  @override
+  String chatWithUser(String name) {
+    return 'Discussion avec $name';
+  }
+
+  @override
+  String get chatEmptyFirst => 'Aucun message. Écrivez le premier !';
+
+  @override
+  String get chatMemberDefault => 'Membre';
+
+  @override
+  String get chatRoleAdminUpper => 'ADMINISTRATION';
+
+  @override
+  String get chatRoleProfessionalUpper => 'PROFESSIONNEL';
+
+  @override
+  String get passwordMigrationDialogTitle => 'Mettez à jour votre mot de passe';
+
+  @override
+  String get passwordMigrationDialogMessage =>
+      'Pour protéger vos données médicales, nous avons renforcé nos exigences de sécurité. Créez un nouveau mot de passe conforme aux standards actuels.';
+
+  @override
+  String get passwordRequire12Chars => 'Au moins 12 caractères';
+
+  @override
+  String get passwordRequireUppercase => 'Une lettre majuscule';
+
+  @override
+  String get passwordRequireLowercase => 'Une lettre minuscule';
+
+  @override
+  String get passwordRequireNumber => 'Un chiffre';
+
+  @override
+  String get passwordShow => 'Afficher le mot de passe';
+
+  @override
+  String get passwordHide => 'Masquer le mot de passe';
+
+  @override
+  String get passwordConfirmLabel => 'Confirmer le mot de passe';
+
+  @override
+  String get passwordMigrationServerError =>
+      'Impossible de mettre à jour le mot de passe.';
+
+  @override
+  String get passwordUnexpectedError =>
+      'Erreur inattendue. Veuillez réessayer.';
+
+  @override
+  String get consentPrivacyTitle => 'Votre confidentialité';
+
+  @override
+  String get consentUpdatedMessage =>
+      'Nous avons mis à jour notre politique de confidentialité. Veuillez vérifier et sélectionner ce que vous nous autorisez à faire avec vos données. Vous pouvez modifier ces préférences à tout moment depuis votre profil.';
+
+  @override
+  String get consentMedicalShort => 'Données médicales et dossier clinique';
+
+  @override
+  String get consentMedicalLongDesc =>
+      'Obligatoire. Nécessaire pour vous fournir le service médical et sportif du centre.';
+
+  @override
+  String get consentMarketingShort => 'Communications commerciales';
+
+  @override
+  String get consentMarketingLongDesc =>
+      'Facultatif. Recevoir des informations sur les offres, événements et actualités du centre par e-mail.';
+
+  @override
+  String get consentAnalyticsShort => 'Analyse de l\'utilisation de l\'app';
+
+  @override
+  String get consentAnalyticsLongDesc =>
+      'Facultatif. Aidez-nous à améliorer l\'app en analysant comment vous l\'utilisez (n\'inclut pas de données médicales).';
+
+  @override
+  String consentFullPolicyLink(String url) {
+    return 'Politique complète sur $url';
+  }
+
+  @override
+  String get consentRequiredBadge => 'OBLIGATOIRE';
+
+  @override
+  String get consentSubmitPreferences => 'Enregistrer les préférences';
+
+  @override
+  String get consentMedicalRequired =>
+      'Le traitement des données médicales est nécessaire pour utiliser l\'app.';
+
+  @override
+  String get consentSaveError =>
+      'Impossible d\'enregistrer. Vérifiez votre connexion.';
+
+  @override
+  String get consentSessionInvalid => 'Session invalide';
+
+  @override
+  String get dobConfirmAge => 'Confirmez votre âge';
+
+  @override
+  String get dobSelectPrompt => 'Sélectionnez une date';
+
+  @override
+  String dobMinAgeError(int age) {
+    return 'L\'âge minimum pour utiliser l\'app est de $age ans.';
+  }
+
+  @override
+  String get dobSelectHelp => 'Sélectionnez votre date de naissance';
+
+  @override
+  String get dobParentalConsentRequired =>
+      'En tant que mineur, vous avez besoin du consentement d\'un tuteur pour utiliser l\'app. Veuillez contacter le centre.';
+
+  @override
+  String get materialScreenTitle => 'VOTRE MATÉRIEL';
+
+  @override
+  String get materialNoExercises =>
+      'Vous n\'avez pas encore d\'exercices assignés';
+
+  @override
+  String get materialDailyGoal => 'OBJECTIF QUOTIDIEN';
+
+  @override
+  String get materialExercisesCompleted => 'exercices terminés';
+
+  @override
+  String get materialLoadError => 'Erreur lors du chargement du matériel';
+
+  @override
+  String get materialDefaultExercise => 'Exercice';
+
+  @override
+  String get materialDefaultFamily => 'Entraînement';
 }

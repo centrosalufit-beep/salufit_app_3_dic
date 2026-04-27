@@ -755,4 +755,146 @@ class AppLocalizationsNl extends AppLocalizations {
   @override
   String get updateMessageLong =>
       'Er is een nieuwe versie van Salufit beschikbaar. U moet bijwerken om de applicatie te blijven gebruiken.';
+
+  @override
+  String chatWithUser(String name) {
+    return 'Chat met $name';
+  }
+
+  @override
+  String get chatEmptyFirst => 'Nog geen berichten. Schrijf de eerste!';
+
+  @override
+  String get chatMemberDefault => 'Lid';
+
+  @override
+  String get chatRoleAdminUpper => 'BEHEER';
+
+  @override
+  String get chatRoleProfessionalUpper => 'PROFESSIONAL';
+
+  @override
+  String get passwordMigrationDialogTitle => 'Werk uw wachtwoord bij';
+
+  @override
+  String get passwordMigrationDialogMessage =>
+      'Om uw medische gegevens te beschermen hebben we onze beveiligingseisen aangescherpt. Maak een nieuw wachtwoord dat voldoet aan de huidige standaarden.';
+
+  @override
+  String get passwordRequire12Chars => 'Minstens 12 tekens';
+
+  @override
+  String get passwordRequireUppercase => 'Een hoofdletter';
+
+  @override
+  String get passwordRequireLowercase => 'Een kleine letter';
+
+  @override
+  String get passwordRequireNumber => 'Een cijfer';
+
+  @override
+  String get passwordShow => 'Wachtwoord tonen';
+
+  @override
+  String get passwordHide => 'Wachtwoord verbergen';
+
+  @override
+  String get passwordConfirmLabel => 'Bevestig wachtwoord';
+
+  @override
+  String get passwordMigrationServerError =>
+      'Wachtwoord kon niet worden bijgewerkt.';
+
+  @override
+  String get passwordUnexpectedError =>
+      'Onverwachte fout. Probeer het opnieuw.';
+
+  @override
+  String get consentPrivacyTitle => 'Uw privacy';
+
+  @override
+  String get consentUpdatedMessage =>
+      'We hebben ons privacybeleid bijgewerkt. Bekijk en selecteer wat u ons toestaat met uw gegevens te doen. U kunt deze voorkeuren op elk moment wijzigen in uw profiel.';
+
+  @override
+  String get consentMedicalShort => 'Medische gegevens en klinisch dossier';
+
+  @override
+  String get consentMedicalLongDesc =>
+      'Verplicht. Nodig om u de medische en sportdienst van het centrum aan te bieden.';
+
+  @override
+  String get consentMarketingShort => 'Commerciële communicatie';
+
+  @override
+  String get consentMarketingLongDesc =>
+      'Optioneel. Informatie ontvangen over aanbiedingen, evenementen en nieuws van het centrum per e-mail.';
+
+  @override
+  String get consentAnalyticsShort => 'App-gebruiksanalyse';
+
+  @override
+  String get consentAnalyticsLongDesc =>
+      'Optioneel. Help ons de app te verbeteren door te analyseren hoe u deze gebruikt (geen medische gegevens).';
+
+  @override
+  String consentFullPolicyLink(String url) {
+    return 'Volledig beleid op $url';
+  }
+
+  @override
+  String get consentRequiredBadge => 'VERPLICHT';
+
+  @override
+  String get consentSubmitPreferences => 'Voorkeuren opslaan';
+
+  @override
+  String get consentMedicalRequired =>
+      'Verwerking van medische gegevens is vereist om de app te gebruiken.';
+
+  @override
+  String get consentSaveError =>
+      'Opslaan niet mogelijk. Controleer uw verbinding.';
+
+  @override
+  String get consentSessionInvalid => 'Ongeldige sessie';
+
+  @override
+  String get dobConfirmAge => 'Bevestig uw leeftijd';
+
+  @override
+  String get dobSelectPrompt => 'Selecteer een datum';
+
+  @override
+  String dobMinAgeError(int age) {
+    return 'De minimumleeftijd om de app te gebruiken is $age jaar.';
+  }
+
+  @override
+  String get dobSelectHelp => 'Selecteer uw geboortedatum';
+
+  @override
+  String get dobParentalConsentRequired =>
+      'Als minderjarige hebt u toestemming van een voogd nodig om de app te gebruiken. Neem contact op met het centrum.';
+
+  @override
+  String get materialScreenTitle => 'UW MATERIAAL';
+
+  @override
+  String get materialNoExercises => 'U heeft nog geen toegewezen oefeningen';
+
+  @override
+  String get materialDailyGoal => 'DAGELIJKS DOEL';
+
+  @override
+  String get materialExercisesCompleted => 'oefeningen voltooid';
+
+  @override
+  String get materialLoadError => 'Fout bij laden van materiaal';
+
+  @override
+  String get materialDefaultExercise => 'Oefening';
+
+  @override
+  String get materialDefaultFamily => 'Training';
 }

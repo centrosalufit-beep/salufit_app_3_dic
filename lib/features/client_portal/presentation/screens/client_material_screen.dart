@@ -5,6 +5,7 @@ import 'package:salufit_app/core/theme/app_colors.dart';
 import 'package:salufit_app/core/utils/safe_parsing_extensions.dart';
 import 'package:salufit_app/features/patient_record/presentation/video_player_screen.dart';
 import 'package:salufit_app/features/patient_record/providers/material_providers.dart';
+import 'package:salufit_app/l10n/generated/app_localizations.dart';
 import 'package:salufit_app/shared/widgets/salufit_header.dart';
 import 'package:salufit_app/shared/widgets/salufit_scaffold.dart';
 
@@ -20,9 +21,10 @@ class ClientMaterialScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final t = AppLocalizations.of(context);
     final assignmentsAsync = ref.watch(myAssignmentsProvider);
     final completedSet = ref.watch(dailyProgressProvider);
-    
+
     final docs = assignmentsAsync.value ?? [];
     final total = docs.length;
     final done = docs.where((d) => completedSet.contains(d['id']?.toString())).length;
@@ -33,29 +35,38 @@ class ClientMaterialScreen extends ConsumerWidget {
       body: SafeArea(
         child: Column(
           children: [
-            const SalufitHeader(title: 'TU MATERIAL'),
-            _buildProgressCard(done, total, progress),
+            SalufitHeader(title: t.materialScreenTitle),
+            _buildProgressCard(context, done, total, progress),
             Expanded(
               child: assignmentsAsync.when(
-                data: (docsList) => docsList.isEmpty 
-                  ? const Center(child: Text('No tienes ejercicios asignados todavía', style: TextStyle(color: Colors.grey)))
-                  : ListView.builder(
-                      padding: const EdgeInsets.fromLTRB(20, 10, 20, 80),
-                      itemCount: docsList.length,
-                      itemBuilder: (context, index) {
-                        final data = docsList[index];
-                        final safeId = data['id']?.toString() ?? '';
-                        return _CompactExerciseCard(
-                          assignmentId: safeId,
-                          titulo: data.safeString('nombre', defaultValue: 'Ejercicio'),
-                          area: data.safeString('familia', defaultValue: 'Entrenamiento'),
-                          urlVideo: data.safeString('urlVideo', defaultValue: data.safeString('videoUrl')),
-                          isDone: completedSet.contains(safeId),
-                        );
-                      },
-                    ),
-                loading: () => const Center(child: CircularProgressIndicator(color: AppColors.primary)),
-                error: (e, _) => const Center(child: Text('Error al cargar material')),
+                data: (docsList) => docsList.isEmpty
+                    ? Center(
+                        child: Text(
+                          t.materialNoExercises,
+                          style: const TextStyle(color: Colors.grey),
+                        ),
+                      )
+                    : ListView.builder(
+                        padding: const EdgeInsets.fromLTRB(20, 10, 20, 80),
+                        itemCount: docsList.length,
+                        itemBuilder: (context, index) {
+                          final data = docsList[index];
+                          final safeId = data['id']?.toString() ?? '';
+                          return _CompactExerciseCard(
+                            assignmentId: safeId,
+                            titulo: data.safeString('nombre',
+                                defaultValue: t.materialDefaultExercise),
+                            area: data.safeString('familia',
+                                defaultValue: t.materialDefaultFamily),
+                            urlVideo: data.safeString('urlVideo',
+                                defaultValue: data.safeString('videoUrl')),
+                            isDone: completedSet.contains(safeId),
+                          );
+                        },
+                      ),
+                loading: () =>
+                    const Center(child: CircularProgressIndicator(color: AppColors.primary)),
+                error: (e, _) => Center(child: Text(t.materialLoadError)),
               ),
             ),
           ],
@@ -64,7 +75,8 @@ class ClientMaterialScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildProgressCard(int done, int total, double progress) {
+  Widget _buildProgressCard(BuildContext context, int done, int total, double progress) {
+    final t = AppLocalizations.of(context);
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
       child: Stack(
@@ -90,10 +102,10 @@ class ClientMaterialScreen extends ConsumerWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('OBJETIVO DIARIO', style: TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1.1)),
+                Text(t.materialDailyGoal, style: const TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1.1)),
                 const SizedBox(height: 5),
                 Text('$done/$total', style: const TextStyle(color: Colors.white, fontSize: 36, fontWeight: FontWeight.w900)),
-                const Text('ejercicios completados', style: TextStyle(color: Colors.white70, fontSize: 13)),
+                Text(t.materialExercisesCompleted, style: const TextStyle(color: Colors.white70, fontSize: 13)),
                 const SizedBox(height: 20),
                 ClipRRect(
                   borderRadius: BorderRadius.circular(10),

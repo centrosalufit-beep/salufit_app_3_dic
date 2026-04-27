@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:salufit_app/core/config/app_config.dart';
 import 'package:salufit_app/core/providers/firebase_providers.dart';
 import 'package:salufit_app/core/theme/app_colors.dart';
+import 'package:salufit_app/l10n/generated/app_localizations.dart';
 
 /// Popup obligatorio de consentimiento granular RGPD.
 ///
@@ -33,9 +34,9 @@ class _GranularConsentDialogState
   String? _error;
 
   Future<void> _submit() async {
+    final t = AppLocalizations.of(context);
     if (!_medicalData) {
-      setState(() => _error =
-          'El tratamiento de datos médicos es necesario para usar la app.');
+      setState(() => _error = t.consentMedicalRequired);
       return;
     }
     setState(() {
@@ -44,7 +45,7 @@ class _GranularConsentDialogState
     });
     try {
       final uid = ref.read(firebaseAuthProvider).currentUser?.uid;
-      if (uid == null) throw Exception('Sesión no válida');
+      if (uid == null) throw Exception(t.consentSessionInvalid);
 
       final db = ref.read(firebaseFirestoreProvider);
       await db.collection('users_app').doc(uid).update({
@@ -77,7 +78,7 @@ class _GranularConsentDialogState
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _error = 'No se pudo guardar. Revisa tu conexión.';
+        _error = AppLocalizations.of(context).consentSaveError;
         _loading = false;
       });
     }
@@ -85,6 +86,7 @@ class _GranularConsentDialogState
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context);
     return PopScope(
       canPop: false,
       child: AlertDialog(
@@ -95,14 +97,14 @@ class _GranularConsentDialogState
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
         ),
-        title: const Row(
+        title: Row(
           children: [
-            Icon(Icons.privacy_tip, color: AppColors.primary, size: 22),
-            SizedBox(width: 8),
+            const Icon(Icons.privacy_tip, color: AppColors.primary, size: 22),
+            const SizedBox(width: 8),
             Expanded(
               child: Text(
-                'Tu privacidad',
-                style: TextStyle(fontSize: 18),
+                t.consentPrivacyTitle,
+                style: const TextStyle(fontSize: 18),
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
               ),
@@ -116,50 +118,44 @@ class _GranularConsentDialogState
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'Hemos actualizado nuestra política de privacidad. '
-                  'Por favor revisa y selecciona qué permites que hagamos '
-                  'con tus datos. Puedes cambiar estas preferencias en '
-                  'cualquier momento desde tu perfil.',
-                  style: TextStyle(fontSize: 13, color: Colors.black87),
+                Text(
+                  t.consentUpdatedMessage,
+                  style: const TextStyle(fontSize: 13, color: Colors.black87),
                 ),
                 const SizedBox(height: 16),
                 _ConsentTile(
-                  title: 'Datos médicos e historia clínica',
-                  subtitle:
-                      'Obligatorio. Necesario para ofrecerte el servicio '
-                      'médico y deportivo del centro.',
+                  title: t.consentMedicalShort,
+                  subtitle: t.consentMedicalLongDesc,
                   required: true,
+                  requiredLabel: t.consentRequiredBadge,
                   value: _medicalData,
                   onChanged: (v) =>
                       setState(() => _medicalData = v ?? false),
                 ),
                 const SizedBox(height: 8),
                 _ConsentTile(
-                  title: 'Comunicaciones comerciales',
-                  subtitle:
-                      'Opcional. Recibir información sobre ofertas, eventos '
-                      'y novedades del centro por email.',
+                  title: t.consentMarketingShort,
+                  subtitle: t.consentMarketingLongDesc,
                   required: false,
+                  requiredLabel: t.consentRequiredBadge,
                   value: _marketingConsent,
                   onChanged: (v) =>
                       setState(() => _marketingConsent = v ?? false),
                 ),
                 const SizedBox(height: 8),
                 _ConsentTile(
-                  title: 'Analítica de uso de la app',
-                  subtitle:
-                      'Opcional. Ayúdanos a mejorar la app analizando cómo '
-                      'la usas (no incluye datos médicos).',
+                  title: t.consentAnalyticsShort,
+                  subtitle: t.consentAnalyticsLongDesc,
                   required: false,
+                  requiredLabel: t.consentRequiredBadge,
                   value: _analyticsConsent,
                   onChanged: (v) =>
                       setState(() => _analyticsConsent = v ?? false),
                 ),
                 const SizedBox(height: 16),
-                const Text(
-                  'Política completa en ${AppConfig.urlPrivacidad}',
-                  style: TextStyle(
+                Text(
+                  t.consentFullPolicyLink(AppConfig.urlPrivacidad),
+                  style: const TextStyle(
                     fontSize: 11,
                     color: AppColors.primary,
                     decoration: TextDecoration.underline,
@@ -181,7 +177,7 @@ class _GranularConsentDialogState
             onPressed: _loading
                 ? null
                 : () => Navigator.of(context).pop(false),
-            child: const Text('Salir'),
+            child: Text(t.termsExit),
           ),
           ElevatedButton(
             onPressed: _loading ? null : _submit,
@@ -198,7 +194,7 @@ class _GranularConsentDialogState
                       color: Colors.white,
                     ),
                   )
-                : const Text('Guardar preferencias'),
+                : Text(t.consentSubmitPreferences),
           ),
         ],
       ),
@@ -211,6 +207,7 @@ class _ConsentTile extends StatelessWidget {
     required this.title,
     required this.subtitle,
     required this.required,
+    required this.requiredLabel,
     required this.value,
     required this.onChanged,
   });
@@ -218,6 +215,7 @@ class _ConsentTile extends StatelessWidget {
   final String title;
   final String subtitle;
   final bool required;
+  final String requiredLabel;
   final bool value;
   final ValueChanged<bool?> onChanged;
 
@@ -267,7 +265,7 @@ class _ConsentTile extends StatelessWidget {
                           borderRadius: BorderRadius.circular(4),
                         ),
                         child: Text(
-                          'OBLIGATORIO',
+                          requiredLabel,
                           style: TextStyle(
                             fontSize: 9,
                             fontWeight: FontWeight.bold,

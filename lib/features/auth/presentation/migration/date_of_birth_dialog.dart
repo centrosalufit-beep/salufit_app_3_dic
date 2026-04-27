@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:salufit_app/core/config/app_config.dart';
 import 'package:salufit_app/core/providers/firebase_providers.dart';
 import 'package:salufit_app/core/theme/app_colors.dart';
+import 'package:salufit_app/l10n/generated/app_localizations.dart';
 
 /// Popup obligatorio que solicita la fecha de nacimiento para verificar
 /// mayoría de edad (14 años LOPDGDD España / 16 años RGPD UE base).
@@ -35,6 +36,7 @@ class _DateOfBirthDialogState extends ConsumerState<DateOfBirthDialog> {
   }
 
   Future<void> _pickDate() async {
+    final t = AppLocalizations.of(context);
     final now = DateTime.now();
     final initial = _selected ?? DateTime(now.year - 30, now.month, now.day);
     final picked = await showDatePicker(
@@ -42,9 +44,9 @@ class _DateOfBirthDialogState extends ConsumerState<DateOfBirthDialog> {
       initialDate: initial,
       firstDate: DateTime(1900),
       lastDate: now,
-      helpText: 'Selecciona tu fecha de nacimiento',
-      cancelText: 'Cancelar',
-      confirmText: 'Aceptar',
+      helpText: t.dobSelectHelp,
+      cancelText: t.commonCancel,
+      confirmText: t.commonAccept,
     );
     if (picked == null) return;
     setState(() {
@@ -56,15 +58,15 @@ class _DateOfBirthDialogState extends ConsumerState<DateOfBirthDialog> {
   }
 
   Future<void> _submit() async {
+    final t = AppLocalizations.of(context);
     if (_selected == null) {
-      setState(() => _error = 'Selecciona una fecha');
+      setState(() => _error = t.dobSelectPrompt);
       return;
     }
     final age = _yearsOld(_selected!);
     if (age < AppConfig.edadMinima) {
       setState(
-        () =>
-            _error = 'La edad mínima para usar la app es ${AppConfig.edadMinima} años.',
+        () => _error = t.dobMinAgeError(AppConfig.edadMinima),
       );
       return;
     }
@@ -72,7 +74,7 @@ class _DateOfBirthDialogState extends ConsumerState<DateOfBirthDialog> {
     setState(() => _loading = true);
     try {
       final uid = ref.read(firebaseAuthProvider).currentUser?.uid;
-      if (uid == null) throw Exception('Sesión no válida');
+      if (uid == null) throw Exception(t.consentSessionInvalid);
 
       await ref.read(firebaseFirestoreProvider).collection('users_app').doc(uid).update({
         'dateOfBirth': Timestamp.fromDate(_selected!),
@@ -87,7 +89,7 @@ class _DateOfBirthDialogState extends ConsumerState<DateOfBirthDialog> {
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _error = 'No se pudo guardar. Revisa tu conexión.';
+        _error = AppLocalizations.of(context).consentSaveError;
         _loading = false;
       });
     }
@@ -105,14 +107,14 @@ class _DateOfBirthDialogState extends ConsumerState<DateOfBirthDialog> {
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
         ),
-        title: const Row(
+        title: Row(
           children: [
-            Icon(Icons.cake, color: AppColors.primary, size: 22),
-            SizedBox(width: 8),
+            const Icon(Icons.cake, color: AppColors.primary, size: 22),
+            const SizedBox(width: 8),
             Expanded(
               child: Text(
-                'Confirma tu edad',
-                style: TextStyle(fontSize: 18),
+                AppLocalizations.of(context).dobConfirmAge,
+                style: const TextStyle(fontSize: 18),
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
               ),
@@ -121,89 +123,91 @@ class _DateOfBirthDialogState extends ConsumerState<DateOfBirthDialog> {
         ),
         content: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 400),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Para cumplir con la normativa de protección de datos '
-                'necesitamos tu fecha de nacimiento.',
-                style: TextStyle(fontSize: 13, color: Colors.black87),
-              ),
-              const SizedBox(height: 16),
-              InkWell(
-                onTap: _loading ? null : _pickDate,
-                borderRadius: BorderRadius.circular(12),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 14,
+          child: Builder(
+            builder: (innerCtx) {
+              final t = AppLocalizations.of(innerCtx);
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    t.birthDateDialogPrompt,
+                    style: const TextStyle(fontSize: 13, color: Colors.black87),
                   ),
-                  decoration: BoxDecoration(
-                    border: Border.all(color: AppColors.primary),
+                  const SizedBox(height: 16),
+                  InkWell(
+                    onTap: _loading ? null : _pickDate,
                     borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.calendar_today,
-                          color: AppColors.primary),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          _selected == null
-                              ? 'Selecciona fecha'
-                              : '${_selected!.day.toString().padLeft(2, '0')}/'
-                                  '${_selected!.month.toString().padLeft(2, '0')}/'
-                                  '${_selected!.year}',
-                          style: TextStyle(
-                            fontSize: 15,
-                            color: _selected == null
-                                ? Colors.grey.shade700
-                                : Colors.black,
-                            fontWeight: FontWeight.w600,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 14,
+                      ),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: AppColors.primary),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.calendar_today,
+                              color: AppColors.primary),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              _selected == null
+                                  ? t.dobSelectPrompt
+                                  : '${_selected!.day.toString().padLeft(2, '0')}/'
+                                      '${_selected!.month.toString().padLeft(2, '0')}/'
+                                      '${_selected!.year}',
+                              style: TextStyle(
+                                fontSize: 15,
+                                color: _selected == null
+                                    ? Colors.grey.shade700
+                                    : Colors.black,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
                           ),
-                        ),
+                          const Icon(Icons.keyboard_arrow_down),
+                        ],
                       ),
-                      const Icon(Icons.keyboard_arrow_down),
-                    ],
+                    ),
                   ),
-                ),
-              ),
-              if (_requiresParentalConsent) ...[
-                const SizedBox(height: 16),
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.orange.shade50,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: Colors.orange.shade200),
-                  ),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Icon(Icons.info_outline,
-                          color: Colors.orange.shade800, size: 20),
-                      const SizedBox(width: 8),
-                      const Expanded(
-                        child: Text(
-                          'Al ser menor, un padre/madre/tutor debe dar su '
-                          'consentimiento expreso. Lo confirmaremos por '
-                          'teléfono antes de activar tu cuenta completa.',
-                          style: TextStyle(fontSize: 12),
-                        ),
+                  if (_requiresParentalConsent) ...[
+                    const SizedBox(height: 16),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.orange.shade50,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: Colors.orange.shade200),
                       ),
-                    ],
-                  ),
-                ),
-              ],
-              if (_error != null) ...[
-                const SizedBox(height: 12),
-                Text(
-                  _error!,
-                  style: const TextStyle(color: Colors.red, fontSize: 13),
-                ),
-              ],
-            ],
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(Icons.info_outline,
+                              color: Colors.orange.shade800, size: 20),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              t.dobParentalConsentRequired,
+                              style: const TextStyle(fontSize: 12),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                  if (_error != null) ...[
+                    const SizedBox(height: 12),
+                    Text(
+                      _error!,
+                      style: const TextStyle(color: Colors.red, fontSize: 13),
+                    ),
+                  ],
+                ],
+              );
+            },
           ),
         ),
         actions: [
@@ -211,7 +215,7 @@ class _DateOfBirthDialogState extends ConsumerState<DateOfBirthDialog> {
             onPressed: _loading
                 ? null
                 : () => Navigator.of(context).pop(false),
-            child: const Text('Salir'),
+            child: Text(AppLocalizations.of(context).termsExit),
           ),
           ElevatedButton(
             onPressed: _loading ? null : _submit,
@@ -228,7 +232,7 @@ class _DateOfBirthDialogState extends ConsumerState<DateOfBirthDialog> {
                       color: Colors.white,
                     ),
                   )
-                : const Text('Confirmar'),
+                : Text(AppLocalizations.of(context).commonConfirm),
           ),
         ],
       ),

@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:salufit_app/core/providers/firebase_providers.dart';
 import 'package:salufit_app/core/theme/app_colors.dart';
 import 'package:salufit_app/core/utils/password_validator.dart';
+import 'package:salufit_app/l10n/generated/app_localizations.dart';
 
 /// Popup obligatorio que fuerza a los usuarios existentes a actualizar
 /// su contraseña a los nuevos requisitos (12+ chars, mayúscula, minúscula,
@@ -45,6 +46,7 @@ class _PasswordMigrationDialogState
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
+    final t = AppLocalizations.of(context);
     setState(() {
       _loading = true;
       _serverError = null;
@@ -62,13 +64,13 @@ class _PasswordMigrationDialogState
     } on FirebaseFunctionsException catch (e) {
       if (!mounted) return;
       setState(() {
-        _serverError = e.message ?? 'No se pudo actualizar la contraseña.';
+        _serverError = e.message ?? t.passwordMigrationServerError;
         _loading = false;
       });
     } catch (_) {
       if (!mounted) return;
       setState(() {
-        _serverError = 'Error inesperado. Inténtalo de nuevo.';
+        _serverError = t.passwordUnexpectedError;
         _loading = false;
       });
     }
@@ -76,6 +78,7 @@ class _PasswordMigrationDialogState
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context);
     return PopScope(
       canPop: false,
       child: AlertDialog(
@@ -86,14 +89,14 @@ class _PasswordMigrationDialogState
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
         ),
-        title: const Row(
+        title: Row(
           children: [
-            Icon(Icons.security, color: AppColors.primary, size: 22),
-            SizedBox(width: 8),
+            const Icon(Icons.security, color: AppColors.primary, size: 22),
+            const SizedBox(width: 8),
             Expanded(
               child: Text(
-                'Actualiza tu contraseña',
-                style: TextStyle(fontSize: 18),
+                t.passwordMigrationDialogTitle,
+                style: const TextStyle(fontSize: 18),
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
               ),
@@ -109,27 +112,25 @@ class _PasswordMigrationDialogState
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'Para proteger tus datos médicos hemos reforzado los '
-                    'requisitos de seguridad. Crea una nueva contraseña que '
-                    'cumpla los estándares actuales.',
-                    style: TextStyle(fontSize: 13, color: Colors.black87),
+                  Text(
+                    t.passwordMigrationDialogMessage,
+                    style: const TextStyle(fontSize: 13, color: Colors.black87),
                   ),
                   const SizedBox(height: 16),
                   _Requirement(
-                    label: 'Al menos 12 caracteres',
+                    label: t.passwordRequire12Chars,
                     ok: _passwordCtrl.text.length >= 12,
                   ),
                   _Requirement(
-                    label: 'Una mayúscula',
+                    label: t.passwordRequireUppercase,
                     ok: RegExp('[A-Z]').hasMatch(_passwordCtrl.text),
                   ),
                   _Requirement(
-                    label: 'Una minúscula',
+                    label: t.passwordRequireLowercase,
                     ok: RegExp('[a-z]').hasMatch(_passwordCtrl.text),
                   ),
                   _Requirement(
-                    label: 'Un número',
+                    label: t.passwordRequireNumber,
                     ok: RegExp(r'\d').hasMatch(_passwordCtrl.text),
                   ),
                   const SizedBox(height: 16),
@@ -139,12 +140,12 @@ class _PasswordMigrationDialogState
                     autofocus: true,
                     onChanged: (_) => setState(() {}),
                     decoration: InputDecoration(
-                      labelText: 'Nueva contraseña',
+                      labelText: t.passwordMigrationLabel,
                       border: const OutlineInputBorder(),
                       suffixIcon: IconButton(
                         tooltip: _showPassword
-                            ? 'Ocultar contraseña'
-                            : 'Mostrar contraseña',
+                            ? t.passwordHide
+                            : t.passwordShow,
                         icon: Icon(
                           _showPassword
                               ? Icons.visibility_off
@@ -190,12 +191,12 @@ class _PasswordMigrationDialogState
                   TextFormField(
                     controller: _confirmCtrl,
                     obscureText: !_showPassword,
-                    decoration: const InputDecoration(
-                      labelText: 'Confirma la contraseña',
-                      border: OutlineInputBorder(),
+                    decoration: InputDecoration(
+                      labelText: t.passwordConfirmLabel,
+                      border: const OutlineInputBorder(),
                     ),
                     validator: (v) => v != _passwordCtrl.text
-                        ? 'Las contraseñas no coinciden'
+                        ? t.passwordMigrationMismatch
                         : null,
                   ),
                   if (_serverError != null) ...[
@@ -221,7 +222,7 @@ class _PasswordMigrationDialogState
                     // Cerrar sesión si el usuario no quiere migrar
                     Navigator.of(context).pop(false);
                   },
-            child: const Text('Salir'),
+            child: Text(t.termsExit),
           ),
           ElevatedButton(
             onPressed: _loading ? null : _submit,
@@ -238,7 +239,7 @@ class _PasswordMigrationDialogState
                       color: Colors.white,
                     ),
                   )
-                : const Text('Guardar'),
+                : Text(t.commonSave),
           ),
         ],
       ),

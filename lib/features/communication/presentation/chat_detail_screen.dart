@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:salufit_app/core/utils/safe_parsing_extensions.dart';
+import 'package:salufit_app/l10n/generated/app_localizations.dart';
 
 class ChatDetailScreen extends StatefulWidget {
   const ChatDetailScreen({
@@ -76,9 +77,10 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context);
     return Scaffold(
       backgroundColor: Colors.transparent,
-      appBar: AppBar(title: Text('Chat con ${widget.otherUserName}')),
+      appBar: AppBar(title: Text(t.chatWithUser(widget.otherUserName))),
       body: Column(
         children: [
           // Lista de mensajes
@@ -96,10 +98,10 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                 }
                 final docs = snapshot.data!.docs;
                 if (docs.isEmpty) {
-                  return const Center(
+                  return Center(
                     child: Text(
-                      'Sin mensajes aún. ¡Escribe el primero!',
-                      style: TextStyle(color: Colors.white70),
+                      t.chatEmptyFirst,
+                      style: const TextStyle(color: Colors.white70),
                     ),
                   );
                 }
@@ -150,7 +152,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                     controller: _controller,
                     style: const TextStyle(color: Colors.white),
                     decoration: InputDecoration(
-                      hintText: 'Escribe un mensaje...',
+                      hintText: t.chatComposeHint,
                       hintStyle: const TextStyle(color: Colors.white38),
                       filled: true,
                       fillColor: Colors.white.withValues(alpha: 0.1),

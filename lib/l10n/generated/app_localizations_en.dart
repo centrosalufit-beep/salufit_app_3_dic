@@ -743,4 +743,143 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get updateMessageLong =>
       'A new version of Salufit is available. You must update to keep using the application.';
+
+  @override
+  String chatWithUser(String name) {
+    return 'Chat with $name';
+  }
+
+  @override
+  String get chatEmptyFirst => 'No messages yet. Write the first one!';
+
+  @override
+  String get chatMemberDefault => 'Member';
+
+  @override
+  String get chatRoleAdminUpper => 'ADMIN';
+
+  @override
+  String get chatRoleProfessionalUpper => 'PROFESSIONAL';
+
+  @override
+  String get passwordMigrationDialogTitle => 'Update your password';
+
+  @override
+  String get passwordMigrationDialogMessage =>
+      'To protect your medical data we have reinforced our security requirements. Create a new password that meets current standards.';
+
+  @override
+  String get passwordRequire12Chars => 'At least 12 characters';
+
+  @override
+  String get passwordRequireUppercase => 'One uppercase letter';
+
+  @override
+  String get passwordRequireLowercase => 'One lowercase letter';
+
+  @override
+  String get passwordRequireNumber => 'One number';
+
+  @override
+  String get passwordShow => 'Show password';
+
+  @override
+  String get passwordHide => 'Hide password';
+
+  @override
+  String get passwordConfirmLabel => 'Confirm password';
+
+  @override
+  String get passwordMigrationServerError => 'Could not update the password.';
+
+  @override
+  String get passwordUnexpectedError => 'Unexpected error. Please try again.';
+
+  @override
+  String get consentPrivacyTitle => 'Your privacy';
+
+  @override
+  String get consentUpdatedMessage =>
+      'We have updated our privacy policy. Please review and select what you allow us to do with your data. You can change these preferences any time from your profile.';
+
+  @override
+  String get consentMedicalShort => 'Medical data and clinical record';
+
+  @override
+  String get consentMedicalLongDesc =>
+      'Mandatory. Necessary to provide the medical and fitness service of the centre.';
+
+  @override
+  String get consentMarketingShort => 'Commercial communications';
+
+  @override
+  String get consentMarketingLongDesc =>
+      'Optional. Receive information about offers, events and news of the centre by email.';
+
+  @override
+  String get consentAnalyticsShort => 'App usage analytics';
+
+  @override
+  String get consentAnalyticsLongDesc =>
+      'Optional. Help us improve the app by analysing how you use it (does not include medical data).';
+
+  @override
+  String consentFullPolicyLink(String url) {
+    return 'Full policy at $url';
+  }
+
+  @override
+  String get consentRequiredBadge => 'MANDATORY';
+
+  @override
+  String get consentSubmitPreferences => 'Save preferences';
+
+  @override
+  String get consentMedicalRequired =>
+      'Processing of medical data is necessary to use the app.';
+
+  @override
+  String get consentSaveError => 'Could not save. Check your connection.';
+
+  @override
+  String get consentSessionInvalid => 'Invalid session';
+
+  @override
+  String get dobConfirmAge => 'Confirm your age';
+
+  @override
+  String get dobSelectPrompt => 'Select a date';
+
+  @override
+  String dobMinAgeError(int age) {
+    return 'The minimum age to use the app is $age years.';
+  }
+
+  @override
+  String get dobSelectHelp => 'Select your date of birth';
+
+  @override
+  String get dobParentalConsentRequired =>
+      'As a minor, you need a guardian\'s consent to use the app. Please contact the centre.';
+
+  @override
+  String get materialScreenTitle => 'YOUR MATERIAL';
+
+  @override
+  String get materialNoExercises => 'You have no assigned exercises yet';
+
+  @override
+  String get materialDailyGoal => 'DAILY GOAL';
+
+  @override
+  String get materialExercisesCompleted => 'exercises completed';
+
+  @override
+  String get materialLoadError => 'Error loading material';
+
+  @override
+  String get materialDefaultExercise => 'Exercise';
+
+  @override
+  String get materialDefaultFamily => 'Training';
 }

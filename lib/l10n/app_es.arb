@@ -344,5 +344,61 @@
   "updateYourVersion": "Tu versión",
   "updateRequiredVersionLabel": "Requerida",
   "updateContactSupport": "Contacta con administración si necesitas ayuda.",
-  "updateMessageLong": "Hay una nueva versión de Salufit disponible. Debes actualizar para continuar usando la aplicación."
+  "updateMessageLong": "Hay una nueva versión de Salufit disponible. Debes actualizar para continuar usando la aplicación.",
+
+  "chatWithUser": "Chat con {name}",
+  "@chatWithUser": {
+    "placeholders": {"name": {"type": "String"}}
+  },
+  "chatEmptyFirst": "Sin mensajes aún. ¡Escribe el primero!",
+  "chatMemberDefault": "Miembro",
+  "chatRoleAdminUpper": "ADMINISTRACIÓN",
+  "chatRoleProfessionalUpper": "PROFESIONAL",
+
+  "passwordMigrationDialogTitle": "Actualiza tu contraseña",
+  "passwordMigrationDialogMessage": "Para proteger tus datos médicos hemos reforzado los requisitos de seguridad. Crea una nueva contraseña que cumpla los estándares actuales.",
+  "passwordRequire12Chars": "Al menos 12 caracteres",
+  "passwordRequireUppercase": "Una mayúscula",
+  "passwordRequireLowercase": "Una minúscula",
+  "passwordRequireNumber": "Un número",
+  "passwordShow": "Mostrar contraseña",
+  "passwordHide": "Ocultar contraseña",
+  "passwordConfirmLabel": "Confirma la contraseña",
+  "passwordMigrationServerError": "No se pudo actualizar la contraseña.",
+  "passwordUnexpectedError": "Error inesperado. Inténtalo de nuevo.",
+
+  "consentPrivacyTitle": "Tu privacidad",
+  "consentUpdatedMessage": "Hemos actualizado nuestra política de privacidad. Por favor revisa y selecciona qué permites que hagamos con tus datos. Puedes cambiar estas preferencias en cualquier momento desde tu perfil.",
+  "consentMedicalShort": "Datos médicos e historia clínica",
+  "consentMedicalLongDesc": "Obligatorio. Necesario para ofrecerte el servicio médico y deportivo del centro.",
+  "consentMarketingShort": "Comunicaciones comerciales",
+  "consentMarketingLongDesc": "Opcional. Recibir información sobre ofertas, eventos y novedades del centro por email.",
+  "consentAnalyticsShort": "Analítica de uso de la app",
+  "consentAnalyticsLongDesc": "Opcional. Ayúdanos a mejorar la app analizando cómo la usas (no incluye datos médicos).",
+  "consentFullPolicyLink": "Política completa en {url}",
+  "@consentFullPolicyLink": {
+    "placeholders": {"url": {"type": "String"}}
+  },
+  "consentRequiredBadge": "OBLIGATORIO",
+  "consentSubmitPreferences": "Guardar preferencias",
+  "consentMedicalRequired": "El tratamiento de datos médicos es necesario para usar la app.",
+  "consentSaveError": "No se pudo guardar. Revisa tu conexión.",
+  "consentSessionInvalid": "Sesión no válida",
+
+  "dobConfirmAge": "Confirma tu edad",
+  "dobSelectPrompt": "Selecciona una fecha",
+  "dobMinAgeError": "La edad mínima para usar la app es {age} años.",
+  "@dobMinAgeError": {
+    "placeholders": {"age": {"type": "int"}}
+  },
+  "dobSelectHelp": "Selecciona tu fecha de nacimiento",
+  "dobParentalConsentRequired": "Como menor de edad, necesitas el consentimiento de un tutor para usar la app. Por favor, contacta con el centro.",
+
+  "materialScreenTitle": "TU MATERIAL",
+  "materialNoExercises": "No tienes ejercicios asignados todavía",
+  "materialDailyGoal": "OBJETIVO DIARIO",
+  "materialExercisesCompleted": "ejercicios completados",
+  "materialLoadError": "Error al cargar material",
+  "materialDefaultExercise": "Ejercicio",
+  "materialDefaultFamily": "Entrenamiento"
 }

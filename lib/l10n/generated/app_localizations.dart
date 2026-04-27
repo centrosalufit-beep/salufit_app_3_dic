@@ -1465,6 +1465,258 @@ abstract class AppLocalizations {
   /// In es, this message translates to:
   /// **'Hay una nueva versión de Salufit disponible. Debes actualizar para continuar usando la aplicación.'**
   String get updateMessageLong;
+
+  /// No description provided for @chatWithUser.
+  ///
+  /// In es, this message translates to:
+  /// **'Chat con {name}'**
+  String chatWithUser(String name);
+
+  /// No description provided for @chatEmptyFirst.
+  ///
+  /// In es, this message translates to:
+  /// **'Sin mensajes aún. ¡Escribe el primero!'**
+  String get chatEmptyFirst;
+
+  /// No description provided for @chatMemberDefault.
+  ///
+  /// In es, this message translates to:
+  /// **'Miembro'**
+  String get chatMemberDefault;
+
+  /// No description provided for @chatRoleAdminUpper.
+  ///
+  /// In es, this message translates to:
+  /// **'ADMINISTRACIÓN'**
+  String get chatRoleAdminUpper;
+
+  /// No description provided for @chatRoleProfessionalUpper.
+  ///
+  /// In es, this message translates to:
+  /// **'PROFESIONAL'**
+  String get chatRoleProfessionalUpper;
+
+  /// No description provided for @passwordMigrationDialogTitle.
+  ///
+  /// In es, this message translates to:
+  /// **'Actualiza tu contraseña'**
+  String get passwordMigrationDialogTitle;
+
+  /// No description provided for @passwordMigrationDialogMessage.
+  ///
+  /// In es, this message translates to:
+  /// **'Para proteger tus datos médicos hemos reforzado los requisitos de seguridad. Crea una nueva contraseña que cumpla los estándares actuales.'**
+  String get passwordMigrationDialogMessage;
+
+  /// No description provided for @passwordRequire12Chars.
+  ///
+  /// In es, this message translates to:
+  /// **'Al menos 12 caracteres'**
+  String get passwordRequire12Chars;
+
+  /// No description provided for @passwordRequireUppercase.
+  ///
+  /// In es, this message translates to:
+  /// **'Una mayúscula'**
+  String get passwordRequireUppercase;
+
+  /// No description provided for @passwordRequireLowercase.
+  ///
+  /// In es, this message translates to:
+  /// **'Una minúscula'**
+  String get passwordRequireLowercase;
+
+  /// No description provided for @passwordRequireNumber.
+  ///
+  /// In es, this message translates to:
+  /// **'Un número'**
+  String get passwordRequireNumber;
+
+  /// No description provided for @passwordShow.
+  ///
+  /// In es, this message translates to:
+  /// **'Mostrar contraseña'**
+  String get passwordShow;
+
+  /// No description provided for @passwordHide.
+  ///
+  /// In es, this message translates to:
+  /// **'Ocultar contraseña'**
+  String get passwordHide;
+
+  /// No description provided for @passwordConfirmLabel.
+  ///
+  /// In es, this message translates to:
+  /// **'Confirma la contraseña'**
+  String get passwordConfirmLabel;
+
+  /// No description provided for @passwordMigrationServerError.
+  ///
+  /// In es, this message translates to:
+  /// **'No se pudo actualizar la contraseña.'**
+  String get passwordMigrationServerError;
+
+  /// No description provided for @passwordUnexpectedError.
+  ///
+  /// In es, this message translates to:
+  /// **'Error inesperado. Inténtalo de nuevo.'**
+  String get passwordUnexpectedError;
+
+  /// No description provided for @consentPrivacyTitle.
+  ///
+  /// In es, this message translates to:
+  /// **'Tu privacidad'**
+  String get consentPrivacyTitle;
+
+  /// No description provided for @consentUpdatedMessage.
+  ///
+  /// In es, this message translates to:
+  /// **'Hemos actualizado nuestra política de privacidad. Por favor revisa y selecciona qué permites que hagamos con tus datos. Puedes cambiar estas preferencias en cualquier momento desde tu perfil.'**
+  String get consentUpdatedMessage;
+
+  /// No description provided for @consentMedicalShort.
+  ///
+  /// In es, this message translates to:
+  /// **'Datos médicos e historia clínica'**
+  String get consentMedicalShort;
+
+  /// No description provided for @consentMedicalLongDesc.
+  ///
+  /// In es, this message translates to:
+  /// **'Obligatorio. Necesario para ofrecerte el servicio médico y deportivo del centro.'**
+  String get consentMedicalLongDesc;
+
+  /// No description provided for @consentMarketingShort.
+  ///
+  /// In es, this message translates to:
+  /// **'Comunicaciones comerciales'**
+  String get consentMarketingShort;
+
+  /// No description provided for @consentMarketingLongDesc.
+  ///
+  /// In es, this message translates to:
+  /// **'Opcional. Recibir información sobre ofertas, eventos y novedades del centro por email.'**
+  String get consentMarketingLongDesc;
+
+  /// No description provided for @consentAnalyticsShort.
+  ///
+  /// In es, this message translates to:
+  /// **'Analítica de uso de la app'**
+  String get consentAnalyticsShort;
+
+  /// No description provided for @consentAnalyticsLongDesc.
+  ///
+  /// In es, this message translates to:
+  /// **'Opcional. Ayúdanos a mejorar la app analizando cómo la usas (no incluye datos médicos).'**
+  String get consentAnalyticsLongDesc;
+
+  /// No description provided for @consentFullPolicyLink.
+  ///
+  /// In es, this message translates to:
+  /// **'Política completa en {url}'**
+  String consentFullPolicyLink(String url);
+
+  /// No description provided for @consentRequiredBadge.
+  ///
+  /// In es, this message translates to:
+  /// **'OBLIGATORIO'**
+  String get consentRequiredBadge;
+
+  /// No description provided for @consentSubmitPreferences.
+  ///
+  /// In es, this message translates to:
+  /// **'Guardar preferencias'**
+  String get consentSubmitPreferences;
+
+  /// No description provided for @consentMedicalRequired.
+  ///
+  /// In es, this message translates to:
+  /// **'El tratamiento de datos médicos es necesario para usar la app.'**
+  String get consentMedicalRequired;
+
+  /// No description provided for @consentSaveError.
+  ///
+  /// In es, this message translates to:
+  /// **'No se pudo guardar. Revisa tu conexión.'**
+  String get consentSaveError;
+
+  /// No description provided for @consentSessionInvalid.
+  ///
+  /// In es, this message translates to:
+  /// **'Sesión no válida'**
+  String get consentSessionInvalid;
+
+  /// No description provided for @dobConfirmAge.
+  ///
+  /// In es, this message translates to:
+  /// **'Confirma tu edad'**
+  String get dobConfirmAge;
+
+  /// No description provided for @dobSelectPrompt.
+  ///
+  /// In es, this message translates to:
+  /// **'Selecciona una fecha'**
+  String get dobSelectPrompt;
+
+  /// No description provided for @dobMinAgeError.
+  ///
+  /// In es, this message translates to:
+  /// **'La edad mínima para usar la app es {age} años.'**
+  String dobMinAgeError(int age);
+
+  /// No description provided for @dobSelectHelp.
+  ///
+  /// In es, this message translates to:
+  /// **'Selecciona tu fecha de nacimiento'**
+  String get dobSelectHelp;
+
+  /// No description provided for @dobParentalConsentRequired.
+  ///
+  /// In es, this message translates to:
+  /// **'Como menor de edad, necesitas el consentimiento de un tutor para usar la app. Por favor, contacta con el centro.'**
+  String get dobParentalConsentRequired;
+
+  /// No description provided for @materialScreenTitle.
+  ///
+  /// In es, this message translates to:
+  /// **'TU MATERIAL'**
+  String get materialScreenTitle;
+
+  /// No description provided for @materialNoExercises.
+  ///
+  /// In es, this message translates to:
+  /// **'No tienes ejercicios asignados todavía'**
+  String get materialNoExercises;
+
+  /// No description provided for @materialDailyGoal.
+  ///
+  /// In es, this message translates to:
+  /// **'OBJETIVO DIARIO'**
+  String get materialDailyGoal;
+
+  /// No description provided for @materialExercisesCompleted.
+  ///
+  /// In es, this message translates to:
+  /// **'ejercicios completados'**
+  String get materialExercisesCompleted;
+
+  /// No description provided for @materialLoadError.
+  ///
+  /// In es, this message translates to:
+  /// **'Error al cargar material'**
+  String get materialLoadError;
+
+  /// No description provided for @materialDefaultExercise.
+  ///
+  /// In es, this message translates to:
+  /// **'Ejercicio'**
+  String get materialDefaultExercise;
+
+  /// No description provided for @materialDefaultFamily.
+  ///
+  /// In es, this message translates to:
+  /// **'Entrenamiento'**
+  String get materialDefaultFamily;
 }
 
 class _AppLocalizationsDelegate
