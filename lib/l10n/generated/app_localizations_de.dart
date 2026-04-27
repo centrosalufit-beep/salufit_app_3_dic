@@ -904,4 +904,197 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get materialDefaultFamily => 'Training';
+
+  @override
+  String get classListHeaderTitle => 'GRUPPENKURSE';
+
+  @override
+  String get classListLoadErrorMsg => 'Fehler beim Laden der Kurse';
+
+  @override
+  String get classListMonitorLabel => 'TRAINER';
+
+  @override
+  String get classListStaffDefault => 'TEAM';
+
+  @override
+  String get classBookedUpper => 'GEBUCHT';
+
+  @override
+  String get classFullUpper => 'AUSGEBUCHT';
+
+  @override
+  String get classBookUpper => 'BUCHEN';
+
+  @override
+  String get classBookConfirmShortTitle => 'Weniger als 24h';
+
+  @override
+  String get classBookConfirmShortMsg =>
+      'Wenn Sie jetzt buchen, können Sie weder stornieren noch den Token gemäß unserer Richtlinie zurückerhalten.';
+
+  @override
+  String get commonReturnUpper => 'ZURÜCK';
+
+  @override
+  String get documentsScreenTitle => 'DOKUMENTE';
+
+  @override
+  String get documentsTabAll => 'Alle';
+
+  @override
+  String get documentsTabPending => 'Ausstehend';
+
+  @override
+  String get documentsTabSigned => 'Unterzeichnet';
+
+  @override
+  String get documentsLoadError => 'Fehler beim Laden der Dokumente';
+
+  @override
+  String get documentsEmptyAll => 'Sie haben keine verfügbaren Dokumente';
+
+  @override
+  String get documentsEmptyPending => 'Sie haben keine ausstehenden Dokumente';
+
+  @override
+  String get documentsEmptySigned =>
+      'Sie haben noch keine Dokumente unterzeichnet';
+
+  @override
+  String documentsCreatedOn(String date) {
+    return 'Erstellt: $date';
+  }
+
+  @override
+  String documentsSignedOn(String date) {
+    return 'Unterzeichnet: $date';
+  }
+
+  @override
+  String get documentsViewButton => 'Ansehen';
+
+  @override
+  String get documentsSignButton => 'Unterzeichnen';
+
+  @override
+  String get documentsTypeContract => 'Vertrag';
+
+  @override
+  String get documentsTypeInvoice => 'Rechnung';
+
+  @override
+  String get documentsTypeReport => 'Bericht';
+
+  @override
+  String get documentsTypeReceipt => 'Quittung';
+
+  @override
+  String get documentsTypeOther => 'Dokument';
+
+  @override
+  String get goalsCardTitle => 'ZIELE';
+
+  @override
+  String get goalsCardCurrentTitle => 'IHR AKTUELLES ZIEL';
+
+  @override
+  String get goalsCardEmpty =>
+      'Ihr Profi hat noch keine Ziele für Sie definiert';
+
+  @override
+  String goalsCardSetByPro(String name) {
+    return 'Festgelegt von $name';
+  }
+
+  @override
+  String goalsCardProgress(int percent) {
+    return 'Fortschritt: $percent%';
+  }
+
+  @override
+  String goalsCardDeadline(String date) {
+    return 'Frist: $date';
+  }
+
+  @override
+  String get goalsCardCompleted => 'Ziel erreicht!';
+
+  @override
+  String get goalsCardOverdue => 'Frist überschritten';
+
+  @override
+  String get goalsCardSeeHistory => 'Verlauf anzeigen';
+
+  @override
+  String get recordHeaderTitle => 'MEINE AKTE';
+
+  @override
+  String get recordTabMetrics => 'MESSWERTE';
+
+  @override
+  String get recordTabDocuments => 'DOKUMENTE';
+
+  @override
+  String get metricsEmptyTitle => 'Noch keine Messwerte erfasst';
+
+  @override
+  String get metricsEmptySubtitle =>
+      'Ihr Profi erfasst sie während der Konsultation';
+
+  @override
+  String get metricsDefaultLabel => 'Messwert';
+
+  @override
+  String get metricsFirstRecord => 'Erster Eintrag';
+
+  @override
+  String get consentsEmptyTitle => 'Keine unterzeichneten Einwilligungen';
+
+  @override
+  String consentsSignedAt(String date) {
+    return 'Unterzeichnet: $date';
+  }
+
+  @override
+  String get weeklyGoalLabel => 'WOCHENZIEL';
+
+  @override
+  String weeklyGoalRemaining(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count KURSE ÜBRIG',
+      one: '1 KURS ÜBRIG',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get weeklyGoalCompleted => 'ZIEL ERREICHT';
+
+  @override
+  String get weeklyGoalEncouragement => 'Weiter so, Sie schaffen das!';
+
+  @override
+  String get weeklyGoalGreatWork => 'Tolle Arbeit diese Woche!';
+
+  @override
+  String get trialPromoExclusive => 'EXKLUSIV FÜR SIE';
+
+  @override
+  String get trialPromoFreeFirstClass => 'IHR ERSTER KURS\nIST GRATIS';
+
+  @override
+  String get trialPromoTapToBook => 'Tippen Sie zum Buchen';
+
+  @override
+  String get trialPromoUsedBadge => 'SIE HABEN IHREN KURS PROBIERT';
+
+  @override
+  String get trialPromoBecomeMember =>
+      'HAT ES IHNEN GEFALLEN?\nWERDEN SIE MITGLIED';
+
+  @override
+  String get trialPromoCheckPasses => 'Entdecken Sie unsere Monatspässe';
 }

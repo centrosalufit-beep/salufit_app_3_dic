@@ -1,19 +1,22 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:salufit_app/core/providers/firebase_providers.dart';
+import 'package:salufit_app/core/providers/locale_provider.dart';
 import 'package:salufit_app/core/theme/app_colors.dart';
+import 'package:salufit_app/core/utils/localized_field.dart';
 import 'package:salufit_app/core/utils/safe_parsing_extensions.dart';
 import 'package:salufit_app/features/bookings/data/class_repository.dart';
 import 'package:salufit_app/features/bookings/providers/booking_providers.dart';
+import 'package:salufit_app/l10n/generated/app_localizations.dart';
 import 'package:salufit_app/shared/widgets/salufit_header.dart';
 import 'package:salufit_app/shared/widgets/salufit_scaffold.dart';
 
 class ClientClassListScreen extends ConsumerStatefulWidget {
   const ClientClassListScreen({
-    required this.userId, 
-    required this.userRole, 
-    super.key, 
+    required this.userId,
+    required this.userRole,
+    super.key,
     this.initialDate,
   });
 
@@ -48,11 +51,14 @@ class _ClientClassListScreenState extends ConsumerState<ClientClassListScreen> {
     }
   }
 
-  bool _isSameDay(DateTime a, DateTime b) => 
+  bool _isSameDay(DateTime a, DateTime b) =>
       a.year == b.year && a.month == b.month && a.day == b.day;
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context);
+    final locale = ref.watch(localeControllerProvider);
+    final localeCode = locale.languageCode;
     final classesAsync = ref.watch(classesStreamProvider);
     final myBookings = ref.watch(myBookingsMapProvider);
 
@@ -61,9 +67,9 @@ class _ClientClassListScreenState extends ConsumerState<ClientClassListScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            const SalufitHeader(title: 'CLASES GRUPALES'),
-            _buildCalendarRail(),
-            _buildDateDivider(),
+            SalufitHeader(title: t.classListHeaderTitle),
+            _buildCalendarRail(localeCode),
+            _buildDateDivider(localeCode),
             Expanded(
               child: classesAsync.when(
                 data: (snap) {
@@ -72,7 +78,7 @@ class _ClientClassListScreenState extends ConsumerState<ClientClassListScreen> {
                     return _isSameDay(data.safeDateTime('fechaHoraInicio'), _selectedDate);
                   }).toList();
                   if (filtered.isEmpty) {
-                    return const Center(child: Text('No hay clases programadas'));
+                    return Center(child: Text(t.classListEmptyDay));
                   }
                   return ListView.builder(
                     padding: const EdgeInsets.fromLTRB(15, 0, 15, 80),
@@ -80,11 +86,16 @@ class _ClientClassListScreenState extends ConsumerState<ClientClassListScreen> {
                     itemBuilder: (context, i) {
                       final doc = filtered[i];
                       final data = doc.data()! as Map<String, dynamic>;
-                      final visuals = _getClassVisuals(data.safeString('nombre'));
+                      final localizedName =
+                          data.localized('nombre', locale).toUpperCase();
+                      final visuals = _getClassVisuals(localizedName.toLowerCase());
                       return _ClassCard(
                         data: data,
                         classId: doc.id,
                         visuals: visuals,
+                        localizedName: localizedName,
+                        localizedMonitor:
+                            data.localized('monitor', locale),
                         isBooked: myBookings.containsKey(doc.id),
                         isProcessing: _processingClassIds.contains(doc.id),
                         onBook: () => _handleReserva(data, doc.id),
@@ -93,7 +104,7 @@ class _ClientClassListScreenState extends ConsumerState<ClientClassListScreen> {
                   );
                 },
                 loading: () => const Center(child: CircularProgressIndicator(color: AppColors.primary)),
-                error: (_, __) => const Center(child: Text('Error al cargar clases')),
+                error: (_, __) => Center(child: Text(t.classListLoadErrorMsg)),
               ),
             ),
           ],
@@ -102,7 +113,7 @@ class _ClientClassListScreenState extends ConsumerState<ClientClassListScreen> {
     );
   }
 
-  Widget _buildCalendarRail() {
+  Widget _buildCalendarRail(String localeCode) {
     return SizedBox(
       height: 100,
       child: ListView.separated(
@@ -118,21 +129,24 @@ class _ClientClassListScreenState extends ConsumerState<ClientClassListScreen> {
             child: Container(
               width: 65,
               decoration: BoxDecoration(
-                color: isSelected ? AppColors.primary : Colors.white, 
+                color: isSelected ? AppColors.primary : Colors.white,
                 borderRadius: BorderRadius.circular(15),
               ),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Text(
-                    DateFormat('EEE', 'es').format(date).toUpperCase().replaceAll('.', ''), 
+                    DateFormat('EEE', localeCode)
+                        .format(date)
+                        .toUpperCase()
+                        .replaceAll('.', ''),
                     style: TextStyle(color: isSelected ? Colors.white70 : Colors.grey, fontSize: 12),
                   ),
                   Text(
-                    '${date.day}', 
+                    '${date.day}',
                     style: TextStyle(
-                      color: isSelected ? Colors.white : Colors.black87, 
-                      fontSize: 20, 
+                      color: isSelected ? Colors.white : Colors.black87,
+                      fontSize: 20,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
@@ -145,29 +159,29 @@ class _ClientClassListScreenState extends ConsumerState<ClientClassListScreen> {
     );
   }
 
-  Widget _buildDateDivider() => Padding(
-    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15), 
-    child: Text(
-      DateFormat("EEEE d 'DE' MMMM", 'es').format(_selectedDate).toUpperCase(), 
-      style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
-    ),
-  );
+  Widget _buildDateDivider(String localeCode) => Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
+        child: Text(
+          DateFormat('EEEE d MMMM', localeCode).format(_selectedDate).toUpperCase(),
+          style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
+        ),
+      );
 
-  Map<String, dynamic> _getClassVisuals(String nombre) {
-    final n = nombre.toLowerCase();
-    if (n.contains('meditación') || n.contains('meditacion')) {
+  Map<String, dynamic> _getClassVisuals(String nombreLower) {
+    final n = nombreLower;
+    if (n.contains('meditación') || n.contains('meditacion') || n.contains('meditation')) {
       return {'colors': [const Color(0xFF4A148C), const Color(0xFFAB47BC)], 'bgIcon': Icons.self_improvement};
     }
-    if (n.contains('tribu') || n.contains('activa')) {
+    if (n.contains('tribu') || n.contains('activa') || n.contains('walk')) {
       return {'colors': [const Color(0xFFE65100), const Color(0xFFFFB74D)], 'bgIcon': Icons.directions_walk};
     }
-    if (n.contains('terapéutico') || n.contains('terapeutico')) {
+    if (n.contains('terapéutico') || n.contains('terapeutico') || n.contains('therapeutic')) {
       return {'colors': [const Color(0xFF0D47A1), const Color(0xFF42A5F5)], 'bgIcon': Icons.self_improvement};
     }
-    if (n.contains('entrenamiento')) {
+    if (n.contains('entrenamiento') || n.contains('training') || n.contains('entraînement') || n.contains('entrainement')) {
       return {'colors': [const Color(0xFFC62828), const Color(0xFFFF5252)], 'bgIcon': Icons.fitness_center};
     }
-    if (n.contains('kids') || n.contains('explora')) {
+    if (n.contains('kids') || n.contains('explora') || n.contains('niños') || n.contains('enfants') || n.contains('kinder')) {
       return {'colors': [const Color(0xFF00897B), const Color(0xFF4DB6AC)], 'bgIcon': Icons.escalator_warning};
     }
     return {'colors': [const Color(0xFF009688), const Color(0xFF4DB6AC)], 'bgIcon': Icons.person};
@@ -175,8 +189,8 @@ class _ClientClassListScreenState extends ConsumerState<ClientClassListScreen> {
 
   Future<void> _handleReserva(Map<String, dynamic> data, String id) async {
     if (_processingClassIds.contains(id)) return;
+    final t = AppLocalizations.of(context);
 
-    // Comprobar si faltan menos de 24h para la clase
     final fechaClase = data.safeDateTime('fechaHoraInicio');
     final horasRestantes = fechaClase.difference(DateTime.now()).inHours;
 
@@ -186,47 +200,48 @@ class _ClientClassListScreenState extends ConsumerState<ClientClassListScreen> {
         builder: (ctx) => Dialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
           child: Container(
-          padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2))),
-              const SizedBox(height: 20),
-              Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(color: Colors.orange.shade50, shape: BoxShape.circle),
-                child: Icon(Icons.schedule, color: Colors.orange.shade700, size: 32),
-              ),
-              const SizedBox(height: 16),
-              const Text('Menos de 24h', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
-              const SizedBox(height: 8),
-              Text(
-                'Si reservas, no podras cancelar ni recuperar el token segun nuestra politica.',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 13, color: Colors.grey.shade600, height: 1.4),
-              ),
-              const SizedBox(height: 24),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () => Navigator.pop(ctx, false),
-                      style: OutlinedButton.styleFrom(padding: const EdgeInsets.all(14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-                      child: const Text('VOLVER', style: TextStyle(fontWeight: FontWeight.bold)),
+            padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2))),
+                const SizedBox(height: 20),
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(color: Colors.orange.shade50, shape: BoxShape.circle),
+                  child: Icon(Icons.schedule, color: Colors.orange.shade700, size: 32),
+                ),
+                const SizedBox(height: 16),
+                Text(t.classBookConfirmShortTitle,
+                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+                const SizedBox(height: 8),
+                Text(
+                  t.classBookConfirmShortMsg,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 13, color: Colors.grey.shade600, height: 1.4),
+                ),
+                const SizedBox(height: 24),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.pop(ctx, false),
+                        style: OutlinedButton.styleFrom(padding: const EdgeInsets.all(14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                        child: Text(t.commonReturnUpper, style: const TextStyle(fontWeight: FontWeight.bold)),
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: () => Navigator.pop(ctx, true),
-                      style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF009688), padding: const EdgeInsets.all(14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-                      child: const Text('RESERVAR', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: () => Navigator.pop(ctx, true),
+                        style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF009688), padding: const EdgeInsets.all(14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                        child: Text(t.classBookUpper, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                      ),
                     ),
-                  ),
-                ],
-              ),
-            ],
-          ),
+                  ],
+                ),
+              ],
+            ),
           ),
         ),
       );
@@ -236,35 +251,39 @@ class _ClientClassListScreenState extends ConsumerState<ClientClassListScreen> {
     setState(() => _processingClassIds.add(id));
     try {
       await ref.read(classRepositoryProvider).inscribirUsuario(
-        userId: widget.userId,
-        userEmail: ref.read(firebaseAuthProvider).currentUser?.email ?? '',
-        classId: id,
-      );
+            userId: widget.userId,
+            userEmail: ref.read(firebaseAuthProvider).currentUser?.email ?? '',
+            classId: id,
+          );
     } finally {
       if (mounted) setState(() => _processingClassIds.remove(id));
     }
   }
 }
 
-class _ClassCard extends StatelessWidget {
+class _ClassCard extends ConsumerWidget {
   const _ClassCard({
-    required this.data, 
-    required this.classId, 
-    required this.visuals, 
-    required this.isBooked, 
-    required this.isProcessing, 
+    required this.data,
+    required this.classId,
+    required this.visuals,
+    required this.localizedName,
+    required this.localizedMonitor,
+    required this.isBooked,
+    required this.isProcessing,
     required this.onBook,
   });
 
   final Map<String, dynamic> data;
   final String classId;
   final Map<String, dynamic> visuals;
+  final String localizedName;
+  final String localizedMonitor;
   final bool isBooked;
   final bool isProcessing;
   final VoidCallback onBook;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final colors = (visuals['colors'] as List).cast<Color>();
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
@@ -290,9 +309,9 @@ class _ClassCard extends StatelessWidget {
                 children: [
                   _buildTimeSidebar(data.safeDateTime('fechaHoraInicio')),
                   const SizedBox(width: 10),
-                  Expanded(child: _buildClassInfo()),
+                  Expanded(child: _buildClassInfo(context)),
                   const SizedBox(width: 6),
-                  _buildActionButton(colors[0]),
+                  _buildActionButton(context, colors[0]),
                 ],
               ),
             ),
@@ -303,22 +322,27 @@ class _ClassCard extends StatelessWidget {
   }
 
   Widget _buildTimeSidebar(DateTime start) => Container(
-    width: 60,
-    padding: const EdgeInsets.symmetric(vertical: 10),
-    decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(12)),
-    child: Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Text(DateFormat('HH:mm').format(start), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
-        Text(DateFormat('HH:mm').format(start.add(const Duration(hours: 1))), style: const TextStyle(color: Colors.white70, fontSize: 11)),
-      ],
-    ),
-  );
+        width: 60,
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(12)),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(DateFormat('HH:mm').format(start),
+                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
+            Text(DateFormat('HH:mm').format(start.add(const Duration(hours: 1))),
+                style: const TextStyle(color: Colors.white70, fontSize: 11)),
+          ],
+        ),
+      );
 
-  Widget _buildClassInfo() {
-    final rawName = data.safeString('nombre').toUpperCase();
-    final words = rawName.split(' ');
-    final formattedTitle = words.length > 1 ? words.join('\n') : rawName;
+  Widget _buildClassInfo(BuildContext context) {
+    final t = AppLocalizations.of(context);
+    final words = localizedName.split(' ');
+    final formattedTitle = words.length > 1 ? words.join('\n') : localizedName;
+    final monitorDisplay = localizedMonitor.trim().isNotEmpty
+        ? localizedMonitor
+        : t.classListStaffDefault;
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -330,7 +354,10 @@ class _ClassCard extends StatelessWidget {
           overflow: TextOverflow.ellipsis,
         ),
         const SizedBox(height: 2),
-        Text('MONITOR: ${data.safeString('monitor', defaultValue: 'STAFF')}', style: const TextStyle(color: Colors.white70, fontSize: 9, fontWeight: FontWeight.bold)),
+        Text(
+          '${t.classListMonitorLabel}: $monitorDisplay',
+          style: const TextStyle(color: Colors.white70, fontSize: 9, fontWeight: FontWeight.bold),
+        ),
         const SizedBox(height: 5),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -340,7 +367,10 @@ class _ClassCard extends StatelessWidget {
             children: [
               const Icon(Icons.people, color: Colors.white, size: 12),
               const SizedBox(width: 4),
-              Text('${data.safeInt('aforoActual')}/${data.safeInt('aforoMaximo', defaultValue: 12)}', style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+              Text(
+                '${data.safeInt('aforoActual')}/${data.safeInt('aforoMaximo', defaultValue: 12)}',
+                style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+              ),
             ],
           ),
         ),
@@ -348,13 +378,24 @@ class _ClassCard extends StatelessWidget {
     );
   }
 
-  Widget _buildActionButton(Color primary) {
+  Widget _buildActionButton(BuildContext context, Color primary) {
+    final t = AppLocalizations.of(context);
     final isFull = data.safeInt('aforoActual') >= data.safeInt('aforoMaximo', defaultValue: 12);
-    final label = isBooked ? 'RESERVADO' : (isFull ? 'LLENO' : 'RESERVAR');
+    final label = isBooked
+        ? t.classBookedUpper
+        : (isFull ? t.classFullUpper : t.classBookUpper);
     return ElevatedButton(
       onPressed: (isBooked || isProcessing || isFull) ? null : onBook,
-      style: ElevatedButton.styleFrom(backgroundColor: Colors.white, foregroundColor: primary, padding: const EdgeInsets.symmetric(horizontal: 8), minimumSize: const Size(85, 36), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-      child: isProcessing ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2)) : Text(label, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 10)),
+      style: ElevatedButton.styleFrom(
+        backgroundColor: Colors.white,
+        foregroundColor: primary,
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        minimumSize: const Size(85, 36),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+      child: isProcessing
+          ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
+          : Text(label, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 10)),
     );
   }
 }

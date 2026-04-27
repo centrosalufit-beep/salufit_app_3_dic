@@ -400,5 +400,88 @@
   "materialExercisesCompleted": "ejercicios completados",
   "materialLoadError": "Error al cargar material",
   "materialDefaultExercise": "Ejercicio",
-  "materialDefaultFamily": "Entrenamiento"
+  "materialDefaultFamily": "Entrenamiento",
+
+  "classListHeaderTitle": "CLASES GRUPALES",
+  "classListLoadErrorMsg": "Error al cargar clases",
+  "classListMonitorLabel": "MONITOR",
+  "classListStaffDefault": "STAFF",
+  "classBookedUpper": "RESERVADO",
+  "classFullUpper": "LLENO",
+  "classBookUpper": "RESERVAR",
+  "classBookConfirmShortTitle": "Menos de 24h",
+  "classBookConfirmShortMsg": "Si reservas, no podrás cancelar ni recuperar el token según nuestra política.",
+  "commonReturnUpper": "VOLVER",
+
+  "documentsScreenTitle": "DOCUMENTOS",
+  "documentsTabAll": "Todos",
+  "documentsTabPending": "Pendientes",
+  "documentsTabSigned": "Firmados",
+  "documentsLoadError": "Error al cargar documentos",
+  "documentsEmptyAll": "No tienes documentos disponibles",
+  "documentsEmptyPending": "No tienes documentos pendientes",
+  "documentsEmptySigned": "Aún no has firmado documentos",
+  "documentsCreatedOn": "Creado: {date}",
+  "@documentsCreatedOn": {
+    "placeholders": {"date": {"type": "String"}}
+  },
+  "documentsSignedOn": "Firmado: {date}",
+  "@documentsSignedOn": {
+    "placeholders": {"date": {"type": "String"}}
+  },
+  "documentsViewButton": "Ver",
+  "documentsSignButton": "Firmar",
+  "documentsTypeContract": "Contrato",
+  "documentsTypeInvoice": "Factura",
+  "documentsTypeReport": "Informe",
+  "documentsTypeReceipt": "Recibo",
+  "documentsTypeOther": "Documento",
+
+  "goalsCardTitle": "OBJETIVOS",
+  "goalsCardCurrentTitle": "TU OBJETIVO ACTUAL",
+  "goalsCardEmpty": "Tu profesional aún no ha definido objetivos para ti",
+  "goalsCardSetByPro": "Definido por {name}",
+  "@goalsCardSetByPro": {
+    "placeholders": {"name": {"type": "String"}}
+  },
+  "goalsCardProgress": "Progreso: {percent}%",
+  "@goalsCardProgress": {
+    "placeholders": {"percent": {"type": "int"}}
+  },
+  "goalsCardDeadline": "Plazo: {date}",
+  "@goalsCardDeadline": {
+    "placeholders": {"date": {"type": "String"}}
+  },
+  "goalsCardCompleted": "¡Objetivo conseguido!",
+  "goalsCardOverdue": "Plazo superado",
+  "goalsCardSeeHistory": "Ver historial",
+
+  "recordHeaderTitle": "MI EXPEDIENTE",
+  "recordTabMetrics": "MÉTRICAS",
+  "recordTabDocuments": "DOCUMENTOS",
+  "metricsEmptyTitle": "Aún no tienes métricas registradas",
+  "metricsEmptySubtitle": "Tu profesional las irá registrando en consulta",
+  "metricsDefaultLabel": "Métrica",
+  "metricsFirstRecord": "Primer registro",
+  "consentsEmptyTitle": "No hay consentimientos firmados",
+  "consentsSignedAt": "Firmado: {date}",
+  "@consentsSignedAt": {
+    "placeholders": {"date": {"type": "String"}}
+  },
+
+  "weeklyGoalLabel": "OBJETIVO SEMANAL",
+  "weeklyGoalRemaining": "{count, plural, =1{1 CLASE RESTANTE} other{{count} CLASES RESTANTES}}",
+  "@weeklyGoalRemaining": {
+    "placeholders": {"count": {"type": "int"}}
+  },
+  "weeklyGoalCompleted": "OBJETIVO CUMPLIDO",
+  "weeklyGoalEncouragement": "Ánimo, ¡a por tu meta!",
+  "weeklyGoalGreatWork": "¡Buen trabajo esta semana!",
+
+  "trialPromoExclusive": "EXCLUSIVO PARA TI",
+  "trialPromoFreeFirstClass": "TU PRIMERA CLASE\nES GRATIS",
+  "trialPromoTapToBook": "Toca para reservar ahora",
+  "trialPromoUsedBadge": "YA PROBASTE TU CLASE",
+  "trialPromoBecomeMember": "¿TE GUSTÓ?\nHAZTE MIEMBRO",
+  "trialPromoCheckPasses": "Consulta nuestros bonos mensuales"
 }

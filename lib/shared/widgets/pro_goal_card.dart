@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:salufit_app/core/utils/safe_parsing_extensions.dart';
+import 'package:salufit_app/l10n/generated/app_localizations.dart';
 
 class ProGoalCard extends StatelessWidget {
   const ProGoalCard({
@@ -146,9 +147,9 @@ class _WeeklyGoalCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'OBJETIVO SEMANAL',
-                  style: TextStyle(
+                Text(
+                  AppLocalizations.of(context).weeklyGoalLabel,
+                  style: const TextStyle(
                     color: Colors.white70,
                     fontSize: 11,
                     fontWeight: FontWeight.bold,
@@ -158,8 +159,8 @@ class _WeeklyGoalCard extends StatelessWidget {
                 const SizedBox(height: 5),
                 Text(
                   restantes > 0
-                      ? '$restantes ${restantes == 1 ? "CLASE" : "CLASES"} RESTANTES'
-                      : 'OBJETIVO CUMPLIDO',
+                      ? AppLocalizations.of(context).weeklyGoalRemaining(restantes)
+                      : AppLocalizations.of(context).weeklyGoalCompleted,
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 22,
@@ -171,8 +172,8 @@ class _WeeklyGoalCard extends StatelessWidget {
                 const SizedBox(height: 4),
                 Text(
                   restantes > 0
-                      ? 'Ánimo, ¡a por tu meta!'
-                      : '¡Buen trabajo esta semana!',
+                      ? AppLocalizations.of(context).weeklyGoalEncouragement
+                      : AppLocalizations.of(context).weeklyGoalGreatWork,
                   style: const TextStyle(
                     color: Colors.white70,
                     fontSize: 13,
@@ -329,9 +330,9 @@ class _TrialPromoCardState extends State<_TrialPromoCard>
                               color: Colors.red.shade700,
                               borderRadius: BorderRadius.circular(6),
                             ),
-                            child: const Text(
-                              'EXCLUSIVO PARA TI',
-                              style: TextStyle(
+                            child: Text(
+                              AppLocalizations.of(context).trialPromoExclusive,
+                              style: const TextStyle(
                                 color: Colors.white,
                                 fontSize: 9,
                                 fontWeight: FontWeight.w900,
@@ -340,9 +341,9 @@ class _TrialPromoCardState extends State<_TrialPromoCard>
                             ),
                           ),
                           const SizedBox(height: 6),
-                          const Text(
-                            'TU PRIMERA CLASE\nES GRATIS',
-                            style: TextStyle(
+                          Text(
+                            AppLocalizations.of(context).trialPromoFreeFirstClass,
+                            style: const TextStyle(
                               color: Colors.white,
                               fontSize: 21,
                               fontWeight: FontWeight.w900,
@@ -360,7 +361,7 @@ class _TrialPromoCardState extends State<_TrialPromoCard>
                               ),
                               const SizedBox(width: 5),
                               Text(
-                                'Toca para reservar ahora',
+                                AppLocalizations.of(context).trialPromoTapToBook,
                                 style: TextStyle(
                                   color: Colors.white.withValues(alpha: 0.85),
                                   fontSize: 12,
@@ -448,9 +449,9 @@ class _TrialPromoCardState extends State<_TrialPromoCard>
                           color: Colors.greenAccent.shade700,
                           borderRadius: BorderRadius.circular(6),
                         ),
-                        child: const Text(
-                          'YA PROBASTE TU CLASE',
-                          style: TextStyle(
+                        child: Text(
+                          AppLocalizations.of(context).trialPromoUsedBadge,
+                          style: const TextStyle(
                             color: Colors.white,
                             fontSize: 9,
                             fontWeight: FontWeight.w900,
@@ -459,9 +460,9 @@ class _TrialPromoCardState extends State<_TrialPromoCard>
                         ),
                       ),
                       const SizedBox(height: 6),
-                      const Text(
-                        '¿TE GUSTÓ?\nHAZTE MIEMBRO',
-                        style: TextStyle(
+                      Text(
+                        AppLocalizations.of(context).trialPromoBecomeMember,
+                        style: const TextStyle(
                           color: Colors.white,
                           fontSize: 20,
                           fontWeight: FontWeight.w900,
@@ -470,7 +471,7 @@ class _TrialPromoCardState extends State<_TrialPromoCard>
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        'Consulta nuestros bonos mensuales',
+                        AppLocalizations.of(context).trialPromoCheckPasses,
                         style: TextStyle(
                           color: Colors.white.withValues(alpha: 0.8),
                           fontSize: 12,

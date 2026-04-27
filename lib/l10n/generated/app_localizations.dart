@@ -1717,6 +1717,342 @@ abstract class AppLocalizations {
   /// In es, this message translates to:
   /// **'Entrenamiento'**
   String get materialDefaultFamily;
+
+  /// No description provided for @classListHeaderTitle.
+  ///
+  /// In es, this message translates to:
+  /// **'CLASES GRUPALES'**
+  String get classListHeaderTitle;
+
+  /// No description provided for @classListLoadErrorMsg.
+  ///
+  /// In es, this message translates to:
+  /// **'Error al cargar clases'**
+  String get classListLoadErrorMsg;
+
+  /// No description provided for @classListMonitorLabel.
+  ///
+  /// In es, this message translates to:
+  /// **'MONITOR'**
+  String get classListMonitorLabel;
+
+  /// No description provided for @classListStaffDefault.
+  ///
+  /// In es, this message translates to:
+  /// **'STAFF'**
+  String get classListStaffDefault;
+
+  /// No description provided for @classBookedUpper.
+  ///
+  /// In es, this message translates to:
+  /// **'RESERVADO'**
+  String get classBookedUpper;
+
+  /// No description provided for @classFullUpper.
+  ///
+  /// In es, this message translates to:
+  /// **'LLENO'**
+  String get classFullUpper;
+
+  /// No description provided for @classBookUpper.
+  ///
+  /// In es, this message translates to:
+  /// **'RESERVAR'**
+  String get classBookUpper;
+
+  /// No description provided for @classBookConfirmShortTitle.
+  ///
+  /// In es, this message translates to:
+  /// **'Menos de 24h'**
+  String get classBookConfirmShortTitle;
+
+  /// No description provided for @classBookConfirmShortMsg.
+  ///
+  /// In es, this message translates to:
+  /// **'Si reservas, no podrás cancelar ni recuperar el token según nuestra política.'**
+  String get classBookConfirmShortMsg;
+
+  /// No description provided for @commonReturnUpper.
+  ///
+  /// In es, this message translates to:
+  /// **'VOLVER'**
+  String get commonReturnUpper;
+
+  /// No description provided for @documentsScreenTitle.
+  ///
+  /// In es, this message translates to:
+  /// **'DOCUMENTOS'**
+  String get documentsScreenTitle;
+
+  /// No description provided for @documentsTabAll.
+  ///
+  /// In es, this message translates to:
+  /// **'Todos'**
+  String get documentsTabAll;
+
+  /// No description provided for @documentsTabPending.
+  ///
+  /// In es, this message translates to:
+  /// **'Pendientes'**
+  String get documentsTabPending;
+
+  /// No description provided for @documentsTabSigned.
+  ///
+  /// In es, this message translates to:
+  /// **'Firmados'**
+  String get documentsTabSigned;
+
+  /// No description provided for @documentsLoadError.
+  ///
+  /// In es, this message translates to:
+  /// **'Error al cargar documentos'**
+  String get documentsLoadError;
+
+  /// No description provided for @documentsEmptyAll.
+  ///
+  /// In es, this message translates to:
+  /// **'No tienes documentos disponibles'**
+  String get documentsEmptyAll;
+
+  /// No description provided for @documentsEmptyPending.
+  ///
+  /// In es, this message translates to:
+  /// **'No tienes documentos pendientes'**
+  String get documentsEmptyPending;
+
+  /// No description provided for @documentsEmptySigned.
+  ///
+  /// In es, this message translates to:
+  /// **'Aún no has firmado documentos'**
+  String get documentsEmptySigned;
+
+  /// No description provided for @documentsCreatedOn.
+  ///
+  /// In es, this message translates to:
+  /// **'Creado: {date}'**
+  String documentsCreatedOn(String date);
+
+  /// No description provided for @documentsSignedOn.
+  ///
+  /// In es, this message translates to:
+  /// **'Firmado: {date}'**
+  String documentsSignedOn(String date);
+
+  /// No description provided for @documentsViewButton.
+  ///
+  /// In es, this message translates to:
+  /// **'Ver'**
+  String get documentsViewButton;
+
+  /// No description provided for @documentsSignButton.
+  ///
+  /// In es, this message translates to:
+  /// **'Firmar'**
+  String get documentsSignButton;
+
+  /// No description provided for @documentsTypeContract.
+  ///
+  /// In es, this message translates to:
+  /// **'Contrato'**
+  String get documentsTypeContract;
+
+  /// No description provided for @documentsTypeInvoice.
+  ///
+  /// In es, this message translates to:
+  /// **'Factura'**
+  String get documentsTypeInvoice;
+
+  /// No description provided for @documentsTypeReport.
+  ///
+  /// In es, this message translates to:
+  /// **'Informe'**
+  String get documentsTypeReport;
+
+  /// No description provided for @documentsTypeReceipt.
+  ///
+  /// In es, this message translates to:
+  /// **'Recibo'**
+  String get documentsTypeReceipt;
+
+  /// No description provided for @documentsTypeOther.
+  ///
+  /// In es, this message translates to:
+  /// **'Documento'**
+  String get documentsTypeOther;
+
+  /// No description provided for @goalsCardTitle.
+  ///
+  /// In es, this message translates to:
+  /// **'OBJETIVOS'**
+  String get goalsCardTitle;
+
+  /// No description provided for @goalsCardCurrentTitle.
+  ///
+  /// In es, this message translates to:
+  /// **'TU OBJETIVO ACTUAL'**
+  String get goalsCardCurrentTitle;
+
+  /// No description provided for @goalsCardEmpty.
+  ///
+  /// In es, this message translates to:
+  /// **'Tu profesional aún no ha definido objetivos para ti'**
+  String get goalsCardEmpty;
+
+  /// No description provided for @goalsCardSetByPro.
+  ///
+  /// In es, this message translates to:
+  /// **'Definido por {name}'**
+  String goalsCardSetByPro(String name);
+
+  /// No description provided for @goalsCardProgress.
+  ///
+  /// In es, this message translates to:
+  /// **'Progreso: {percent}%'**
+  String goalsCardProgress(int percent);
+
+  /// No description provided for @goalsCardDeadline.
+  ///
+  /// In es, this message translates to:
+  /// **'Plazo: {date}'**
+  String goalsCardDeadline(String date);
+
+  /// No description provided for @goalsCardCompleted.
+  ///
+  /// In es, this message translates to:
+  /// **'¡Objetivo conseguido!'**
+  String get goalsCardCompleted;
+
+  /// No description provided for @goalsCardOverdue.
+  ///
+  /// In es, this message translates to:
+  /// **'Plazo superado'**
+  String get goalsCardOverdue;
+
+  /// No description provided for @goalsCardSeeHistory.
+  ///
+  /// In es, this message translates to:
+  /// **'Ver historial'**
+  String get goalsCardSeeHistory;
+
+  /// No description provided for @recordHeaderTitle.
+  ///
+  /// In es, this message translates to:
+  /// **'MI EXPEDIENTE'**
+  String get recordHeaderTitle;
+
+  /// No description provided for @recordTabMetrics.
+  ///
+  /// In es, this message translates to:
+  /// **'MÉTRICAS'**
+  String get recordTabMetrics;
+
+  /// No description provided for @recordTabDocuments.
+  ///
+  /// In es, this message translates to:
+  /// **'DOCUMENTOS'**
+  String get recordTabDocuments;
+
+  /// No description provided for @metricsEmptyTitle.
+  ///
+  /// In es, this message translates to:
+  /// **'Aún no tienes métricas registradas'**
+  String get metricsEmptyTitle;
+
+  /// No description provided for @metricsEmptySubtitle.
+  ///
+  /// In es, this message translates to:
+  /// **'Tu profesional las irá registrando en consulta'**
+  String get metricsEmptySubtitle;
+
+  /// No description provided for @metricsDefaultLabel.
+  ///
+  /// In es, this message translates to:
+  /// **'Métrica'**
+  String get metricsDefaultLabel;
+
+  /// No description provided for @metricsFirstRecord.
+  ///
+  /// In es, this message translates to:
+  /// **'Primer registro'**
+  String get metricsFirstRecord;
+
+  /// No description provided for @consentsEmptyTitle.
+  ///
+  /// In es, this message translates to:
+  /// **'No hay consentimientos firmados'**
+  String get consentsEmptyTitle;
+
+  /// No description provided for @consentsSignedAt.
+  ///
+  /// In es, this message translates to:
+  /// **'Firmado: {date}'**
+  String consentsSignedAt(String date);
+
+  /// No description provided for @weeklyGoalLabel.
+  ///
+  /// In es, this message translates to:
+  /// **'OBJETIVO SEMANAL'**
+  String get weeklyGoalLabel;
+
+  /// No description provided for @weeklyGoalRemaining.
+  ///
+  /// In es, this message translates to:
+  /// **'{count, plural, =1{1 CLASE RESTANTE} other{{count} CLASES RESTANTES}}'**
+  String weeklyGoalRemaining(int count);
+
+  /// No description provided for @weeklyGoalCompleted.
+  ///
+  /// In es, this message translates to:
+  /// **'OBJETIVO CUMPLIDO'**
+  String get weeklyGoalCompleted;
+
+  /// No description provided for @weeklyGoalEncouragement.
+  ///
+  /// In es, this message translates to:
+  /// **'Ánimo, ¡a por tu meta!'**
+  String get weeklyGoalEncouragement;
+
+  /// No description provided for @weeklyGoalGreatWork.
+  ///
+  /// In es, this message translates to:
+  /// **'¡Buen trabajo esta semana!'**
+  String get weeklyGoalGreatWork;
+
+  /// No description provided for @trialPromoExclusive.
+  ///
+  /// In es, this message translates to:
+  /// **'EXCLUSIVO PARA TI'**
+  String get trialPromoExclusive;
+
+  /// No description provided for @trialPromoFreeFirstClass.
+  ///
+  /// In es, this message translates to:
+  /// **'TU PRIMERA CLASE\nES GRATIS'**
+  String get trialPromoFreeFirstClass;
+
+  /// No description provided for @trialPromoTapToBook.
+  ///
+  /// In es, this message translates to:
+  /// **'Toca para reservar ahora'**
+  String get trialPromoTapToBook;
+
+  /// No description provided for @trialPromoUsedBadge.
+  ///
+  /// In es, this message translates to:
+  /// **'YA PROBASTE TU CLASE'**
+  String get trialPromoUsedBadge;
+
+  /// No description provided for @trialPromoBecomeMember.
+  ///
+  /// In es, this message translates to:
+  /// **'¿TE GUSTÓ?\nHAZTE MIEMBRO'**
+  String get trialPromoBecomeMember;
+
+  /// No description provided for @trialPromoCheckPasses.
+  ///
+  /// In es, this message translates to:
+  /// **'Consulta nuestros bonos mensuales'**
+  String get trialPromoCheckPasses;
 }
 
 class _AppLocalizationsDelegate

@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import 'package:salufit_app/core/providers/firebase_providers.dart';
 import 'package:salufit_app/core/theme/app_colors.dart';
 import 'package:salufit_app/core/utils/safe_parsing_extensions.dart';
+import 'package:salufit_app/l10n/generated/app_localizations.dart';
 import 'package:salufit_app/shared/widgets/salufit_header.dart';
 import 'package:salufit_app/shared/widgets/salufit_scaffold.dart';
 
@@ -85,11 +86,12 @@ class _ClientDocumentsScreenState extends State<ClientDocumentsScreen>
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context);
     return SalufitScaffold(
       body: SafeArea(
         child: Column(
           children: [
-            const SalufitHeader(title: 'MI EXPEDIENTE'),
+            SalufitHeader(title: t.recordHeaderTitle),
             TabBar(
               controller: _tabController,
               labelColor: AppColors.primary,
@@ -100,14 +102,14 @@ class _ClientDocumentsScreenState extends State<ClientDocumentsScreen>
                 fontWeight: FontWeight.w700,
               ),
               unselectedLabelStyle: const TextStyle(fontSize: 12),
-              tabs: const [
+              tabs: [
                 Tab(
-                  icon: Icon(Icons.show_chart, size: 18),
-                  text: 'MÉTRICAS',
+                  icon: const Icon(Icons.show_chart, size: 18),
+                  text: t.recordTabMetrics,
                 ),
                 Tab(
-                  icon: Icon(Icons.verified, size: 18),
-                  text: 'DOCUMENTOS',
+                  icon: const Icon(Icons.verified, size: 18),
+                  text: t.recordTabDocuments,
                 ),
               ],
             ),
@@ -145,6 +147,7 @@ class _MetricsTab extends ConsumerWidget {
           .limit(200)
           .snapshots(),
       builder: (context, snapshot) {
+        final t = AppLocalizations.of(context);
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
         }
@@ -157,13 +160,13 @@ class _MetricsTab extends ConsumerWidget {
               children: [
                 Icon(Icons.show_chart, size: 60, color: Colors.grey.shade300),
                 const SizedBox(height: 12),
-                const Text(
-                  'Aún no tienes métricas registradas',
-                  style: TextStyle(color: Colors.grey),
+                Text(
+                  t.metricsEmptyTitle,
+                  style: const TextStyle(color: Colors.grey),
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  'Tu profesional las irá registrando en consulta',
+                  t.metricsEmptySubtitle,
                   style: TextStyle(color: Colors.grey.shade400, fontSize: 12),
                 ),
               ],
@@ -175,7 +178,8 @@ class _MetricsTab extends ConsumerWidget {
         final grouped = <String, List<Map<String, dynamic>>>{};
         for (final doc in allDocs) {
           final data = doc.data()! as Map<String, dynamic>;
-          final nombre = data.safeString('nombre', defaultValue: 'Métrica');
+          final nombre =
+              data.safeString('nombre', defaultValue: t.metricsDefaultLabel);
           grouped.putIfAbsent(nombre, () => []).add(data);
         }
 
@@ -244,7 +248,7 @@ class _MetricEvolutionCard extends StatelessWidget {
         deltaColor = Colors.grey;
       }
     } else {
-      deltaText = 'Primer registro';
+      deltaText = AppLocalizations.of(context).metricsFirstRecord;
       deltaColor = Colors.grey;
     }
 
@@ -533,6 +537,7 @@ class _SignedConsentsTab extends ConsumerWidget {
         }).toList();
 
         if (docs.isEmpty) {
+          final t = AppLocalizations.of(context);
           return Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -543,9 +548,9 @@ class _SignedConsentsTab extends ConsumerWidget {
                   color: Colors.grey.shade300,
                 ),
                 const SizedBox(height: 12),
-                const Text(
-                  'No hay consentimientos firmados',
-                  style: TextStyle(color: Colors.grey),
+                Text(
+                  t.consentsEmptyTitle,
+                  style: const TextStyle(color: Colors.grey),
                 ),
               ],
             ),

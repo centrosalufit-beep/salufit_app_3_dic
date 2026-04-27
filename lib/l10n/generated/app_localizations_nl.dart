@@ -897,4 +897,195 @@ class AppLocalizationsNl extends AppLocalizations {
 
   @override
   String get materialDefaultFamily => 'Training';
+
+  @override
+  String get classListHeaderTitle => 'GROEPSLESSEN';
+
+  @override
+  String get classListLoadErrorMsg => 'Fout bij laden van lessen';
+
+  @override
+  String get classListMonitorLabel => 'TRAINER';
+
+  @override
+  String get classListStaffDefault => 'TEAM';
+
+  @override
+  String get classBookedUpper => 'GERESERVEERD';
+
+  @override
+  String get classFullUpper => 'VOL';
+
+  @override
+  String get classBookUpper => 'RESERVEREN';
+
+  @override
+  String get classBookConfirmShortTitle => 'Minder dan 24u';
+
+  @override
+  String get classBookConfirmShortMsg =>
+      'Als u nu reserveert, kunt u volgens ons beleid niet annuleren of de credit terugkrijgen.';
+
+  @override
+  String get commonReturnUpper => 'TERUG';
+
+  @override
+  String get documentsScreenTitle => 'DOCUMENTEN';
+
+  @override
+  String get documentsTabAll => 'Alle';
+
+  @override
+  String get documentsTabPending => 'In afwachting';
+
+  @override
+  String get documentsTabSigned => 'Ondertekend';
+
+  @override
+  String get documentsLoadError => 'Fout bij laden van documenten';
+
+  @override
+  String get documentsEmptyAll => 'U heeft geen documenten beschikbaar';
+
+  @override
+  String get documentsEmptyPending => 'U heeft geen documenten in afwachting';
+
+  @override
+  String get documentsEmptySigned => 'U heeft nog geen documenten ondertekend';
+
+  @override
+  String documentsCreatedOn(String date) {
+    return 'Gemaakt: $date';
+  }
+
+  @override
+  String documentsSignedOn(String date) {
+    return 'Ondertekend: $date';
+  }
+
+  @override
+  String get documentsViewButton => 'Bekijken';
+
+  @override
+  String get documentsSignButton => 'Ondertekenen';
+
+  @override
+  String get documentsTypeContract => 'Contract';
+
+  @override
+  String get documentsTypeInvoice => 'Factuur';
+
+  @override
+  String get documentsTypeReport => 'Rapport';
+
+  @override
+  String get documentsTypeReceipt => 'Bon';
+
+  @override
+  String get documentsTypeOther => 'Document';
+
+  @override
+  String get goalsCardTitle => 'DOELEN';
+
+  @override
+  String get goalsCardCurrentTitle => 'UW HUIDIGE DOEL';
+
+  @override
+  String get goalsCardEmpty =>
+      'Uw professional heeft nog geen doelen voor u gedefinieerd';
+
+  @override
+  String goalsCardSetByPro(String name) {
+    return 'Ingesteld door $name';
+  }
+
+  @override
+  String goalsCardProgress(int percent) {
+    return 'Voortgang: $percent%';
+  }
+
+  @override
+  String goalsCardDeadline(String date) {
+    return 'Deadline: $date';
+  }
+
+  @override
+  String get goalsCardCompleted => 'Doel bereikt!';
+
+  @override
+  String get goalsCardOverdue => 'Deadline verstreken';
+
+  @override
+  String get goalsCardSeeHistory => 'Geschiedenis bekijken';
+
+  @override
+  String get recordHeaderTitle => 'MIJN DOSSIER';
+
+  @override
+  String get recordTabMetrics => 'METINGEN';
+
+  @override
+  String get recordTabDocuments => 'DOCUMENTEN';
+
+  @override
+  String get metricsEmptyTitle => 'Nog geen metingen geregistreerd';
+
+  @override
+  String get metricsEmptySubtitle =>
+      'Uw professional registreert ze tijdens de consultatie';
+
+  @override
+  String get metricsDefaultLabel => 'Meting';
+
+  @override
+  String get metricsFirstRecord => 'Eerste registratie';
+
+  @override
+  String get consentsEmptyTitle => 'Geen ondertekende toestemmingen';
+
+  @override
+  String consentsSignedAt(String date) {
+    return 'Ondertekend: $date';
+  }
+
+  @override
+  String get weeklyGoalLabel => 'WEKELIJKS DOEL';
+
+  @override
+  String weeklyGoalRemaining(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count LESSEN OVER',
+      one: '1 LES OVER',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get weeklyGoalCompleted => 'DOEL BEHAALD';
+
+  @override
+  String get weeklyGoalEncouragement => 'Ga zo door, u kunt het!';
+
+  @override
+  String get weeklyGoalGreatWork => 'Geweldig werk deze week!';
+
+  @override
+  String get trialPromoExclusive => 'EXCLUSIEF VOOR U';
+
+  @override
+  String get trialPromoFreeFirstClass => 'UW EERSTE LES\nIS GRATIS';
+
+  @override
+  String get trialPromoTapToBook => 'Tik om te reserveren';
+
+  @override
+  String get trialPromoUsedBadge => 'U HEEFT UW LES GEPROBEERD';
+
+  @override
+  String get trialPromoBecomeMember => 'VOND U HET LEUK?\nWORD LID';
+
+  @override
+  String get trialPromoCheckPasses => 'Bekijk onze maandelijkse passen';
 }

@@ -882,4 +882,195 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get materialDefaultFamily => 'Training';
+
+  @override
+  String get classListHeaderTitle => 'GROUP CLASSES';
+
+  @override
+  String get classListLoadErrorMsg => 'Error loading classes';
+
+  @override
+  String get classListMonitorLabel => 'TRAINER';
+
+  @override
+  String get classListStaffDefault => 'STAFF';
+
+  @override
+  String get classBookedUpper => 'BOOKED';
+
+  @override
+  String get classFullUpper => 'FULL';
+
+  @override
+  String get classBookUpper => 'BOOK';
+
+  @override
+  String get classBookConfirmShortTitle => 'Less than 24h';
+
+  @override
+  String get classBookConfirmShortMsg =>
+      'If you book now, you will not be able to cancel or recover the token according to our policy.';
+
+  @override
+  String get commonReturnUpper => 'BACK';
+
+  @override
+  String get documentsScreenTitle => 'DOCUMENTS';
+
+  @override
+  String get documentsTabAll => 'All';
+
+  @override
+  String get documentsTabPending => 'Pending';
+
+  @override
+  String get documentsTabSigned => 'Signed';
+
+  @override
+  String get documentsLoadError => 'Error loading documents';
+
+  @override
+  String get documentsEmptyAll => 'You have no documents available';
+
+  @override
+  String get documentsEmptyPending => 'You have no pending documents';
+
+  @override
+  String get documentsEmptySigned => 'You haven\'t signed any documents yet';
+
+  @override
+  String documentsCreatedOn(String date) {
+    return 'Created: $date';
+  }
+
+  @override
+  String documentsSignedOn(String date) {
+    return 'Signed: $date';
+  }
+
+  @override
+  String get documentsViewButton => 'View';
+
+  @override
+  String get documentsSignButton => 'Sign';
+
+  @override
+  String get documentsTypeContract => 'Contract';
+
+  @override
+  String get documentsTypeInvoice => 'Invoice';
+
+  @override
+  String get documentsTypeReport => 'Report';
+
+  @override
+  String get documentsTypeReceipt => 'Receipt';
+
+  @override
+  String get documentsTypeOther => 'Document';
+
+  @override
+  String get goalsCardTitle => 'GOALS';
+
+  @override
+  String get goalsCardCurrentTitle => 'YOUR CURRENT GOAL';
+
+  @override
+  String get goalsCardEmpty =>
+      'Your professional hasn\'t set any goals for you yet';
+
+  @override
+  String goalsCardSetByPro(String name) {
+    return 'Set by $name';
+  }
+
+  @override
+  String goalsCardProgress(int percent) {
+    return 'Progress: $percent%';
+  }
+
+  @override
+  String goalsCardDeadline(String date) {
+    return 'Deadline: $date';
+  }
+
+  @override
+  String get goalsCardCompleted => 'Goal achieved!';
+
+  @override
+  String get goalsCardOverdue => 'Deadline passed';
+
+  @override
+  String get goalsCardSeeHistory => 'See history';
+
+  @override
+  String get recordHeaderTitle => 'MY RECORD';
+
+  @override
+  String get recordTabMetrics => 'METRICS';
+
+  @override
+  String get recordTabDocuments => 'DOCUMENTS';
+
+  @override
+  String get metricsEmptyTitle => 'You have no metrics recorded yet';
+
+  @override
+  String get metricsEmptySubtitle =>
+      'Your professional will record them during consultation';
+
+  @override
+  String get metricsDefaultLabel => 'Metric';
+
+  @override
+  String get metricsFirstRecord => 'First record';
+
+  @override
+  String get consentsEmptyTitle => 'No signed consents';
+
+  @override
+  String consentsSignedAt(String date) {
+    return 'Signed: $date';
+  }
+
+  @override
+  String get weeklyGoalLabel => 'WEEKLY GOAL';
+
+  @override
+  String weeklyGoalRemaining(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count CLASSES LEFT',
+      one: '1 CLASS LEFT',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get weeklyGoalCompleted => 'GOAL ACHIEVED';
+
+  @override
+  String get weeklyGoalEncouragement => 'Keep going, you can do it!';
+
+  @override
+  String get weeklyGoalGreatWork => 'Great work this week!';
+
+  @override
+  String get trialPromoExclusive => 'EXCLUSIVE FOR YOU';
+
+  @override
+  String get trialPromoFreeFirstClass => 'YOUR FIRST CLASS\nIS FREE';
+
+  @override
+  String get trialPromoTapToBook => 'Tap to book now';
+
+  @override
+  String get trialPromoUsedBadge => 'YOU TRIED YOUR CLASS';
+
+  @override
+  String get trialPromoBecomeMember => 'DID YOU LIKE IT?\nBECOME A MEMBER';
+
+  @override
+  String get trialPromoCheckPasses => 'Check out our monthly passes';
 }
