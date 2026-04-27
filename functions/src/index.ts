@@ -619,6 +619,156 @@ export const cancelarReserva = onRequest(async (req, res) => {
 });
 
 // ═══════════════════════════════════════════════════════════════
+// VIDEO FEEDBACK ROJO — CREAR TAREA PARA EL PROFESIONAL (SERVIDOR)
+// ═══════════════════════════════════════════════════════════════
+// Trigger: cuando un cliente actualiza el campo `feedback` de su
+// exercise_assignment. Si `feedback.alerta` pasa a true (cliente marca
+// dificultad ROJA o pulgar abajo en el reproductor), creamos o
+// actualizamos una tarea en staff_tasks asignada al profesional que
+// asignó originalmente el ejercicio.
+//
+// Razón: el cliente NO puede listar/escribir en staff_tasks ni leer el
+// perfil del profesional por las Firestore Rules — esa lógica vive aquí
+// porque admin SDK bypassea las reglas.
+async function resolveUserName(
+    uid: string,
+): Promise<string> {
+    try {
+        const doc = await db.collection("users_app").doc(uid).get();
+        if (!doc.exists) return uid;
+        const data = doc.data() ?? {};
+        const completo = (data.nombreCompleto as string | undefined) || "";
+        if (completo.trim()) return completo;
+        const nombre = (data.nombre as string | undefined) || "";
+        const apellidos = (data.apellidos as string | undefined) || "";
+        const combo = `${nombre} ${apellidos}`.trim();
+        if (combo) return combo;
+        return (data.email as string | undefined) || uid;
+    } catch {
+        return uid;
+    }
+}
+
+export const onExerciseFeedbackChange = onDocumentWritten(
+    {
+        document: "exercise_assignments/{assignmentId}",
+        region: "europe-southwest1",
+    },
+    async (event) => {
+        const before = event.data?.before.data();
+        const after = event.data?.after.data();
+        if (!after) return;
+
+        const beforeAlerta =
+            (before?.feedback?.alerta as boolean | undefined) ?? false;
+        const afterAlerta =
+            (after.feedback?.alerta as boolean | undefined) ?? false;
+
+        // Solo actuamos cuando feedback.alerta pasa de false→true
+        // o cuando el cliente repite la marca roja con alerta ya en true
+        // y la fecha cambia (re-marcado).
+        const beforeFecha = before?.feedback?.fecha;
+        const afterFecha = after.feedback?.fecha;
+        const fechaCambia =
+            JSON.stringify(beforeFecha) !== JSON.stringify(afterFecha);
+
+        if (!afterAlerta) return;
+        if (beforeAlerta && !fechaCambia) return;
+
+        // Solo crear tarea si la dificultad reportada es 'dificil'
+        // (rojo). Pulgar abajo también marca alerta=true pero no genera
+        // tarea — solo deja constancia en feedback.
+        const dificultad = after.feedback?.dificultad as
+            | string
+            | undefined;
+        if (dificultad !== "dificil") return;
+
+        const clientId = (after.userId ?? after.clientId ?? "") as string;
+        const assignedBy =
+            (after.assignedBy ?? after.professionalId ?? "") as string;
+        const exerciseId =
+            (after.exerciseId ?? after.ejercicioId ?? event.params.assignmentId) as string;
+        const exerciseName =
+            (after.nombre ?? after.exerciseName ?? "Ejercicio") as string;
+        const videoUrl =
+            (after.urlVideo ?? after.videoUrl ?? "") as string;
+
+        if (!clientId || !assignedBy) {
+            functions.logger.warn(
+                "Assignment sin userId o assignedBy — tarea no creada",
+                { assignmentId: event.params.assignmentId },
+            );
+            return;
+        }
+
+        const [clientName, assignedToName] = await Promise.all([
+            resolveUserName(clientId),
+            resolveUserName(assignedBy),
+        ]);
+
+        const tasksCol = db.collection("staff_tasks");
+
+        // Dedup: si ya hay tarea pendiente para (clientId+exerciseId+type),
+        // incrementar contador y refrescar fechas. Sino, crear nueva.
+        const existing = await tasksCol
+            .where("type", "==", "video_difficulty_red")
+            .where("clientId", "==", clientId)
+            .where("exerciseId", "==", exerciseId)
+            .where("estado", "==", "pendiente")
+            .limit(1)
+            .get();
+
+        if (!existing.empty) {
+            await existing.docs[0].ref.update({
+                reportCount: admin.firestore.FieldValue.increment(1),
+                lastReportAt: admin.firestore.FieldValue.serverTimestamp(),
+                pushPending: true,
+            });
+            functions.logger.info("staff_tasks reabierta (dedup)", {
+                taskId: existing.docs[0].id,
+                clientId,
+                exerciseId,
+            });
+            return;
+        }
+
+        const fechaLimite = admin.firestore.Timestamp.fromDate(
+            new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        );
+        const created = await tasksCol.add({
+            titulo: `Dificultad alta reportada en ${exerciseName}`,
+            descripcion:
+                `${clientName} ha marcado este ejercicio en rojo (muy difícil). ` +
+                "Revisa si conviene ajustar la progresión o sustituirlo.",
+            creadoPorId: "system",
+            creadoPorNombre: "Sistema (feedback automático)",
+            asignadoAId: assignedBy,
+            asignadoANombre: assignedToName,
+            fechaLimite,
+            estado: "pendiente",
+            fechaCreacion: admin.firestore.FieldValue.serverTimestamp(),
+            type: "video_difficulty_red",
+            clientId,
+            clientName,
+            exerciseId,
+            exerciseName,
+            videoUrl,
+            assignmentId: event.params.assignmentId,
+            reportCount: 1,
+            firstReportAt: admin.firestore.FieldValue.serverTimestamp(),
+            lastReportAt: admin.firestore.FieldValue.serverTimestamp(),
+            pushPending: true,
+        });
+        functions.logger.info("staff_tasks creada", {
+            taskId: created.id,
+            clientId,
+            exerciseId,
+            assignedBy,
+        });
+    },
+);
+
+// ═══════════════════════════════════════════════════════════════
 // VIDEO FEEDBACK ROJO — PUSH AL PROFESIONAL
 // ═══════════════════════════════════════════════════════════════
 // Trigger Firestore: cuando se crea o actualiza una staff_tasks con

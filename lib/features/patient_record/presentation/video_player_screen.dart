@@ -243,9 +243,13 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
       ));
     }
 
-    // Trigger tarea para el profesional cuando el cliente marca rojo.
+    // Si el cliente ha marcado rojo, la creación de la tarea para el
+    // profesional la hace una Cloud Function (onExerciseFeedbackChange)
+    // que escucha cambios de feedback.alerta en exercise_assignments.
+    // El cliente NO escribe directamente en staff_tasks por seguridad.
+    // assignmentRef se mantiene por compatibilidad con _persistirFeedbackEnBackground.
     if (esRojo) {
-      unawaited(_crearOActualizarTareaDificultadRoja(assignmentRef));
+      // No-op: la Cloud Function `onExerciseFeedbackChange` se encarga.
     }
   }
 
@@ -309,111 +313,13 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     }
   }
 
-  // Crea o actualiza una tarea en `staff_tasks` cuando el cliente marca
-  // dificultad ROJA. La colección staff_tasks es la que ya consume la
-  // pantalla ProfessionalTasksScreen, así el profesional ve estas tareas
-  // en el mismo sitio que las que ya creaba manualmente.
-  // Deduplica por (type, clientId, exerciseId, estado='pendiente').
-  // Si la tarea estaba 'completada', crea una nueva (problema reapareció).
-  Future<void> _crearOActualizarTareaDificultadRoja(
-    DocumentReference<Map<String, dynamic>> assignmentRef,
-  ) async {
-    try {
-      final assignmentSnap = await assignmentRef.get();
-      if (!assignmentSnap.exists) return;
-      final data = assignmentSnap.data() ?? {};
-
-      final clientId = (data['userId'] ?? data['clientId'] ?? '') as String;
-      final assignedBy =
-          (data['assignedBy'] ?? data['professionalId'] ?? '') as String;
-      final exerciseId =
-          (data['exerciseId'] ?? data['ejercicioId'] ?? widget.assignmentId)
-              as String;
-      final exerciseName =
-          (data['nombre'] ?? data['exerciseName'] ?? widget.title) as String;
-
-      if (clientId.isEmpty || assignedBy.isEmpty) {
-        debugPrint('⚠️ Tarea NO creada: assignment sin userId o assignedBy');
-        return;
-      }
-
-      // Lookup nombres para que la card lo muestre sin extra reads
-      final db = FirebaseFirestore.instance;
-      final clientName = await _resolverNombreUsuario(db, clientId);
-      final assignedToName = await _resolverNombreUsuario(db, assignedBy);
-
-      final tasksCol = db.collection('staff_tasks');
-
-      // Buscar tarea pendiente existente para deduplicar.
-      final existing = await tasksCol
-          .where('type', isEqualTo: 'video_difficulty_red')
-          .where('clientId', isEqualTo: clientId)
-          .where('exerciseId', isEqualTo: exerciseId)
-          .where('estado', isEqualTo: 'pendiente')
-          .limit(1)
-          .get();
-
-      if (existing.docs.isNotEmpty) {
-        await existing.docs.first.reference.update({
-          'reportCount': FieldValue.increment(1),
-          'lastReportAt': FieldValue.serverTimestamp(),
-          'pushPending': true,
-        });
-      } else {
-        final fechaLimite =
-            DateTime.now().add(const Duration(days: 7));
-        await tasksCol.add({
-          // Campos compatibles con _TaskList existente:
-          'titulo': 'Dificultad alta reportada en $exerciseName',
-          'descripcion':
-              '$clientName ha marcado este ejercicio en rojo (muy difícil). '
-              'Revisa si conviene ajustar la progresión o sustituirlo.',
-          'creadoPorId': 'system',
-          'creadoPorNombre': 'Sistema (feedback automático)',
-          'asignadoAId': assignedBy,
-          'asignadoANombre': assignedToName,
-          'fechaLimite': Timestamp.fromDate(fechaLimite),
-          'estado': 'pendiente',
-          'fechaCreacion': FieldValue.serverTimestamp(),
-          // Campos extra propios de este tipo de tarea
-          'type': 'video_difficulty_red',
-          'clientId': clientId,
-          'clientName': clientName,
-          'exerciseId': exerciseId,
-          'exerciseName': exerciseName,
-          'videoUrl': widget.videoUrl,
-          'assignmentId': widget.assignmentId,
-          'reportCount': 1,
-          'firstReportAt': FieldValue.serverTimestamp(),
-          'lastReportAt': FieldValue.serverTimestamp(),
-          'pushPending': true,
-        });
-      }
-    } catch (e, st) {
-      debugPrint('❌ Error creando tarea dificultad roja: $e');
-      debugPrintStack(stackTrace: st);
-    }
-  }
-
-  Future<String> _resolverNombreUsuario(
-    FirebaseFirestore db,
-    String uid,
-  ) async {
-    try {
-      final doc = await db.collection('users_app').doc(uid).get();
-      if (!doc.exists) return uid;
-      final data = doc.data() ?? {};
-      final completo = (data['nombreCompleto'] as String?) ?? '';
-      if (completo.trim().isNotEmpty) return completo;
-      final nombre = (data['nombre'] as String?) ?? '';
-      final apellidos = (data['apellidos'] as String?) ?? '';
-      final combo = '$nombre $apellidos'.trim();
-      if (combo.isNotEmpty) return combo;
-      return (data['email'] as String?) ?? uid;
-    } catch (_) {
-      return uid;
-    }
-  }
+  // La creación / dedup de tareas en staff_tasks la hace una Cloud Function
+  // (onExerciseFeedbackChange) en lugar del cliente, por dos motivos:
+  // 1. Las Firestore Rules NO permiten al cliente leer/listar staff_tasks
+  //    (es información operativa interna del personal).
+  // 2. Tampoco puede leer users_app/{otroUsuario} para resolver nombres.
+  // El cliente solo escribe feedback.alerta=true en su exercise_assignment;
+  // el servidor (admin SDK) hace la dedup y crea/actualiza la tarea.
 
   // =========================================================
   // 2.b ONBOARDING / TUTORIAL

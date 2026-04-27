@@ -228,23 +228,11 @@ service cloud.firestore {
     // TAREAS DE STAFF
     // ═══════════════════════════════════════════════════════════════
     match /staff_tasks/{id} {
-      allow read: if isStaff();
-      // El cliente puede crear tareas de tipo `video_difficulty_red`
-      // automáticas desde el reproductor cuando marca rojo, siempre que
-      // él mismo sea el `clientId` de la tarea.
-      allow create: if isStaff()
-                    || (isAuthenticated()
-                        && request.resource.data.type == 'video_difficulty_red'
-                        && request.resource.data.clientId == request.auth.uid);
-      // El cliente puede ACTUALIZAR su propia tarea video_difficulty_red
-      // existente solo para incrementar el contador de reportes y
-      // refrescar la fecha (deduplicación). No puede cambiar otros campos.
-      allow update: if isStaff()
-                    || (isAuthenticated()
-                        && resource.data.type == 'video_difficulty_red'
-                        && resource.data.clientId == request.auth.uid
-                        && request.resource.data.diff(resource.data).affectedKeys()
-                            .hasOnly(['reportCount', 'lastReportAt', 'pushPending']));
+      // staff_tasks es información operativa interna del personal: solo
+      // lectura/escritura para staff. Las tareas video_difficulty_red
+      // las crea una Cloud Function (admin SDK) cuando el cliente marca
+      // rojo en el reproductor; el cliente nunca las escribe directamente.
+      allow read, create, update: if isStaff();
       allow delete: if isAdmin();
     }
 
