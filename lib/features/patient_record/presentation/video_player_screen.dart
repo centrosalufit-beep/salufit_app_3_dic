@@ -6,6 +6,8 @@ import 'package:chewie/chewie.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'; // Para HapticFeedback y orientación
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:tutorial_coach_mark/tutorial_coach_mark.dart';
 import 'package:video_player/video_player.dart';
 
 class VideoPlayerScreen extends StatefulWidget {
@@ -49,15 +51,25 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   int _cfgWork = 60;
   int _cfgRest = 40;
 
-  // URL de demo - en produccion obtener via FirebaseStorage.instance.ref().getDownloadURL()
-  final String _fixedVideoUrl =
+  // Fallback solo si el asignment no trae URL (no debería pasar en producción).
+  static const String _fallbackDemoVideoUrl =
       'https://firebasestorage.googleapis.com/v0/b/salufitnewapp.firebasestorage.app/o/1.mp4?alt=media';
+
+  // --- TUTORIAL / ONBOARDING ---
+  final GlobalKey _likeKey = GlobalKey();
+  final GlobalKey _semaforoKey = GlobalKey();
+  final GlobalKey _timerKey = GlobalKey();
+  TutorialCoachMark? _tutorial;
+  static const String _tutorialPrefsKey = 'video_player_tutorial_seen_v1';
 
   @override
   void initState() {
     super.initState();
     debugPrint('Iniciando reproductor para: ${widget.title}');
     _initializePlayer();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _maybeShowTutorial();
+    });
   }
 
   @override
@@ -65,6 +77,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     _workoutTimer?.cancel();
     _videoPlayerController?.dispose();
     _chewieController?.dispose();
+    _tutorial?.finish();
     // Restaurar orientación vertical al salir por si acaso
     SystemChrome.setPreferredOrientations([
       DeviceOrientation.portraitUp,
@@ -73,16 +86,21 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   }
 
   // =========================================================
-  // 1. INICIALIZACIÓN DEL VIDEO (MODIFICADO)
+  // 1. INICIALIZACIÓN DEL VIDEO
   // =========================================================
   Future<void> _initializePlayer() async {
-    // Nota del Arquitecto: Aquí ignoramos widget.videoUrl temporalmente
-    // para asegurar la carga del video de prueba solicitado.
+    // Usa el videoUrl que el profesional asignó al cliente.
+    // Solo cae al demo si la URL llega vacía (asignment mal formado).
+    final url = widget.videoUrl.trim().isEmpty
+        ? _fallbackDemoVideoUrl
+        : widget.videoUrl.trim();
+    if (url == _fallbackDemoVideoUrl) {
+      debugPrint('⚠️ videoUrl vacío en assignment ${widget.assignmentId} — usando demo');
+    }
 
     try {
-      // Intentamos cargar el video con la URL fija
       _videoPlayerController = VideoPlayerController.networkUrl(
-        Uri.parse(_fixedVideoUrl),
+        Uri.parse(url),
       );
 
       await _videoPlayerController!.initialize();
@@ -152,20 +170,20 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   // =========================================================
   // 2. LÓGICA DE FEEDBACK (FIRESTORE)
   // =========================================================
-  void _enviarFeedback(String campo, Object valor) {
+  Future<void> _enviarFeedback(String campo, Object valor) async {
     HapticFeedback.lightImpact(); // Feedback táctil
+    final esRojo = campo == 'dificultad' && valor == 'dificil';
 
     final updates = <String, Object?>{
       'feedback.$campo': valor,
       'feedback.fecha': FieldValue.serverTimestamp(),
-      'feedback.alerta': (campo == 'gustado' && valor == false) ||
-          (campo == 'dificultad' && valor == 'dificil'),
+      'feedback.alerta': (campo == 'gustado' && valor == false) || esRojo,
     };
 
-    FirebaseFirestore.instance
+    final assignmentRef = FirebaseFirestore.instance
         .collection('exercise_assignments')
-        .doc(widget.assignmentId)
-        .update(updates);
+        .doc(widget.assignmentId);
+    await assignmentRef.update(updates);
 
     setState(() {
       if (campo == 'gustado' && valor is bool) {
@@ -175,6 +193,250 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
         _dificultad = valor;
       }
     });
+
+    // Trigger tarea para el profesional cuando el cliente marca rojo.
+    if (esRojo) {
+      unawaited(_crearOActualizarTareaDificultadRoja(assignmentRef));
+    }
+  }
+
+  // Crea o actualiza una tarea en `internal_tasks` cuando el cliente marca
+  // dificultad ROJA. Deduplica por (clientId, exerciseId) si ya existe una
+  // tarea con status='pendiente'; si existe pero está 'resuelta', crea una
+  // nueva (problema reapareció). Visibilidad: profesional asignador + admin.
+  Future<void> _crearOActualizarTareaDificultadRoja(
+    DocumentReference<Map<String, dynamic>> assignmentRef,
+  ) async {
+    try {
+      final assignmentSnap = await assignmentRef.get();
+      if (!assignmentSnap.exists) return;
+      final data = assignmentSnap.data() ?? {};
+
+      final clientId = (data['userId'] ?? data['clientId'] ?? '') as String;
+      final assignedBy =
+          (data['assignedBy'] ?? data['professionalId'] ?? '') as String;
+      final exerciseId =
+          (data['exerciseId'] ?? data['ejercicioId'] ?? widget.assignmentId)
+              as String;
+      final exerciseName =
+          (data['nombre'] ?? data['exerciseName'] ?? widget.title) as String;
+
+      if (clientId.isEmpty || assignedBy.isEmpty) {
+        debugPrint('⚠️ Tarea NO creada: assignment sin userId o assignedBy');
+        return;
+      }
+
+      final tasksCol = FirebaseFirestore.instance.collection('internal_tasks');
+
+      // Buscar tarea pendiente existente para deduplicar.
+      final existing = await tasksCol
+          .where('type', isEqualTo: 'video_difficulty_red')
+          .where('clientId', isEqualTo: clientId)
+          .where('exerciseId', isEqualTo: exerciseId)
+          .where('status', isEqualTo: 'pendiente')
+          .limit(1)
+          .get();
+
+      if (existing.docs.isNotEmpty) {
+        // Actualizar contador y fecha del último reporte
+        await existing.docs.first.reference.update({
+          'reportCount': FieldValue.increment(1),
+          'lastReportAt': FieldValue.serverTimestamp(),
+          'pushPending': true,
+        });
+      } else {
+        // Crear nueva tarea
+        await tasksCol.add({
+          'type': 'video_difficulty_red',
+          'clientId': clientId,
+          'exerciseId': exerciseId,
+          'exerciseName': exerciseName,
+          'videoUrl': widget.videoUrl,
+          'assignmentId': widget.assignmentId,
+          'assignedBy': assignedBy,
+          'visibleTo': [assignedBy], // admin se considera por rol, no por uid
+          'status': 'pendiente',
+          'reportCount': 1,
+          'firstReportAt': FieldValue.serverTimestamp(),
+          'lastReportAt': FieldValue.serverTimestamp(),
+          'createdAt': FieldValue.serverTimestamp(),
+          'pushPending': true,
+        });
+      }
+    } catch (e, st) {
+      debugPrint('❌ Error creando tarea dificultad roja: $e');
+      debugPrintStack(stackTrace: st);
+    }
+  }
+
+  // =========================================================
+  // 2.b ONBOARDING / TUTORIAL
+  // =========================================================
+  Future<void> _maybeShowTutorial() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final seen = prefs.getBool(_tutorialPrefsKey) ?? false;
+      if (seen || !mounted) return;
+      // Pequeño delay para que las keys ya estén montadas
+      await Future<void>.delayed(const Duration(milliseconds: 600));
+      if (!mounted) return;
+      _showTutorial();
+    } catch (e) {
+      debugPrint('Tutorial init error: $e');
+    }
+  }
+
+  Future<void> _markTutorialSeen() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_tutorialPrefsKey, true);
+    } catch (_) {}
+  }
+
+  void _showTutorial() {
+    _tutorial = TutorialCoachMark(
+      targets: _buildTutorialTargets(),
+      opacityShadow: 0.85,
+      paddingFocus: 8,
+      textSkip: 'SALTAR',
+      textStyleSkip: const TextStyle(
+        color: Colors.white,
+        fontWeight: FontWeight.bold,
+        fontSize: 14,
+      ),
+      onClickTarget: (_) {},
+      onSkip: () {
+        _markTutorialSeen();
+        return true;
+      },
+      onFinish: _markTutorialSeen,
+    );
+    _tutorial!.show(context: context);
+  }
+
+  List<TargetFocus> _buildTutorialTargets() {
+    return [
+      TargetFocus(
+        identify: 'tutorial_likes',
+        keyTarget: _likeKey,
+        alignSkip: Alignment.topRight,
+        shape: ShapeLightFocus.RRect,
+        radius: 18,
+        contents: [
+          TargetContent(
+            align: ContentAlign.top,
+            child: _tutorialContent(
+              title: '¿Te gustó el ejercicio?',
+              body:
+                  'Pulsa el pulgar arriba si te ha gustado, o el de abajo si no. '
+                  'Así sabremos qué ejercicios te resultan más motivadores.',
+              step: 1,
+            ),
+          ),
+        ],
+      ),
+      TargetFocus(
+        identify: 'tutorial_semaforo',
+        keyTarget: _semaforoKey,
+        alignSkip: Alignment.topRight,
+        shape: ShapeLightFocus.RRect,
+        radius: 18,
+        contents: [
+          TargetContent(
+            align: ContentAlign.top,
+            child: _tutorialContent(
+              title: 'Marca la dificultad',
+              body:
+                  'Verde = fácil, naranja = regular, rojo = MUY DIFÍCIL.\n\n'
+                  'Es importante que marques rojo si no has podido hacerlo. '
+                  'Tu profesional recibirá un aviso para cambiar el ejercicio.',
+              step: 2,
+            ),
+          ),
+        ],
+      ),
+      TargetFocus(
+        identify: 'tutorial_timer',
+        keyTarget: _timerKey,
+        alignSkip: Alignment.topRight,
+        shape: ShapeLightFocus.RRect,
+        radius: 22,
+        contents: [
+          TargetContent(
+            align: ContentAlign.top,
+            child: _tutorialContent(
+              title: 'Empieza tu rutina',
+              body:
+                  'Pulsa "COMENZAR RUTINA" para activar el temporizador y '
+                  'hacer los ejercicios al ritmo que tu profesional te '
+                  'recomendó. Puedes pausar y reanudar cuando quieras.',
+              step: 3,
+              isLast: true,
+            ),
+          ),
+        ],
+      ),
+    ];
+  }
+
+  Widget _tutorialContent({
+    required String title,
+    required String body,
+    required int step,
+    bool isLast = false,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: Colors.teal,
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Text(
+              'PASO $step / 3',
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 11,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 1,
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            title,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 22,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            body,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 15,
+              height: 1.4,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            isLast ? 'Pulsa fuera para terminar' : 'Pulsa fuera para continuar →',
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.7),
+              fontSize: 12,
+              fontStyle: FontStyle.italic,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   // =========================================================
@@ -401,6 +663,11 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   // =========================================================
   @override
   Widget build(BuildContext context) {
+    // viewPadding mantiene el inset de la barra de gestos / nav bar de
+    // Android + safe area inferior de iPhone para que los botones del
+    // temporizador no queden tapados por el sistema.
+    final bottomInset = MediaQuery.viewPaddingOf(context).bottom;
+
     return Scaffold(
       backgroundColor: const Color(
         0xFF1A1A1A,
@@ -415,66 +682,67 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
         centerTitle: true,
       ),
 
-      body: Column(
-        children: <Widget>[
-          // --- ZONA 1: REPRODUCTOR DE VIDEO (Flex 3) ---
-          Expanded(
-            flex: 3,
-            child: Container(
-              width: double.infinity,
-              margin: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.black,
-                borderRadius: BorderRadius.circular(20),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.5),
-                    blurRadius: 15,
-                    offset: const Offset(0, 5),
-                  ),
-                ],
-              ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(20),
-                child: _buildVideoContent(),
-              ),
-            ),
-          ),
-
-          // --- ZONA 2: CONTROLES Y FEEDBACK (Flex 5) ---
-          Expanded(
-            flex: 5,
-            child: Container(
-              width: double.infinity,
-              decoration: const BoxDecoration(
-                color: Color(0xFFF5F7FA), // Fondo claro para los controles
-                borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
-              ),
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(20, 30, 20, 20),
-                physics: const BouncingScrollPhysics(),
-                child: Column(
-                  children: <Widget>[
-                    // Panel de Feedback
-                    _buildFeedbackPanel(),
-
-                    const SizedBox(height: 30),
-
-                    // Panel de Temporizador (Activo o Inactivo)
-                    AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 300),
-                      child: _isTimerRunning
-                          ? _buildActiveTimer()
-                          : _buildIdleTimer(),
+      body: SafeArea(
+        top: false,
+        child: Column(
+          children: <Widget>[
+            // --- ZONA 1: REPRODUCTOR DE VIDEO (Flex 3) ---
+            Expanded(
+              flex: 3,
+              child: Container(
+                width: double.infinity,
+                margin: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.black,
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.5),
+                      blurRadius: 15,
+                      offset: const Offset(0, 5),
                     ),
-
-                    const SizedBox(height: 20), // Padding extra abajo
                   ],
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(20),
+                  child: _buildVideoContent(),
                 ),
               ),
             ),
-          ),
-        ],
+
+            // --- ZONA 2: CONTROLES Y FEEDBACK (Flex 5) ---
+            Expanded(
+              flex: 5,
+              child: Container(
+                width: double.infinity,
+                decoration: const BoxDecoration(
+                  color: Color(0xFFF5F7FA), // Fondo claro para los controles
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
+                ),
+                child: SingleChildScrollView(
+                  padding: EdgeInsets.fromLTRB(20, 30, 20, 24 + bottomInset),
+                  physics: const BouncingScrollPhysics(),
+                  child: Column(
+                    children: <Widget>[
+                      // Panel de Feedback
+                      _buildFeedbackPanel(),
+
+                      const SizedBox(height: 30),
+
+                      // Panel de Temporizador (Activo o Inactivo)
+                      AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 300),
+                        child: _isTimerRunning
+                            ? _buildActiveTimer()
+                            : _buildIdleTimer(),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -519,6 +787,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
           // Caja izquierda: ¿Te gustó?
           Expanded(
             child: Container(
+              key: _likeKey,
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
                 color: Colors.white,
@@ -569,6 +838,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
           // Caja derecha: Dificultad
           Expanded(
             child: Container(
+              key: _semaforoKey,
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
                 color: Colors.white,
@@ -711,6 +981,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
           ),
           const SizedBox(height: 25),
           SizedBox(
+            key: _timerKey,
             width: double.infinity,
             height: 55,
             child: ElevatedButton.icon(
