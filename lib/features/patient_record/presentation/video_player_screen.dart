@@ -171,10 +171,32 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   // =========================================================
   // 2. LÓGICA DE FEEDBACK (FIRESTORE)
   // =========================================================
-  Future<void> _enviarFeedback(String campo, Object valor) async {
-    HapticFeedback.lightImpact(); // Feedback táctil
-    final esRojo = campo == 'dificultad' && valor == 'dificil';
+  // Handler del tap: NO bloqueante. Actualiza UI inmediatamente y delega
+  // toda la I/O de Firestore a un Future en background. Sin esto, los
+  // awaits sobre Firestore mientras el temporizador hace setState cada
+  // segundo provocan ANR en Android cuando la red es lenta.
+  void _enviarFeedback(String campo, Object valor) {
+    HapticFeedback.lightImpact();
 
+    // 1) UI optimista
+    setState(() {
+      if (campo == 'gustado' && valor is bool) {
+        _leGusta = valor;
+      }
+      if (campo == 'dificultad' && valor is String) {
+        _dificultad = valor;
+      }
+    });
+
+    // 2) Persistencia + stats + tarea en background
+    unawaited(_persistirFeedbackEnBackground(campo, valor));
+  }
+
+  Future<void> _persistirFeedbackEnBackground(
+    String campo,
+    Object valor,
+  ) async {
+    final esRojo = campo == 'dificultad' && valor == 'dificil';
     final assignmentRef = FirebaseFirestore.instance
         .collection('exercise_assignments')
         .doc(widget.assignmentId);
@@ -193,23 +215,21 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
       exerciseId = (data['exerciseId'] ?? data['ejercicioId'] ?? '') as String;
       exerciseName =
           (data['nombre'] ?? data['exerciseName'] ?? widget.title) as String;
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('Lectura previa feedback falló: $e');
+    }
 
     final updates = <String, Object?>{
       'feedback.$campo': valor,
       'feedback.fecha': FieldValue.serverTimestamp(),
       'feedback.alerta': (campo == 'gustado' && valor == false) || esRojo,
     };
-    await assignmentRef.update(updates);
-
-    setState(() {
-      if (campo == 'gustado' && valor is bool) {
-        _leGusta = valor;
-      }
-      if (campo == 'dificultad' && valor is String) {
-        _dificultad = valor;
-      }
-    });
+    try {
+      await assignmentRef.update(updates);
+    } catch (e) {
+      debugPrint('Update feedback falló: $e');
+      return;
+    }
 
     // Stats agregados por ejercicio (panel admin de feedback).
     if (exerciseId.isNotEmpty) {
