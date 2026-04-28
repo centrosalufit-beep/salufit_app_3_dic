@@ -35,6 +35,7 @@ export interface ClassificationResult {
   confianza: number;
   idiomaDetectado: "es" | "en";
   dentro48h: boolean; // true si quedan menos de 48h (relevante para cancelaciones)
+  fuerzaMayor: boolean; // el paciente alega causa de fuerza mayor
 }
 
 // Teléfono de la clínica (recepción humana) que damos al paciente cuando hay
@@ -57,25 +58,39 @@ CATEGORÍAS (responde en español, código interno):
 POLÍTICA DE CANCELACIÓN SALUFIT (REGLA DE NEGOCIO CRÍTICA):
 - Si faltan MÁS de 48h para la cita (dentro_48h=false): cancelación gratuita.
 - Si faltan MENOS de 48h para la cita (dentro_48h=true): no se puede cancelar gratis.
-  El paciente puede REAGENDAR (gratis, máximo 2 veces) o ABONAR 50€ por Bizum
-  al ${TELEFONO_RECEPCION} (recepción Salufit).
+  Opciones para el paciente:
+  1. REAGENDAR — gratis, MÁXIMO 2 reagendaciones, y cada nueva cita debe ser dentro
+     de las 48h SIGUIENTES a la cita actual. Ejemplo: cita el lunes → nueva cita
+     como máximo el miércoles; si esa del miércoles se reagenda otra vez → nueva
+     cita como máximo el viernes. Recepción busca el hueco en mañana o tarde.
+  2. Si NO reagenda → debe ABONAR 55€ por Bizum al ${TELEFONO_RECEPCION}
+     (recepción Salufit) para confirmar la cancelación.
+  3. CAUSA DE FUERZA MAYOR (enfermedad propia con baja, urgencia familiar grave,
+     accidente, fallecimiento, etc.): si el paciente alega una causa así, devuelve
+     fuerza_mayor=true y NO le exijas el pago en la respuesta. Indica que recepción
+     valorará el caso y le contactará. La decisión final del exento la toma Alba
+     en recepción, no el bot.
 - El sistema te indica las horas exactas que faltan; usa ese valor para fijar dentro_48h.
-- Si el paciente quiere cancelar dentro de 48h, explícale la política con tacto, ofrécele
-  reagendar o el Bizum, y devuelve intencion="cancelar" con dentro_48h=true. NO confirmes la
-  cancelación: la decisión final la toma recepción.
+- Si el paciente quiere cancelar dentro de 48h y NO alega fuerza mayor, explícale la
+  política con tacto, ofrécele reagendar (con el plazo de 48h) o los 55€ Bizum, y devuelve
+  intencion="cancelar" dentro_48h=true fuerza_mayor=false. NO confirmes la cancelación:
+  la decisión final la toma recepción.
+- Si alega fuerza mayor, devuelve intencion="cancelar" dentro_48h=true fuerza_mayor=true.
+  Empatiza, no presiones con el cobro y traslada el caso a recepción.
 
 REGLAS CRÍTICAS:
-1. NO preguntes al paciente qué día ni qué hora prefiere para reagendar. El sistema busca huecos
-   automáticamente y se los enviará con botones. Si no puedes ofrecer huecos en este turno, indica
-   que recepción contactará desde el ${TELEFONO_RECEPCION}.
+1. NO preguntes al paciente qué día ni qué hora prefiere para reagendar. Recepción busca huecos
+   y los confirma con el paciente. Si la cita está dentro de 48h, recuérdale que la nueva
+   cita debe estar dentro de las 48h SIGUIENTES a la cita actual (mañana o tarde) y máximo 2
+   reagendaciones en total.
 2. Detecta el idioma del mensaje (ES o EN) y responde en el MISMO idioma del paciente.
    En la respuesta al paciente puedes traducir el teléfono y la política, pero el JSON va en ES.
-3. La respuesta debe ser breve, cordial, profesional pero cercana y humana (máximo 3 líneas).
+3. La respuesta debe ser breve, cordial, profesional pero cercana y humana (máximo 3-4 líneas).
 4. Si la intención es "confirmar" la respuesta agradece y recuerda fecha/hora/profesional.
 5. Si la intención es "reagendar" la respuesta solo acusa recibo y dice que recepción contacta.
 6. Si es "consulta", responde con la información disponible o di que no la tienes y pasarás a
    recepción si es algo complejo.
-7. NUNCA inventes precios, horarios concretos ni datos médicos.
+7. NUNCA inventes precios concretos de sesiones, horarios específicos ni datos médicos.
 8. Si el paciente está frustrado, agresivo o insulta, intencion="escalate", empatiza, discúlpate
    sinceramente e indica que se transfiere a una persona de recepción para atenderle mejor.
 9. Firma "SALUFIT" al final cuando proceda. Máximo 1-2 emojis por mensaje, sin abusar.
@@ -95,7 +110,8 @@ COMPLETA debe empezar con { y terminar con }:
   "respuesta": "...",
   "confianza": 0.95,
   "idiomaDetectado": "es" | "en",
-  "dentro_48h": true | false
+  "dentro_48h": true | false,
+  "fuerza_mayor": true | false
 }`;
 
 /**
@@ -147,8 +163,11 @@ export async function classifyIntent(
       functions.logger.warn("Claude no devolvió JSON parseable", {raw});
       return null;
     }
-    // El blueprint usaba snake_case (dentro_48h); aceptamos ambos.
-    type RawResult = Partial<ClassificationResult> & {dentro_48h?: boolean};
+    // El blueprint usaba snake_case (dentro_48h, fuerza_mayor); aceptamos ambos.
+    type RawResult = Partial<ClassificationResult> & {
+      dentro_48h?: boolean;
+      fuerza_mayor?: boolean;
+    };
     const parsed = JSON.parse(jsonMatch[0]) as RawResult;
 
     // Validaciones defensivas
@@ -167,12 +186,14 @@ export async function classifyIntent(
     const codeDentro48h = isFinite(context.horasHastaCita) &&
         context.horasHastaCita >= 0 &&
         context.horasHastaCita < 48;
+    const aiFuerzaMayor = parsed.fuerzaMayor ?? parsed.fuerza_mayor;
     return {
       intencion: parsed.intencion as BotIntent,
       respuesta: parsed.respuesta,
       confianza: typeof parsed.confianza === "number" ? parsed.confianza : 0.8,
       idiomaDetectado: parsed.idiomaDetectado === "en" ? "en" : "es",
       dentro48h: typeof aiDentro48h === "boolean" ? aiDentro48h : codeDentro48h,
+      fuerzaMayor: typeof aiFuerzaMayor === "boolean" ? aiFuerzaMayor : false,
     };
   } catch (e) {
     functions.logger.error("Claude classifyIntent error", e);

@@ -344,6 +344,7 @@ async function processIncomingText(
     intencionDetectada: classification.intencion,
     idiomaDetectado: classification.idiomaDetectado,
     dentro48h: classification.dentro48h,
+    fuerzaMayor: classification.fuerzaMayor,
   });
 
   // Ejecutar acción según intención
@@ -351,6 +352,7 @@ async function processIncomingText(
       classification.intencion,
       classification.idiomaDetectado,
       classification.dentro48h,
+      classification.fuerzaMayor,
       conv.id,
       cita,
       telefono,
@@ -364,6 +366,7 @@ async function executeAction(
     intent: BotIntent,
     lang: "es" | "en",
     dentro48h: boolean,
+    fuerzaMayor: boolean,
     convId: string,
     cita: ProximaCita | null,
     telefono: string,
@@ -406,22 +409,35 @@ async function executeAction(
 
     case "cancelar":
       if (cita && dentro48h) {
-        // POLÍTICA 48h: NO cancelamos automáticamente. Escalamos a recepción
-        // para que decida (cobrar 50€ Bizum, aceptar reagendar, etc.).
-        // El bot ya envió la respuesta explicando la política antes de llegar aquí.
-        await appendMessageToConversation(convId, "bot", "(cancelación dentro de 48h, decisión recepción)", {
-          estado: "cancelacion_solicitada",
-          resultado: "cancelar_dentro_48h_escalado",
-        });
+        // POLÍTICA 48h: NO cancelamos automáticamente. Escalamos a Alba para
+        // que decida. El bot ya envió la respuesta explicando la política antes
+        // de llegar aquí. Si la IA detectó fuerza mayor, lo destacamos en el
+        // aviso para que Alba lo valore con prioridad.
+        const resultado = fuerzaMayor ?
+          "cancelar_dentro_48h_fuerza_mayor" :
+          "cancelar_dentro_48h_escalado";
+        await appendMessageToConversation(convId, "bot",
+            "(cancelación dentro de 48h, decisión recepción)", {
+              estado: "cancelacion_solicitada",
+              resultado,
+            });
+        const cabecera = fuerzaMayor ?
+          "🆘 [ALBA] CANCELACIÓN <48h CON FUERZA MAYOR ALEGADA" :
+          "⚠️ [ALBA] CANCELACIÓN DENTRO DE 48h";
+        const politica = fuerzaMayor ?
+          "(Política: paciente alega fuerza mayor — valorar exención. " +
+          "Si no procede, ofrecer reagendar +48h o 55€ Bizum.)" :
+          "(Política: reagendar dentro de 48h — máx 2 veces — o 55€ Bizum. " +
+          "Decisión humana.)";
         await notifyRecepcion(
             config,
             waToken,
-            `⚠️ CANCELACIÓN DENTRO DE 48h — ${cita.pacienteNombre}\n` +
+            `${cabecera} — ${cita.pacienteNombre}\n` +
             `Cita: ${formatFechaES(cita.fechaCita, "es")}\n` +
             `Profesional: ${cita.profesional}\n` +
             `Tel: ${telefono}\n` +
             `Mensaje: "${mensajeOriginal}"\n` +
-            "(Política: reagendar gratis o 50€ Bizum. Decisión humana.)",
+            politica,
         );
       } else if (cita) {
         // Cancelación con más de 48h de antelación: gratuita.
@@ -542,12 +558,13 @@ async function processInteractiveReply(
   if (conv) {
     await appendMessageToConversation(conv.id, "paciente", `(botón: ${buttonId})`);
   }
-  // Para botones calculamos dentro48h en código (no hay IA aquí).
+  // Para botones calculamos dentro48h en código (no hay IA aquí). Fuerza mayor
+  // no se puede detectar desde un botón de recordatorio, así que false.
   const dentro48h = cita ?
     (cita.fechaCita.getTime() - Date.now()) / (1000 * 60 * 60) < 48 :
     false;
   await executeAction(
-      intent, "es", dentro48h, convId, cita, telefono,
+      intent, "es", dentro48h, false, convId, cita, telefono,
       `(botón: ${buttonId})`, config, waToken,
   );
 }
