@@ -293,14 +293,31 @@ async function processIncomingText(
     appSecret: string, // eslint-disable-line @typescript-eslint/no-unused-vars
     anthropicKey: string,
 ): Promise<void> {
+  functions.logger.info("➡️ processIncomingText START", {
+    telefono,
+    textoPreview: texto.slice(0, 60),
+  });
   const config = await loadConfig();
   if (!config.activo) {
     functions.logger.info("Bot inactivo, mensaje ignorado", {telefono});
     return;
   }
+  functions.logger.info("config cargada", {
+    phoneId: config.whatsappPhoneId,
+    activo: config.activo,
+    grupoRecepcion: config.grupoRecepcionId ? "SET" : "EMPTY",
+  });
 
   const cita = await findUpcomingAppointment(telefono);
+  functions.logger.info("findUpcomingAppointment resultado", {
+    encontrada: cita !== null,
+    citaId: cita?.id,
+  });
   let conv = await findActiveConversation(telefono);
+  functions.logger.info("findActiveConversation resultado", {
+    encontrada: conv !== null,
+    convId: conv?.id,
+  });
 
   // Si el usuario inicia conversación sin cita asociada, intentar reagendar/escalar igualmente
   if (!conv) {
@@ -324,6 +341,7 @@ async function processIncomingText(
     (cita.fechaCita.getTime() - Date.now()) / (1000 * 60 * 60) :
     Number.POSITIVE_INFINITY;
 
+  functions.logger.info("Llamando a Claude para clasificar...", {textoPreview: texto.slice(0, 60)});
   const classification = await classifyIntent(anthropicKey, texto, {
     pacienteNombre: cita?.pacienteNombre ?? "",
     fechaCita: cita ? cita.fechaCita.toISOString() : "",
@@ -331,6 +349,13 @@ async function processIncomingText(
     servicio: cita?.servicio ?? "",
     isWithinBusinessHours: inHours,
     horasHastaCita,
+  });
+  functions.logger.info("Claude resultado", {
+    classification: classification ? {
+      intencion: classification.intencion,
+      idioma: classification.idiomaDetectado,
+      respuestaPreview: classification.respuesta.slice(0, 80),
+    } : null,
   });
 
   if (!classification) {
@@ -357,10 +382,19 @@ async function processIncomingText(
   }
 
   // Enviar respuesta breve al paciente
-  await sendTextMessage(
+  functions.logger.info("Enviando respuesta a paciente...", {
+    phoneId: config.whatsappPhoneId,
+    to: telefono,
+  });
+  const sendResult = await sendTextMessage(
       {phoneId: config.whatsappPhoneId, token: waToken, to: telefono},
       classification.respuesta,
   );
+  functions.logger.info("sendTextMessage resultado", {
+    success: sendResult.success,
+    error: sendResult.error,
+    messageId: sendResult.messageId,
+  });
   await appendMessageToConversation(conv.id, "bot", classification.respuesta, {
     intencionDetectada: classification.intencion,
     idiomaDetectado: classification.idiomaDetectado,
