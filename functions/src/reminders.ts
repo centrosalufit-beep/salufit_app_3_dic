@@ -73,7 +73,9 @@ function formatFecha(date: Date): string {
 export const sendAppointmentReminders = onSchedule(
     {
       schedule: "every 30 minutes",
-      region: "europe-southwest1",
+      // Region europe-west1 (Bélgica) porque Cloud Scheduler no soporta
+      // europe-southwest1. Firestore en mismo proyecto, latencia ~15ms.
+      region: "europe-west1",
       timeZone: "Europe/Madrid",
       secrets: [WHATSAPP_TOKEN],
       memory: "256MiB",

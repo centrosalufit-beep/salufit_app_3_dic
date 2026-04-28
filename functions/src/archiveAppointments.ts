@@ -29,9 +29,11 @@ function archiveCollectionName(date: Date): string {
 
 export const archiveOldAppointments = onSchedule(
     {
-      // Día 1 de cada mes a las 02:00 hora España
+      // Día 1 de cada mes a las 02:00 hora España.
+      // Region europe-west1 (Bélgica) porque Cloud Scheduler no soporta
+      // europe-southwest1; Firestore sigue siendo el mismo proyecto, latencia ~15ms.
       schedule: "0 2 1 * *",
-      region: "europe-southwest1",
+      region: "europe-west1",
       timeZone: "Europe/Madrid",
       memory: "256MiB",
       timeoutSeconds: 540,
