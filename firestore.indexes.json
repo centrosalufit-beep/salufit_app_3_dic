@@ -409,15 +409,15 @@
       "queryScope": "COLLECTION",
       "fields": [
         {
+          "fieldPath": "estado",
+          "order": "ASCENDING"
+        },
+        {
           "fieldPath": "pacienteTelefono",
           "order": "ASCENDING"
         },
         {
           "fieldPath": "fechaCita",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "estado",
           "order": "ASCENDING"
         },
         {
