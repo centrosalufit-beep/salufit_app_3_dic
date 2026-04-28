@@ -1,0 +1,2 @@
+-dontwarn com.google.firebase.appcheck.safetynet.**
+-dontwarn com.google.android.gms.safetynet.**
