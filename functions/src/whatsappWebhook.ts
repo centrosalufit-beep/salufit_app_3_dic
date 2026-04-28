@@ -113,26 +113,37 @@ interface ProximaCita {
 async function findUpcomingAppointment(
     telefono: string,
 ): Promise<ProximaCita | null> {
-  const now = admin.firestore.Timestamp.now();
-  const snap = await db
-      .collection("clinni_appointments")
-      .where("pacienteTelefono", "==", telefono)
-      .where("fechaCita", ">=", now)
-      .where("estado", "in", ["pendiente", "confirmada", "reagendada"])
-      .orderBy("fechaCita")
-      .limit(1)
-      .get();
-  if (snap.empty) return null;
-  const doc = snap.docs[0];
-  const data = doc.data();
-  return {
-    id: doc.id,
-    pacienteNombre: (data.pacienteNombre as string) ?? "",
-    fechaCita: (data.fechaCita as admin.firestore.Timestamp).toDate(),
-    profesional: (data.profesional as string) ?? "",
-    servicio: (data.servicio as string) ?? "",
-    estado: (data.estado as string) ?? "pendiente",
-  };
+  // Tolerante a fallos: si Firestore devuelve error (índice faltante, timeout,
+  // permisos), devolvemos null en lugar de propagar la excepción para que el
+  // bot al menos pueda responder algo al paciente.
+  try {
+    const now = admin.firestore.Timestamp.now();
+    const snap = await db
+        .collection("clinni_appointments")
+        .where("pacienteTelefono", "==", telefono)
+        .where("fechaCita", ">=", now)
+        .where("estado", "in", ["pendiente", "confirmada", "reagendada"])
+        .orderBy("fechaCita")
+        .limit(1)
+        .get();
+    if (snap.empty) return null;
+    const doc = snap.docs[0];
+    const data = doc.data();
+    return {
+      id: doc.id,
+      pacienteNombre: (data.pacienteNombre as string) ?? "",
+      fechaCita: (data.fechaCita as admin.firestore.Timestamp).toDate(),
+      profesional: (data.profesional as string) ?? "",
+      servicio: (data.servicio as string) ?? "",
+      estado: (data.estado as string) ?? "pendiente",
+    };
+  } catch (e) {
+    functions.logger.warn(
+        "findUpcomingAppointment falló, continuamos sin cita asociada",
+        {telefono, error: String(e)},
+    );
+    return null;
+  }
 }
 
 interface ConversationDoc {
@@ -143,19 +154,29 @@ interface ConversationDoc {
 async function findActiveConversation(
     telefono: string,
 ): Promise<ConversationDoc | null> {
-  const snap = await db
-      .collection("whatsapp_conversations")
-      .where("pacienteTelefono", "==", telefono)
-      .where("estado", "in", [
-        "activa",
-        "esperando_respuesta_boton",
-        "esperando_respuesta_boton_2",
-      ])
-      .orderBy("fechaUltimaInteraccion", "desc")
-      .limit(1)
-      .get();
-  if (snap.empty) return null;
-  return {id: snap.docs[0].id, data: snap.docs[0].data()};
+  // Idem que findUpcomingAppointment: si Firestore falla devolvemos null para
+  // que el bot pueda crear una conversación nueva en lugar de quedarse mudo.
+  try {
+    const snap = await db
+        .collection("whatsapp_conversations")
+        .where("pacienteTelefono", "==", telefono)
+        .where("estado", "in", [
+          "activa",
+          "esperando_respuesta_boton",
+          "esperando_respuesta_boton_2",
+        ])
+        .orderBy("fechaUltimaInteraccion", "desc")
+        .limit(1)
+        .get();
+    if (snap.empty) return null;
+    return {id: snap.docs[0].id, data: snap.docs[0].data()};
+  } catch (e) {
+    functions.logger.warn(
+        "findActiveConversation falló, asumimos sin conversación activa",
+        {telefono, error: String(e)},
+    );
+    return null;
+  }
 }
 
 async function appendMessageToConversation(
@@ -622,6 +643,11 @@ export const whatsappWebhook = onRequest(
       res.status(200).send("ok");
 
       // ─── Procesado en background ────────────────────────────
+      // Capturamos el teléfono fuera del try para poder enviar fallback al
+      // paciente si algo falla en mitad del procesamiento (índice faltante,
+      // Claude caído, etc.). Sin esto el bot quedaría mudo y el paciente no
+      // sabría que su mensaje llegó.
+      let fromForFallback = "";
       try {
         const body = req.body;
         const entry = body?.entry?.[0];
@@ -636,6 +662,7 @@ export const whatsappWebhook = onRequest(
         const msg = messages[0];
         const from = String(msg.from ?? ""); // teléfono del paciente
         if (!from) return;
+        fromForFallback = from;
 
         // ─── Idempotencia: descartar duplicados de Meta (at-least-once) ──
         const messageId = String(msg.id ?? "");
@@ -670,6 +697,25 @@ export const whatsappWebhook = onRequest(
         }
       } catch (e) {
         functions.logger.error("Webhook background processing error", e);
+        // Fallback: si hemos identificado el paciente, intentamos al menos
+        // enviarle un mensaje básico para que no quede sin respuesta. Si esto
+        // también falla (token caducado, Meta caído), no hay nada más que hacer.
+        if (fromForFallback) {
+          try {
+            const config = await loadConfig().catch(() => DEFAULT_CONFIG);
+            await sendTextMessage(
+                {
+                  phoneId: config.whatsappPhoneId,
+                  token: WHATSAPP_TOKEN.value(),
+                  to: fromForFallback,
+                },
+                "Gracias por contactar con SALUFIT. Hemos recibido tu mensaje y " +
+                "una persona de recepción te atenderá en breve.",
+            );
+          } catch (fallbackErr) {
+            functions.logger.error("Webhook fallback send también falló", fallbackErr);
+          }
+        }
       }
     },
 );
