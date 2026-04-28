@@ -299,6 +299,9 @@ async function processIncomingText(
   }
 
   const inHours = isWithinBusinessHours(new Date(), config);
+  const horasHastaCita = cita ?
+    (cita.fechaCita.getTime() - Date.now()) / (1000 * 60 * 60) :
+    Number.POSITIVE_INFINITY;
 
   const classification = await classifyIntent(anthropicKey, texto, {
     pacienteNombre: cita?.pacienteNombre ?? "",
@@ -306,6 +309,7 @@ async function processIncomingText(
     profesional: cita?.profesional ?? "",
     servicio: cita?.servicio ?? "",
     isWithinBusinessHours: inHours,
+    horasHastaCita,
   });
 
   if (!classification) {
@@ -338,12 +342,15 @@ async function processIncomingText(
   );
   await appendMessageToConversation(conv.id, "bot", classification.respuesta, {
     intencionDetectada: classification.intencion,
+    idiomaDetectado: classification.idiomaDetectado,
+    dentro48h: classification.dentro48h,
   });
 
   // Ejecutar acción según intención
   await executeAction(
       classification.intencion,
       classification.idiomaDetectado,
+      classification.dentro48h,
       conv.id,
       cita,
       telefono,
@@ -356,6 +363,7 @@ async function processIncomingText(
 async function executeAction(
     intent: BotIntent,
     lang: "es" | "en",
+    dentro48h: boolean,
     convId: string,
     cita: ProximaCita | null,
     telefono: string,
@@ -397,7 +405,26 @@ async function executeAction(
       return;
 
     case "cancelar":
-      if (cita) {
+      if (cita && dentro48h) {
+        // POLÍTICA 48h: NO cancelamos automáticamente. Escalamos a recepción
+        // para que decida (cobrar 50€ Bizum, aceptar reagendar, etc.).
+        // El bot ya envió la respuesta explicando la política antes de llegar aquí.
+        await appendMessageToConversation(convId, "bot", "(cancelación dentro de 48h, decisión recepción)", {
+          estado: "cancelacion_solicitada",
+          resultado: "cancelar_dentro_48h_escalado",
+        });
+        await notifyRecepcion(
+            config,
+            waToken,
+            `⚠️ CANCELACIÓN DENTRO DE 48h — ${cita.pacienteNombre}\n` +
+            `Cita: ${formatFechaES(cita.fechaCita, "es")}\n` +
+            `Profesional: ${cita.profesional}\n` +
+            `Tel: ${telefono}\n` +
+            `Mensaje: "${mensajeOriginal}"\n` +
+            "(Política: reagendar gratis o 50€ Bizum. Decisión humana.)",
+        );
+      } else if (cita) {
+        // Cancelación con más de 48h de antelación: gratuita.
         await db
             .collection("clinni_appointments")
             .doc(cita.id)
@@ -432,10 +459,11 @@ async function executeAction(
       return;
 
     case "reagendar":
-      // FASE 2: implementar búsqueda de huecos + botones interactivos
+      // FASE 2: implementar búsqueda de huecos + botones interactivos.
+      // En Fase 1 acusamos recibo y delegamos en recepción con tel directo.
       await appendMessageToConversation(convId, "bot", "(reagendación delegada a recepción)", {
-        estado: "escalada",
-        resultado: "reagendar_pendiente",
+        estado: "reagendar_solicitada",
+        resultado: "reagendar_delegado_recepcion",
       });
       await notifyRecepcion(
           config,
@@ -448,11 +476,12 @@ async function executeAction(
       return;
 
     case "consulta":
-      // La respuesta ya se envió en classifyIntent. Marcar resuelta.
+      // La respuesta ya se envió en classifyIntent. Marcar como consulta pendiente.
+      // (No la cerramos como "resuelta" porque puede que recepción quiera revisarla.)
       await db
           .collection("whatsapp_conversations")
           .doc(convId)
-          .update({estado: "resuelta", resultado: "consulta_respondida"});
+          .update({estado: "consulta_pendiente", resultado: "consulta_respondida"});
       return;
 
     case "escalate":
@@ -513,7 +542,14 @@ async function processInteractiveReply(
   if (conv) {
     await appendMessageToConversation(conv.id, "paciente", `(botón: ${buttonId})`);
   }
-  await executeAction(intent, "es", convId, cita, telefono, `(botón: ${buttonId})`, config, waToken);
+  // Para botones calculamos dentro48h en código (no hay IA aquí).
+  const dentro48h = cita ?
+    (cita.fechaCita.getTime() - Date.now()) / (1000 * 60 * 60) < 48 :
+    false;
+  await executeAction(
+      intent, "es", dentro48h, convId, cita, telefono,
+      `(botón: ${buttonId})`, config, waToken,
+  );
 }
 
 export const whatsappWebhook = onRequest(
