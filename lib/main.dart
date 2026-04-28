@@ -59,7 +59,10 @@ void main() async {
         appleProvider: AppleProvider.debug,
       );
     } else {
-      await FirebaseAppCheck.instance.activate();
+      await FirebaseAppCheck.instance.activate(
+        androidProvider: AndroidProvider.playIntegrity,
+        appleProvider: AppleProvider.deviceCheck,
+      );
     }
   } catch (e, stack) {
     debugPrint('Error Crítico en main: $e');

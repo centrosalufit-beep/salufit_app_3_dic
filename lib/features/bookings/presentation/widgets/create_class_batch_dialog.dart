@@ -94,8 +94,8 @@ class _CreateClassBatchDialogState extends State<CreateClassBatchDialog> {
       final db = FirebaseFirestore.instance;
       var count = 0;
 
-      final tomorrow = DateTime(now.year, now.month, now.day + 1);
-      final firstDay = tomorrow;
+      final today = DateTime(now.year, now.month, now.day);
+      final firstDay = today;
       final lastDay = DateTime(anio, mes + 1, 0);
 
       for (var day = firstDay; !day.isAfter(lastDay); day = day.add(const Duration(days: 1))) {
@@ -103,6 +103,7 @@ class _CreateClassBatchDialogState extends State<CreateClassBatchDialog> {
 
         for (final time in _selectedTimes) {
           final fechaInicio = DateTime(anio, mes, day.day, time.hour, time.minute);
+          if (fechaInicio.isBefore(now)) continue;
           final fechaFin = fechaInicio.add(const Duration(hours: 1));
 
           await db.collection('groupClasses').add({

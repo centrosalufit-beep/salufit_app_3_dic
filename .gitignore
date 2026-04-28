@@ -60,3 +60,8 @@ android/app/build/
 *.p12
 *.jks
 android/key.properties
+
+# Local build backups & installer binaries
+_backup/
+installer/Output/
+installer/*.exe

@@ -1,4 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+// ignore: unnecessary_import
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -14,6 +16,8 @@ import 'package:salufit_app/features/communication/presentation/internal_managem
 import 'package:salufit_app/features/patient_record/presentation/admin_patient_detail_screen.dart';
 import 'package:salufit_app/features/patient_record/presentation/admin_patient_list_screen.dart';
 import 'package:salufit_app/features/professional/presentation/professional_desktop_dashboard_screen.dart';
+import 'package:salufit_app/features/tasks/application/task_providers.dart';
+import 'package:salufit_app/features/tasks/presentation/tasks_screen.dart';
 import 'package:salufit_app/features/whatsapp_bot/presentation/whatsapp_bot_screen.dart';
 
 class DesktopScaffold extends ConsumerStatefulWidget {
@@ -24,6 +28,38 @@ class DesktopScaffold extends ConsumerStatefulWidget {
 
 class _DesktopScaffoldState extends ConsumerState<DesktopScaffold> {
   int _selectedIndex = 0;
+  String _currentUserName = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCurrentUserName();
+  }
+
+  Future<void> _loadCurrentUserName() async {
+    try {
+      final doc = await ref
+          .read(firebaseFirestoreProvider)
+          .collection('users_app')
+          .doc(widget.userId)
+          .get();
+      if (!mounted || !doc.exists) return;
+      final data = doc.data()!;
+      final full = (data['nombreCompleto'] as String?) ?? '';
+      final nombre = (data['nombre'] as String?) ?? '';
+      final apellidos = (data['apellidos'] as String?) ?? '';
+      final combined = full.isNotEmpty
+          ? full
+          : '$nombre $apellidos'.trim();
+      final email = (data['email'] as String?) ?? '';
+      setState(() {
+        _currentUserName = combined.isNotEmpty ? combined : email;
+      });
+    } catch (_) {
+      // noop; dejamos vacío
+    }
+  }
+
   void _openPatient(String uid, String name) {
     Navigator.push(context, MaterialPageRoute<void>(builder: (_) => AdminPatientDetailScreen(userId: uid, userName: name, viewerRole: widget.userRole)));
   }
@@ -31,6 +67,7 @@ class _DesktopScaffoldState extends ConsumerState<DesktopScaffold> {
   @override
   Widget build(BuildContext context) {
     final isAdmin = widget.userRole == 'admin' || widget.userRole == 'administrador';
+    final showTasks = !kIsWeb && defaultTargetPlatform == TargetPlatform.windows;
     final pages = <Widget>[
       if (isAdmin)
         const AdminAnalysisScreen()
@@ -45,6 +82,11 @@ class _DesktopScaffoldState extends ConsumerState<DesktopScaffold> {
       AdminPatientListScreen(viewerRole: 'profesional', onUserSelected: _openPatient),
       InternalManagementScreen(currentUserId: widget.userId, userRole: widget.userRole),
       AdminCrmScreen(userId: widget.userId, userRole: widget.userRole),
+      if (showTasks)
+        TasksScreen(
+          currentUserId: widget.userId,
+          currentUserName: _currentUserName,
+        ),
       if (isAdmin) const AdminRRHHScreen(),
       if (isAdmin) const AdminLibraryHubScreen(),
       if (isAdmin) const AdminExerciseFeedbackScreen(),
@@ -95,6 +137,11 @@ class _DesktopScaffoldState extends ConsumerState<DesktopScaffold> {
                                 const NavigationRailDestination(icon: Icon(Icons.assignment), label: Text('Recursos')),
                                 const NavigationRailDestination(icon: Icon(Icons.forum), label: Text('Equipo')),
                                 const NavigationRailDestination(icon: Icon(Icons.leaderboard), label: Text('CRM')),
+                                if (showTasks)
+                                  NavigationRailDestination(
+                                    icon: _TasksBadgeIcon(userId: widget.userId),
+                                    label: const Text('Tareas'),
+                                  ),
                                 if (isAdmin) const NavigationRailDestination(icon: Icon(Icons.badge), label: Text('RRHH')),
                                 if (isAdmin) const NavigationRailDestination(icon: Icon(Icons.auto_stories), label: Text('Librería')),
                                 if (isAdmin) const NavigationRailDestination(icon: Icon(Icons.thumbs_up_down_outlined), label: Text('Feedback')),
@@ -308,6 +355,23 @@ class _UnreadBellBadge extends ConsumerWidget {
           onPressed: onTap,
         );
       },
+    );
+  }
+}
+
+/// Icono de Tareas con badge rojo con el número de pendientes.
+class _TasksBadgeIcon extends ConsumerWidget {
+  const _TasksBadgeIcon({required this.userId});
+  final String userId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final count = ref.watch(pendingTasksCountProvider(userId)).value ?? 0;
+    return Badge(
+      isLabelVisible: count > 0,
+      backgroundColor: Colors.red,
+      label: Text('$count', style: const TextStyle(fontSize: 9)),
+      child: const Icon(Icons.task_alt),
     );
   }
 }
