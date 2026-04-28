@@ -239,6 +239,32 @@ async function notifyRecepcion(
   );
 }
 
+/**
+ * Idempotencia: Meta entrega webhooks at-least-once y reintenta hasta 36h.
+ * Cada mensaje trae un id único; lo guardamos con TTL para no procesar
+ * dos veces. Devuelve true si es el primer procesamiento, false si ya
+ * estaba registrado (= duplicado a ignorar).
+ */
+async function claimMessageId(messageId: string): Promise<boolean> {
+  if (!messageId) return true; // sin id, dejamos pasar (mejor procesar dos veces que ninguna)
+  const ref = db.collection("whatsapp_processed_messages").doc(messageId);
+  try {
+    await ref.create({
+      processedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    return true;
+  } catch (e: unknown) {
+    // ALREADY_EXISTS → mensaje ya procesado
+    const code = (e as {code?: number | string}).code;
+    if (code === 6 || code === "already-exists") {
+      functions.logger.info("Mensaje duplicado ignorado", {messageId});
+      return false;
+    }
+    functions.logger.warn("claimMessageId falló, procesamos por seguridad", e);
+    return true;
+  }
+}
+
 async function processIncomingText(
     telefono: string,
     texto: string,
@@ -557,6 +583,11 @@ export const whatsappWebhook = onRequest(
         const msg = messages[0];
         const from = String(msg.from ?? ""); // teléfono del paciente
         if (!from) return;
+
+        // ─── Idempotencia: descartar duplicados de Meta (at-least-once) ──
+        const messageId = String(msg.id ?? "");
+        const isFirst = await claimMessageId(messageId);
+        if (!isFirst) return;
 
         const waToken = WHATSAPP_TOKEN.value();
         const appSecret = WHATSAPP_APP_SECRET.value();

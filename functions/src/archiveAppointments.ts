@@ -92,5 +92,26 @@ export const archiveOldAppointments = onSchedule(
       }
 
       functions.logger.info("archiveOldAppointments terminado", {totalMoved});
+
+      // Limpieza adicional: borrar registros de idempotencia
+      // (whatsapp_processed_messages) más antiguos de 7 días.
+      // Meta solo reintenta hasta 36h, así que 7 días es margen seguro.
+      const cleanCutoff = new Date();
+      cleanCutoff.setDate(cleanCutoff.getDate() - 7);
+      const oldProcessed = await db
+          .collection("whatsapp_processed_messages")
+          .where("processedAt", "<", admin.firestore.Timestamp.fromDate(cleanCutoff))
+          .limit(500)
+          .get();
+      if (!oldProcessed.empty) {
+        const batch = db.batch();
+        for (const d of oldProcessed.docs) {
+          batch.delete(d.ref);
+        }
+        await batch.commit();
+        functions.logger.info(
+            `Limpiados ${oldProcessed.size} registros de idempotencia antiguos`,
+        );
+      }
     },
 );

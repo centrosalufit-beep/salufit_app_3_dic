@@ -250,6 +250,50 @@ service cloud.firestore {
       allow read, write: if isStaff();
     }
 
+    // ═══════════════════════════════════════════════════════════════
+    // WHATSAPP BOT — colecciones gestionadas exclusivamente por
+    // Cloud Functions (admin SDK). El cliente Flutter SOLO lee desde
+    // el panel admin (rol staff) para visualización.
+    // ═══════════════════════════════════════════════════════════════
+    match /clinni_appointments/{id} {
+      allow read: if isStaff();
+      // Escritura solo por Cloud Functions admin SDK (importClinniAppointments,
+      // whatsappWebhook, sendAppointmentReminders, archiveOldAppointments).
+      allow write: if false;
+    }
+
+    match /whatsapp_conversations/{id} {
+      allow read: if isStaff();
+      allow write: if false; // solo Cloud Functions
+    }
+
+    // Idempotencia: mensajes ya procesados de Meta (TTL implícito).
+    // El cliente nunca debe acceder.
+    match /whatsapp_processed_messages/{id} {
+      allow read, write: if false;
+    }
+
+    // Configuración runtime del bot (telefonos, horarios, activo).
+    // Lectura abierta a staff para que el panel muestre estado;
+    // escritura solo admin (cambios sensibles como deshabilitar bot).
+    match /config/whatsapp_bot {
+      allow read: if isStaff();
+      allow write: if isAdmin();
+    }
+
+    // NOTA: Las colecciones de archivo `clinni_appointments_archive_YYYY_MM`
+    // NO tienen regla específica. Quedan bloqueadas por la regla default-deny
+    // del final del archivo: solo se acceden vía admin SDK desde Cloud Functions
+    // (archiveOldAppointments). Si en futuro el panel admin necesita leerlas
+    // directamente, hay que añadir reglas individuales por mes (no se pueden
+    // wildcards de prefijo en match) o exponerlas via una Cloud Function.
+
+    // Horarios de profesionales (Fase 2)
+    match /professional_schedules/{id} {
+      allow read: if isStaff();
+      allow write: if isAdmin();
+    }
+
     match /internal_tasks/{id} {
       allow read, write: if isStaff();
     }
