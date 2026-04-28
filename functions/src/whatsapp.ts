@@ -8,7 +8,11 @@
 import * as crypto from "crypto";
 import * as functions from "firebase-functions";
 
-const WHATSAPP_API_VERSION = "v21.0";
+// Versión del Graph API de Meta para llamadas salientes. Meta entrega los webhooks
+// entrantes en v23.0 (configurado en developers.facebook.com → Webhooks). Mantenemos
+// la misma versión saliente para coherencia. Las versiones son retrocompatibles
+// dentro del mismo año.
+const WHATSAPP_API_VERSION = "v23.0";
 
 interface WhatsAppButton {
   id: string;
