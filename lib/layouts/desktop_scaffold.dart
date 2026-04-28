@@ -14,6 +14,7 @@ import 'package:salufit_app/features/communication/presentation/internal_managem
 import 'package:salufit_app/features/patient_record/presentation/admin_patient_detail_screen.dart';
 import 'package:salufit_app/features/patient_record/presentation/admin_patient_list_screen.dart';
 import 'package:salufit_app/features/professional/presentation/professional_desktop_dashboard_screen.dart';
+import 'package:salufit_app/features/whatsapp_bot/presentation/whatsapp_bot_screen.dart';
 
 class DesktopScaffold extends ConsumerStatefulWidget {
   const DesktopScaffold({required this.userId, required this.userRole, super.key});
@@ -47,6 +48,7 @@ class _DesktopScaffoldState extends ConsumerState<DesktopScaffold> {
       if (isAdmin) const AdminRRHHScreen(),
       if (isAdmin) const AdminLibraryHubScreen(),
       if (isAdmin) const AdminExerciseFeedbackScreen(),
+      if (isAdmin) const WhatsAppBotScreen(),
     ];
 
     return Scaffold(
@@ -96,6 +98,7 @@ class _DesktopScaffoldState extends ConsumerState<DesktopScaffold> {
                                 if (isAdmin) const NavigationRailDestination(icon: Icon(Icons.badge), label: Text('RRHH')),
                                 if (isAdmin) const NavigationRailDestination(icon: Icon(Icons.auto_stories), label: Text('Librería')),
                                 if (isAdmin) const NavigationRailDestination(icon: Icon(Icons.thumbs_up_down_outlined), label: Text('Feedback')),
+                                if (isAdmin) const NavigationRailDestination(icon: Icon(Icons.smart_toy_outlined), label: Text('Bot WA')),
                               ],
                             ),
                           ),

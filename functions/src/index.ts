@@ -15,6 +15,12 @@ import { onDocumentWritten } from "firebase-functions/v2/firestore";
 import * as functions from "firebase-functions";
 import * as admin from "firebase-admin";
 
+// Re-export WhatsApp Bot Cloud Functions (Fase 1)
+export { importClinniAppointments } from "./clinniImport";
+export { whatsappWebhook } from "./whatsappWebhook";
+export { sendAppointmentReminders } from "./reminders";
+export { archiveOldAppointments } from "./archiveAppointments";
+
 // Dominios autorizados a llamar nuestras funciones HTTP
 const ALLOWED_ORIGINS = [
     "https://centrosalufit.com",

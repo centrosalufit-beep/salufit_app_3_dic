@@ -11,8 +11,9 @@
  * - Cascade delete RGPD-compliant para derecho al olvido
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.cancelarReserva = exports.logAudit = exports.deleteUserData = exports.setStrongPassword = exports.consumirTokenPorQR = exports.checkAccountStatus = void 0;
+exports.sendVideoFeedbackPush = exports.onExerciseFeedbackChange = exports.cancelarReserva = exports.logAudit = exports.deleteUserData = exports.setStrongPassword = exports.consumirTokenPorQR = exports.checkAccountStatus = void 0;
 const https_1 = require("firebase-functions/v2/https");
+const firestore_1 = require("firebase-functions/v2/firestore");
 const functions = require("firebase-functions");
 const admin = require("firebase-admin");
 // Dominios autorizados a llamar nuestras funciones HTTP
@@ -539,6 +540,223 @@ exports.cancelarReserva = (0, https_1.onRequest)(async (req, res) => {
     }
     catch (e) {
         res.status(400).json({ error: e.message });
+    }
+});
+// ═══════════════════════════════════════════════════════════════
+// VIDEO FEEDBACK ROJO — CREAR TAREA PARA EL PROFESIONAL (SERVIDOR)
+// ═══════════════════════════════════════════════════════════════
+// Trigger: cuando un cliente actualiza el campo `feedback` de su
+// exercise_assignment. Si `feedback.alerta` pasa a true (cliente marca
+// dificultad ROJA o pulgar abajo en el reproductor), creamos o
+// actualizamos una tarea en staff_tasks asignada al profesional que
+// asignó originalmente el ejercicio.
+//
+// Razón: el cliente NO puede listar/escribir en staff_tasks ni leer el
+// perfil del profesional por las Firestore Rules — esa lógica vive aquí
+// porque admin SDK bypassea las reglas.
+async function resolveUserName(uid) {
+    try {
+        const doc = await db.collection("users_app").doc(uid).get();
+        if (!doc.exists)
+            return uid;
+        const data = doc.data() ?? {};
+        const completo = data.nombreCompleto || "";
+        if (completo.trim())
+            return completo;
+        const nombre = data.nombre || "";
+        const apellidos = data.apellidos || "";
+        const combo = `${nombre} ${apellidos}`.trim();
+        if (combo)
+            return combo;
+        return data.email || uid;
+    }
+    catch {
+        return uid;
+    }
+}
+exports.onExerciseFeedbackChange = (0, firestore_1.onDocumentWritten)({
+    document: "exercise_assignments/{assignmentId}",
+    region: "europe-southwest1",
+}, async (event) => {
+    const before = event.data?.before.data();
+    const after = event.data?.after.data();
+    if (!after)
+        return;
+    const beforeAlerta = before?.feedback?.alerta ?? false;
+    const afterAlerta = after.feedback?.alerta ?? false;
+    // Solo actuamos cuando feedback.alerta pasa de false→true
+    // o cuando el cliente repite la marca roja con alerta ya en true
+    // y la fecha cambia (re-marcado).
+    const beforeFecha = before?.feedback?.fecha;
+    const afterFecha = after.feedback?.fecha;
+    const fechaCambia = JSON.stringify(beforeFecha) !== JSON.stringify(afterFecha);
+    if (!afterAlerta)
+        return;
+    if (beforeAlerta && !fechaCambia)
+        return;
+    // Solo crear tarea si la dificultad reportada es 'dificil'
+    // (rojo). Pulgar abajo también marca alerta=true pero no genera
+    // tarea — solo deja constancia en feedback.
+    const dificultad = after.feedback?.dificultad;
+    if (dificultad !== "dificil")
+        return;
+    const clientId = (after.userId ?? after.clientId ?? "");
+    const assignedBy = (after.assignedBy ?? after.professionalId ?? "");
+    const exerciseId = (after.exerciseId ?? after.ejercicioId ?? event.params.assignmentId);
+    const exerciseName = (after.nombre ?? after.exerciseName ?? "Ejercicio");
+    const videoUrl = (after.urlVideo ?? after.videoUrl ?? "");
+    if (!clientId || !assignedBy) {
+        functions.logger.warn("Assignment sin userId o assignedBy — tarea no creada", { assignmentId: event.params.assignmentId });
+        return;
+    }
+    const [clientName, assignedToName] = await Promise.all([
+        resolveUserName(clientId),
+        resolveUserName(assignedBy),
+    ]);
+    const tasksCol = db.collection("staff_tasks");
+    // Dedup: si ya hay tarea pendiente para (clientId+exerciseId+type),
+    // incrementar contador y refrescar fechas. Sino, crear nueva.
+    const existing = await tasksCol
+        .where("type", "==", "video_difficulty_red")
+        .where("clientId", "==", clientId)
+        .where("exerciseId", "==", exerciseId)
+        .where("estado", "==", "pendiente")
+        .limit(1)
+        .get();
+    if (!existing.empty) {
+        await existing.docs[0].ref.update({
+            reportCount: admin.firestore.FieldValue.increment(1),
+            lastReportAt: admin.firestore.FieldValue.serverTimestamp(),
+            pushPending: true,
+        });
+        functions.logger.info("staff_tasks reabierta (dedup)", {
+            taskId: existing.docs[0].id,
+            clientId,
+            exerciseId,
+        });
+        return;
+    }
+    const fechaLimite = admin.firestore.Timestamp.fromDate(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000));
+    const created = await tasksCol.add({
+        titulo: `Dificultad alta reportada en ${exerciseName}`,
+        descripcion: `${clientName} ha marcado este ejercicio en rojo (muy difícil). ` +
+            "Revisa si conviene ajustar la progresión o sustituirlo.",
+        creadoPorId: "system",
+        creadoPorNombre: "Sistema (feedback automático)",
+        asignadoAId: assignedBy,
+        asignadoANombre: assignedToName,
+        fechaLimite,
+        estado: "pendiente",
+        fechaCreacion: admin.firestore.FieldValue.serverTimestamp(),
+        type: "video_difficulty_red",
+        clientId,
+        clientName,
+        exerciseId,
+        exerciseName,
+        videoUrl,
+        assignmentId: event.params.assignmentId,
+        reportCount: 1,
+        firstReportAt: admin.firestore.FieldValue.serverTimestamp(),
+        lastReportAt: admin.firestore.FieldValue.serverTimestamp(),
+        pushPending: true,
+    });
+    functions.logger.info("staff_tasks creada", {
+        taskId: created.id,
+        clientId,
+        exerciseId,
+        assignedBy,
+    });
+});
+// ═══════════════════════════════════════════════════════════════
+// VIDEO FEEDBACK ROJO — PUSH AL PROFESIONAL
+// ═══════════════════════════════════════════════════════════════
+// Trigger Firestore: cuando se crea o actualiza una staff_tasks con
+// type='video_difficulty_red' y pushPending=true, envía notificación
+// FCM al profesional asignado y marca pushPending=false. La app cliente
+// (Flutter) escribe el campo pushPending=true al crear/incrementar la
+// tarea desde el reproductor de vídeos del paciente.
+exports.sendVideoFeedbackPush = (0, firestore_1.onDocumentWritten)({
+    document: "staff_tasks/{taskId}",
+    region: "europe-southwest1",
+}, async (event) => {
+    const afterSnap = event.data?.after;
+    const after = afterSnap?.data();
+    if (!afterSnap || !after)
+        return;
+    if (after.type !== "video_difficulty_red")
+        return;
+    if (after.pushPending !== true)
+        return;
+    const asignadoAId = after.asignadoAId;
+    if (!asignadoAId) {
+        await afterSnap.ref.update({
+            pushPending: false,
+            pushError: "missing_asignadoAId",
+        });
+        return;
+    }
+    // Lookup del token FCM del profesional
+    let fcmToken = "";
+    try {
+        const userDoc = await db
+            .collection("users_app")
+            .doc(asignadoAId)
+            .get();
+        fcmToken = userDoc.data()?.fcmToken ?? "";
+    }
+    catch (e) {
+        functions.logger.error("Error leyendo fcmToken", e);
+    }
+    if (!fcmToken) {
+        await afterSnap.ref.update({
+            pushPending: false,
+            pushError: "no_token",
+        });
+        return;
+    }
+    const exerciseName = after.exerciseName || "un ejercicio";
+    const clientName = after.clientName || "Un cliente";
+    const reportCount = after.reportCount ?? 1;
+    const title = reportCount > 1
+        ? `⚠️ ${clientName} reporta dificultad (${reportCount}x)`
+        : `⚠️ ${clientName} marca rojo en ${exerciseName}`;
+    const body = "Toca para revisar. Considera ajustar la progresión o sustituir el ejercicio.";
+    try {
+        await admin.messaging().send({
+            token: fcmToken,
+            notification: { title, body },
+            data: {
+                type: "video_difficulty_red",
+                taskId: event.params.taskId,
+                clientId: after.clientId ?? "",
+                exerciseId: after.exerciseId ?? "",
+                assignmentId: after.assignmentId ?? "",
+                reportCount: String(reportCount),
+            },
+            android: {
+                priority: "high",
+                notification: {
+                    channelId: "salufit_default",
+                    priority: "high",
+                },
+            },
+            apns: {
+                payload: {
+                    aps: { sound: "default", badge: 1 },
+                },
+            },
+        });
+        await afterSnap.ref.update({
+            pushPending: false,
+            pushSentAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+    }
+    catch (err) {
+        functions.logger.error("FCM send error", err);
+        await afterSnap.ref.update({
+            pushPending: false,
+            pushError: String(err?.message ?? err),
+        });
     }
 });
 //# sourceMappingURL=index.js.map

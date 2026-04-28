@@ -1,0 +1,334 @@
+/**
+ * Cloud Function `importClinniAppointments` (onCall).
+ *
+ * Recibe el contenido base64 de un Excel de Clinni desde el panel admin
+ * (Flutter Windows), lo parsea con la librería `xlsx`, deduplica las
+ * citas por hash (telefono + fechaCita ISO + profesional) y las inserta
+ * en `clinni_appointments`.
+ *
+ * Esquema esperado del Excel (columnas, orden flexible):
+ *  - "Paciente" | "Nombre" -> pacienteNombre
+ *  - "Teléfono" | "Telefono" | "Móvil" | "Movil" -> pacienteTelefono
+ *  - "Fecha" | "Fecha cita" + "Hora" -> fechaCita
+ *  - "Profesional" | "Doctor" -> profesional
+ *  - "Servicio" | "Tratamiento" -> servicio
+ *  - "Notas" | "Observaciones" -> notas (opcional)
+ */
+
+import {onCall, HttpsError} from "firebase-functions/v2/https";
+import * as functions from "firebase-functions";
+import * as admin from "firebase-admin";
+import * as XLSX from "xlsx";
+import {normalizePhone} from "./whatsapp";
+
+if (admin.apps.length === 0) {
+  admin.initializeApp();
+}
+const db = admin.firestore();
+
+interface ImportRequestPayload {
+  fileBase64: string;
+  fileName: string;
+}
+
+interface ImportResultPayload {
+  imported: number;
+  duplicates: number;
+  errors: number;
+  errorMessages: string[];
+}
+
+interface ParsedRow {
+  pacienteNombre: string;
+  pacienteTelefono: string;
+  fechaCita: Date;
+  profesional: string;
+  servicio: string;
+  notas: string;
+}
+
+const COLUMN_ALIASES = {
+  pacienteNombre: ["paciente", "nombre", "cliente"],
+  pacienteTelefono: ["telefono", "teléfono", "movil", "móvil", "tel", "celular", "phone"],
+  fecha: ["fecha", "fecha cita", "fecha de la cita", "fechacita", "date"],
+  hora: ["hora", "hora cita", "horacita", "time"],
+  fechaHora: ["fecha y hora", "fechahora", "datetime"],
+  profesional: ["profesional", "doctor", "doctora", "médico", "medico", "terapeuta"],
+  servicio: ["servicio", "tratamiento", "tipo", "tipo cita", "service"],
+  notas: ["notas", "observaciones", "comentarios", "notes"],
+};
+
+function findColumn(
+    headers: string[],
+    aliases: string[],
+): number {
+  const normalized = headers.map((h) =>
+    String(h ?? "").toLowerCase().trim().replace(/\s+/g, " "),
+  );
+  for (const alias of aliases) {
+    const idx = normalized.indexOf(alias);
+    if (idx >= 0) return idx;
+  }
+  return -1;
+}
+
+function parseDate(raw: unknown): Date | null {
+  if (!raw) return null;
+  if (raw instanceof Date) return raw;
+  if (typeof raw === "number") {
+    // Excel serial date (días desde 1900-01-01)
+    const utcDays = Math.floor(raw - 25569);
+    const utcMs = utcDays * 86400 * 1000;
+    const fractional = raw - Math.floor(raw);
+    return new Date(utcMs + fractional * 86400 * 1000);
+  }
+  if (typeof raw === "string") {
+    const trimmed = raw.trim();
+    if (!trimmed) return null;
+    // Intentar formatos: "DD/MM/YYYY HH:mm", "YYYY-MM-DD HH:mm", ISO
+    const isoLike = trimmed.replace(" ", "T");
+    const dt1 = new Date(isoLike);
+    if (!isNaN(dt1.getTime())) return dt1;
+    const m = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})(?:[ T](\d{1,2}):(\d{2}))?/);
+    if (m) {
+      const [, dd, mm, yy, hh = "0", mn = "0"] = m;
+      const year = yy.length === 2 ? 2000 + Number(yy) : Number(yy);
+      return new Date(year, Number(mm) - 1, Number(dd), Number(hh), Number(mn));
+    }
+  }
+  return null;
+}
+
+function buildDeduplicationKey(
+    pacienteTelefono: string,
+    fechaCita: Date,
+    profesional: string,
+): string {
+  return `${pacienteTelefono}_${fechaCita.toISOString()}_${profesional.trim().toLowerCase()}`;
+}
+
+function parseWorkbook(buffer: Buffer): {rows: ParsedRow[]; errors: string[]} {
+  const wb = XLSX.read(buffer, {type: "buffer", cellDates: true});
+  const sheetName = wb.SheetNames[0];
+  if (!sheetName) {
+    return {rows: [], errors: ["El Excel no contiene hojas"]};
+  }
+  const sheet = wb.Sheets[sheetName];
+  const json = XLSX.utils.sheet_to_json(sheet, {
+    header: 1,
+    raw: true,
+    defval: "",
+  }) as unknown[][];
+  if (json.length < 2) {
+    return {rows: [], errors: ["El Excel está vacío o solo tiene cabecera"]};
+  }
+  const headers = json[0].map((h) => String(h ?? "").trim());
+  const colNombre = findColumn(headers, COLUMN_ALIASES.pacienteNombre);
+  const colTel = findColumn(headers, COLUMN_ALIASES.pacienteTelefono);
+  const colFecha = findColumn(headers, COLUMN_ALIASES.fecha);
+  const colHora = findColumn(headers, COLUMN_ALIASES.hora);
+  const colFechaHora = findColumn(headers, COLUMN_ALIASES.fechaHora);
+  const colProf = findColumn(headers, COLUMN_ALIASES.profesional);
+  const colServ = findColumn(headers, COLUMN_ALIASES.servicio);
+  const colNotas = findColumn(headers, COLUMN_ALIASES.notas);
+
+  const requiredMissing: string[] = [];
+  if (colNombre < 0) requiredMissing.push("Paciente/Nombre");
+  if (colTel < 0) requiredMissing.push("Teléfono");
+  if (colFecha < 0 && colFechaHora < 0) requiredMissing.push("Fecha");
+  if (colProf < 0) requiredMissing.push("Profesional");
+  if (requiredMissing.length > 0) {
+    return {
+      rows: [],
+      errors: [`Faltan columnas obligatorias: ${requiredMissing.join(", ")}`],
+    };
+  }
+
+  const rows: ParsedRow[] = [];
+  const errors: string[] = [];
+
+  for (let i = 1; i < json.length; i++) {
+    const row = json[i];
+    if (!row || row.length === 0) continue;
+    try {
+      const nombre = String(row[colNombre] ?? "").trim();
+      const telRaw = String(row[colTel] ?? "").trim();
+      if (!nombre || !telRaw) {
+        continue; // fila vacía o incompleta, ignorar silenciosamente
+      }
+      let fecha: Date | null = null;
+      if (colFechaHora >= 0) {
+        fecha = parseDate(row[colFechaHora]);
+      } else {
+        const dia = parseDate(row[colFecha]);
+        const horaRaw = colHora >= 0 ? row[colHora] : null;
+        if (dia) {
+          fecha = new Date(dia);
+          if (typeof horaRaw === "string") {
+            const m = horaRaw.match(/(\d{1,2}):(\d{2})/);
+            if (m) {
+              fecha.setHours(Number(m[1]), Number(m[2]), 0, 0);
+            }
+          } else if (typeof horaRaw === "number") {
+            // Hora como fracción de día
+            const totalSec = Math.round(horaRaw * 86400);
+            fecha.setHours(Math.floor(totalSec / 3600));
+            fecha.setMinutes(Math.floor((totalSec % 3600) / 60));
+          }
+        }
+      }
+      if (!fecha || isNaN(fecha.getTime())) {
+        errors.push(`Fila ${i + 1}: fecha inválida (${row[colFecha] ?? row[colFechaHora]})`);
+        continue;
+      }
+      const profesional = String(row[colProf] ?? "").trim();
+      if (!profesional) {
+        errors.push(`Fila ${i + 1}: profesional vacío`);
+        continue;
+      }
+      rows.push({
+        pacienteNombre: nombre,
+        pacienteTelefono: normalizePhone(telRaw),
+        fechaCita: fecha,
+        profesional,
+        servicio: colServ >= 0 ? String(row[colServ] ?? "").trim() : "",
+        notas: colNotas >= 0 ? String(row[colNotas] ?? "").trim() : "",
+      });
+    } catch (e) {
+      errors.push(`Fila ${i + 1}: ${String(e)}`);
+    }
+  }
+  return {rows, errors};
+}
+
+export const importClinniAppointments = onCall<ImportRequestPayload, Promise<ImportResultPayload>>(
+    {
+      region: "europe-southwest1",
+      memory: "512MiB",
+      timeoutSeconds: 300,
+    },
+    async (request) => {
+      // Solo admin / staff pueden importar
+      const callerUid = request.auth?.uid;
+      if (!callerUid) {
+        throw new HttpsError("unauthenticated", "Debe autenticarse");
+      }
+      const userDoc = await db.collection("users_app").doc(callerUid).get();
+      const rol = (userDoc.data()?.rol as string | undefined) ?? "";
+      if (!["admin", "administrador"].includes(rol)) {
+        throw new HttpsError("permission-denied", "Solo admin");
+      }
+
+      const {fileBase64, fileName} = request.data ?? {};
+      if (!fileBase64 || typeof fileBase64 !== "string") {
+        throw new HttpsError("invalid-argument", "Falta fileBase64");
+      }
+      const safeName = (fileName ?? "import.xlsx").replace(/[^a-zA-Z0-9._-]/g, "_");
+
+      let buffer: Buffer;
+      try {
+        buffer = Buffer.from(fileBase64, "base64");
+      } catch {
+        throw new HttpsError("invalid-argument", "Base64 inválido");
+      }
+      if (buffer.byteLength === 0) {
+        throw new HttpsError("invalid-argument", "Archivo vacío");
+      }
+      if (buffer.byteLength > 15 * 1024 * 1024) {
+        throw new HttpsError("invalid-argument", "Archivo > 15MB");
+      }
+
+      const {rows, errors} = parseWorkbook(buffer);
+      functions.logger.info("Clinni Excel parseado", {
+        fileName: safeName,
+        rows: rows.length,
+        errors: errors.length,
+      });
+
+      let imported = 0;
+      let duplicates = 0;
+      const importedAt = admin.firestore.FieldValue.serverTimestamp();
+
+      // Insertar en lotes de 400 (límite Firestore 500/batch)
+      for (let i = 0; i < rows.length; i += 400) {
+        const slice = rows.slice(i, i + 400);
+        const dedupKeys = slice.map((r) =>
+          buildDeduplicationKey(r.pacienteTelefono, r.fechaCita, r.profesional),
+        );
+        // Comprobar duplicados existentes
+        const existing = await db
+            .collection("clinni_appointments")
+            .where("deduplicationKey", "in", dedupKeys.slice(0, 30))
+            .get();
+        const existingKeys = new Set(
+            existing.docs.map((d) => d.data().deduplicationKey as string),
+        );
+        // Para más de 30 hay que iterar; lo hacemos por simplicidad si hay
+        if (dedupKeys.length > 30) {
+          // Comprobar el resto en chunks de 30
+          for (let j = 30; j < dedupKeys.length; j += 30) {
+            const subKeys = dedupKeys.slice(j, j + 30);
+            const sub = await db
+                .collection("clinni_appointments")
+                .where("deduplicationKey", "in", subKeys)
+                .get();
+            for (const d of sub.docs) {
+              existingKeys.add(d.data().deduplicationKey as string);
+            }
+          }
+        }
+
+        const batch = db.batch();
+        for (const row of slice) {
+          const key = buildDeduplicationKey(row.pacienteTelefono, row.fechaCita, row.profesional);
+          if (existingKeys.has(key)) {
+            duplicates++;
+            continue;
+          }
+          const ref = db.collection("clinni_appointments").doc();
+          batch.set(ref, {
+            pacienteNombre: row.pacienteNombre,
+            pacienteTelefono: row.pacienteTelefono,
+            fechaCita: admin.firestore.Timestamp.fromDate(row.fechaCita),
+            profesional: row.profesional,
+            servicio: row.servicio,
+            estado: "pendiente",
+            recordatorioEnviado: false,
+            fechaRecordatorio: null,
+            deduplicationKey: key,
+            importadoEn: importedAt,
+            origenExcel: safeName,
+            notas: row.notas,
+          });
+          imported++;
+        }
+        await batch.commit();
+      }
+
+      // Audit log
+      try {
+        await db.collection("audit_logs").add({
+          tipo: "CLINNI_IMPORT",
+          userId: callerUid,
+          timestamp: importedAt,
+          metadata: {
+            fileName: safeName,
+            imported,
+            duplicates,
+            errors: errors.length,
+            totalRows: rows.length,
+          },
+          status: "SUCCESS",
+        });
+      } catch (e) {
+        functions.logger.warn("audit_logs write failed", e);
+      }
+
+      return {
+        imported,
+        duplicates,
+        errors: errors.length,
+        errorMessages: errors.slice(0, 20),
+      };
+    },
+);
