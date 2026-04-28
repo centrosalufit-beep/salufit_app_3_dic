@@ -110,6 +110,44 @@ interface ProximaCita {
   estado: string;
 }
 
+interface Patient {
+  numeroHistoria: string;
+  nombreCompleto: string;
+  email: string;
+  proteccionDatosFirmada: boolean;
+}
+
+// Teléfono de recepción humana — debe ir en config; fallback hardcoded para
+// que el filtro Fase 3 funcione aun sin config completa.
+const TELEFONO_RECEPCION_FALLBACK = "+34 629 01 10 55";
+
+/**
+ * Filtro Fase 3: comprueba si el remitente está registrado en clinni_patients.
+ * Si no lo está, el bot evita gastar Claude con el mensaje y responde con un
+ * texto fijo redirigiendo a recepción humana. Devuelve null si no encuentra
+ * paciente o si Firestore falla (en cuyo caso dejamos pasar para no romper).
+ */
+async function findPatient(telefono: string): Promise<Patient | null> {
+  try {
+    const doc = await db.collection("clinni_patients").doc(telefono).get();
+    if (!doc.exists) return null;
+    const data = doc.data() ?? {};
+    return {
+      numeroHistoria: (data.numeroHistoria as string) ?? "",
+      nombreCompleto: ((data.nombreCompleto as string) ||
+                       (data.nombre as string) || "").trim(),
+      email: (data.email as string) ?? "",
+      proteccionDatosFirmada: data.proteccionDatosFirmada === true,
+    };
+  } catch (e) {
+    functions.logger.warn(
+        "findPatient falló — dejamos pasar para no bloquear",
+        {telefono, error: String(e)},
+    );
+    return null;
+  }
+}
+
 async function findUpcomingAppointment(
     telefono: string,
 ): Promise<ProximaCita | null> {
@@ -308,21 +346,90 @@ async function processIncomingText(
     grupoRecepcion: config.grupoRecepcionId ? "SET" : "EMPTY",
   });
 
-  const cita = await findUpcomingAppointment(telefono);
-  functions.logger.info("findUpcomingAppointment resultado", {
-    encontrada: cita !== null,
+  // Paralelizamos las 3 lecturas de Firestore para reducir latencia.
+  const [patient, cita, convInicial] = await Promise.all([
+    findPatient(telefono),
+    findUpcomingAppointment(telefono),
+    findActiveConversation(telefono),
+  ]);
+  functions.logger.info("contexto cargado", {
+    patientEncontrado: patient !== null,
+    pacienteHistoria: patient?.numeroHistoria,
+    citaEncontrada: cita !== null,
     citaId: cita?.id,
-  });
-  let conv = await findActiveConversation(telefono);
-  functions.logger.info("findActiveConversation resultado", {
-    encontrada: conv !== null,
-    convId: conv?.id,
+    convEncontrada: convInicial !== null,
+    convId: convInicial?.id,
   });
 
+  // ─── Fase 3: filtro de paciente conocido ──────────────────────────────────
+  // Si el remitente no está registrado como paciente Y no tiene cita asociada,
+  // respondemos con texto fijo redirigiendo a recepción humana, SIN llamar a
+  // Claude (ahorra tokens y bloquea spam). Solo aplica si la conversación es
+  // nueva (sin historial activo): si ya hay conversación activa, dejamos pasar
+  // para no cortar un hilo en curso.
+  if (!patient && !cita && !convInicial) {
+    functions.logger.info(
+        "📛 Filtro Fase 3 — paciente no registrado, no se invoca Claude",
+        {telefono},
+    );
+    const fechaPos = (await db.collection("config").doc("whatsapp_bot").get())
+        .data();
+    const telRecepcion = (fechaPos?.telefonoRecepcion as string) ||
+                         TELEFONO_RECEPCION_FALLBACK;
+    const respuestaFija =
+      "Hola, este es el WhatsApp del Centro Salufit. " +
+      "No te encontramos como paciente registrado en nuestra base de datos. " +
+      "Si quieres pedir información, concertar una cita o resolver una duda, " +
+      `contacta con recepción al ${telRecepcion} y te atenderemos personalmente. ` +
+      "Gracias.\n\n— SALUFIT";
+    await sendTextMessage(
+        {phoneId: config.whatsappPhoneId, token: waToken, to: telefono},
+        respuestaFija,
+    );
+    // Registramos la conversación para auditoría/futuro filtrado, marcada
+    // explícitamente como no_registrado para que el panel admin la vea aparte.
+    await createConversation({
+      pacienteNombre: "(no registrado)",
+      pacienteTelefono: telefono,
+      appointmentId: null,
+      tipo: "paciente_iniciado",
+      profesional: "",
+      fechaCita: null,
+      textoInicial: texto,
+      rolInicial: "paciente",
+    }).then((convId) =>
+      db.collection("whatsapp_conversations").doc(convId).update({
+        estado: "no_registrado",
+        resultado: "filtrado_no_paciente",
+        intencionDetectada: "filtered",
+        mensajes: admin.firestore.FieldValue.arrayUnion({
+          rol: "bot",
+          texto: respuestaFija,
+          timestamp: admin.firestore.Timestamp.now(),
+        }),
+      }),
+    );
+    // Notificación opcional a recepción para que sepa que un desconocido escribió.
+    await notifyRecepcion(
+        config,
+        waToken,
+        `🔕 Bot filtró mensaje de número no registrado.\n` +
+        `Tel: ${telefono}\n` +
+        `Mensaje: "${texto.slice(0, 200)}"\n` +
+        "(Se le ha enviado el teléfono de recepción.)",
+    );
+    return;
+  }
+
+  // ─── Continuamos con el flujo normal (paciente conocido o conversación activa) ──
+  let conv = convInicial;
   // Si el usuario inicia conversación sin cita asociada, intentar reagendar/escalar igualmente
   if (!conv) {
     const convId = await createConversation({
-      pacienteNombre: cita?.pacienteNombre ?? "(sin registrar)",
+      pacienteNombre:
+        patient?.nombreCompleto ||
+        cita?.pacienteNombre ||
+        "(sin registrar)",
       pacienteTelefono: telefono,
       appointmentId: cita?.id ?? null,
       tipo: "paciente_iniciado",
@@ -343,7 +450,12 @@ async function processIncomingText(
 
   functions.logger.info("Llamando a Claude para clasificar...", {textoPreview: texto.slice(0, 60)});
   const classification = await classifyIntent(anthropicKey, texto, {
-    pacienteNombre: cita?.pacienteNombre ?? "",
+    // Preferimos el nombre de la cita (más reciente) sobre el del listado de
+    // pacientes; si no hay cita, usamos el paciente registrado.
+    pacienteNombre:
+      cita?.pacienteNombre ||
+      patient?.nombreCompleto ||
+      "",
     fechaCita: cita ? cita.fechaCita.toISOString() : "",
     profesional: cita?.profesional ?? "",
     servicio: cita?.servicio ?? "",
@@ -360,15 +472,29 @@ async function processIncomingText(
 
   if (!classification) {
     // Fallback genérico si la IA falla
-    await sendTextMessage(
+    const textoFallback =
+      "Gracias por tu mensaje. Te contactaremos desde recepción en breve.";
+    functions.logger.info("Enviando fallback IA al paciente...", {
+      phoneId: config.whatsappPhoneId,
+      to: telefono,
+    });
+    const fallbackResult = await sendTextMessage(
         {phoneId: config.whatsappPhoneId, token: waToken, to: telefono},
-        "Gracias por tu mensaje. Te contactaremos desde recepción en breve.",
+        textoFallback,
     );
+    functions.logger.info("sendTextMessage fallback resultado", {
+      success: fallbackResult.success,
+      error: fallbackResult.error,
+      messageId: fallbackResult.messageId,
+    });
     await appendMessageToConversation(
         conv.id,
         "bot",
         "(fallback IA) Gracias por tu mensaje. Te contactaremos desde recepción.",
-        {estado: "escalada", intencionDetectada: "escalate"},
+        {
+          estado: fallbackResult.success ? "escalada" : "error_envio_fallback",
+          intencionDetectada: "escalate",
+        },
     );
     await notifyRecepcion(
         config,
@@ -376,7 +502,9 @@ async function processIncomingText(
         `⚠️ Bot fallback: ${cita?.pacienteNombre ?? telefono}\n` +
         `Tel: ${telefono}\n` +
         `Mensaje: "${texto}"\n` +
-        "(IA no disponible, atender manualmente)",
+        (fallbackResult.success ?
+          "(IA no disponible, atender manualmente)" :
+          `(IA no disponible Y envío fallback FALLÓ: ${fallbackResult.error ?? "?"})`),
     );
     return;
   }
