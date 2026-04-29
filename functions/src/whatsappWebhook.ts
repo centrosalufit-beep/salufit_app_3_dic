@@ -614,7 +614,21 @@ async function processIncomingText(
     (cita.fechaCita.getTime() - Date.now()) / (1000 * 60 * 60) :
     Number.POSITIVE_INFINITY;
 
-  functions.logger.info("Llamando a Claude para clasificar...", {textoPreview: texto.slice(0, 60)});
+  // Historial reciente para multi-turno: últimos 6 mensajes de la conv,
+  // EXCLUYENDO el mensaje actual del paciente (ya se pasa como user input).
+  // Si la conv es nueva (textoInicial), no hay historial previo relevante.
+  const todosMensajes =
+    (conv.data?.mensajes as Array<{rol: "paciente" | "bot"; texto: string}> | undefined) ??
+    [];
+  const historialMensajes = todosMensajes
+      .filter((m) => m.rol === "paciente" || m.rol === "bot")
+      .slice(-7, -1) // los 6 anteriores al actual
+      .map((m) => ({rol: m.rol, texto: m.texto}));
+
+  functions.logger.info("Llamando a Claude para clasificar...", {
+    textoPreview: texto.slice(0, 60),
+    historialCount: historialMensajes.length,
+  });
   const classification = await classifyIntent(anthropicKey, texto, {
     // Preferimos el nombre de la cita (más reciente) sobre el del listado de
     // pacientes; si no hay cita, usamos el paciente registrado.
@@ -627,6 +641,7 @@ async function processIncomingText(
     servicio: cita?.servicio ?? "",
     isWithinBusinessHours: inHours,
     horasHastaCita,
+    historialMensajes,
   });
   functions.logger.info("Claude resultado", {
     classification: classification ? {

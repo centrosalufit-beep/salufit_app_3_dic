@@ -27,6 +27,9 @@ export interface ClassificationContext {
   servicio: string;
   isWithinBusinessHours: boolean;
   horasHastaCita: number; // negativo si la cita ya pasó, Infinity si no hay cita
+  // Historial reciente de la conversación (últimos N mensajes, sin incluir el
+  // mensaje actual). Se pasa como contexto a Claude para que entienda el hilo.
+  historialMensajes?: Array<{rol: "paciente" | "bot"; texto: string}>;
 }
 
 export interface ClassificationResult {
@@ -140,11 +143,18 @@ export async function classifyIntent(
             "{isWithinBusinessHours}",
             context.isWithinBusinessHours ? "sí" : "no",
         );
+    // Construimos el array de messages con el historial previo (multi-turno).
+    // El historial es opcional; si llega, traducimos rol "paciente"→"user" y
+    // "bot"→"assistant" como exige la API de Anthropic.
+    const historial = (context.historialMensajes ?? []).map((m) => ({
+      role: (m.rol === "paciente" ? "user" : "assistant") as "user" | "assistant",
+      content: m.texto,
+    }));
     const response = await client.messages.create({
       model: MODEL,
       max_tokens: 400,
       system: filledPrompt,
-      messages: [{role: "user", content: mensaje}],
+      messages: [...historial, {role: "user", content: mensaje}],
     });
 
     const block = response.content[0];
