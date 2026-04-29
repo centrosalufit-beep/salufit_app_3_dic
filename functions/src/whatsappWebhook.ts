@@ -313,6 +313,52 @@ async function notifyRecepcion(
  * dos veces. Devuelve true si es el primer procesamiento, false si ya
  * estaba registrado (= duplicado a ignorar).
  */
+// ─── Rate limiting ────────────────────────────────────────────────────────
+// Defensa anti-abuso: máximo 10 mensajes por teléfono en una ventana de 5 min.
+// Si un teléfono supera ese ratio, el bot calla por completo (no responde, no
+// llama a Claude, no notifica). Los timestamps antiguos se ignoran por la
+// cutoff window así que el bot vuelve a responder cuando baja el ritmo.
+const RATE_LIMIT_MAX = 10;
+const RATE_LIMIT_WINDOW_MS = 5 * 60 * 1000;
+
+async function checkRateLimit(telefono: string): Promise<boolean> {
+  try {
+    const ref = db.collection("whatsapp_rate_limit").doc(telefono);
+    const now = Date.now();
+    const cutoff = now - RATE_LIMIT_WINDOW_MS;
+
+    const doc = await ref.get();
+    const stored = doc.exists ?
+      ((doc.data()?.timestamps as number[] | undefined) ?? []) :
+      [];
+    const recent = stored.filter((t) => t > cutoff);
+
+    if (recent.length >= RATE_LIMIT_MAX) {
+      functions.logger.warn("Rate limit excedido — silenciando", {
+        telefono,
+        recentCount: recent.length,
+        windowMinutes: RATE_LIMIT_WINDOW_MS / 60000,
+        max: RATE_LIMIT_MAX,
+      });
+      return false;
+    }
+
+    recent.push(now);
+    await ref.set({
+      timestamps: recent,
+      lastActivity: admin.firestore.Timestamp.now(),
+    });
+    return true;
+  } catch (e) {
+    // Si Firestore falla, dejamos pasar para no bloquear el bot por accidente.
+    functions.logger.warn("checkRateLimit falló — dejamos pasar", {
+      telefono,
+      error: String(e),
+    });
+    return true;
+  }
+}
+
 async function claimMessageId(messageId: string): Promise<boolean> {
   if (!messageId) return true; // sin id, dejamos pasar (mejor procesar dos veces que ninguna)
   const ref = db.collection("whatsapp_processed_messages").doc(messageId);
@@ -344,6 +390,11 @@ async function processIncomingText(
     telefono,
     textoPreview: texto.slice(0, 60),
   });
+
+  // Rate limit: bloqueo silencioso si supera el ratio.
+  const allowed = await checkRateLimit(telefono);
+  if (!allowed) return;
+
   const config = await loadConfig();
   if (!config.activo) {
     functions.logger.info("Bot inactivo, mensaje ignorado", {telefono});
