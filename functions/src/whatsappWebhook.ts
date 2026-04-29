@@ -558,7 +558,7 @@ async function processIncomingText(
     await notifyRecepcion(
         config,
         waToken,
-        `⚠️ Bot fallback: ${cita?.pacienteNombre ?? telefono}\n` +
+        `⚠️ Bot fallback: ${patient?.nombreCompleto || cita?.pacienteNombre || telefono}\n` +
         `Tel: ${telefono}\n` +
         `Mensaje: "${texto}"\n` +
         (fallbackResult.success ?
@@ -601,6 +601,7 @@ async function processIncomingText(
       texto,
       config,
       waToken,
+      patient?.nombreCompleto || cita?.pacienteNombre || telefono,
   );
 }
 
@@ -615,6 +616,7 @@ async function executeAction(
     mensajeOriginal: string,
     config: BotConfig,
     waToken: string,
+    pacienteNombre: string,
 ): Promise<void> {
   switch (intent) {
     case "confirmar":
@@ -726,7 +728,7 @@ async function executeAction(
       await notifyRecepcion(
           config,
           waToken,
-          `🔄 REAGENDACIÓN — ${cita?.pacienteNombre ?? telefono}\n` +
+          `🔄 REAGENDACIÓN — ${pacienteNombre}\n` +
           `${cita ? `Cita actual: ${formatFechaES(cita.fechaCita, "es")} con ${cita.profesional}` : "(sin cita registrada)"}\n` +
           `Tel: ${telefono}\nMensaje: "${mensajeOriginal}"\n` +
           "(Búsqueda automática de huecos pendiente fase 2)",
@@ -750,7 +752,7 @@ async function executeAction(
       await notifyRecepcion(
           config,
           waToken,
-          `📨 ESCALADO — ${cita?.pacienteNombre ?? telefono}\n` +
+          `📨 ESCALADO — ${pacienteNombre}\n` +
           `Tel: ${telefono}\nMensaje: "${mensajeOriginal}"\n` +
           "(Bot derivó a humano)",
       );
@@ -808,6 +810,7 @@ async function processInteractiveReply(
   await executeAction(
       intent, "es", dentro48h, false, convId, cita, telefono,
       `(botón: ${buttonId})`, config, waToken,
+      cita?.pacienteNombre || telefono,
   );
 }
 
