@@ -292,10 +292,19 @@ async function notifyRecepcion(
     );
     return;
   }
-  await sendTextMessage(
+  functions.logger.info("notifyRecepcion → enviando DM a recepción", {
+    to: config.grupoRecepcionId,
+    mensajePreview: mensaje.slice(0, 80),
+  });
+  const r = await sendTextMessage(
       {phoneId: config.whatsappPhoneId, token, to: config.grupoRecepcionId},
       mensaje,
   );
+  functions.logger.info("notifyRecepcion sendTextMessage resultado", {
+    success: r.success,
+    error: r.error,
+    messageId: r.messageId,
+  });
 }
 
 /**
