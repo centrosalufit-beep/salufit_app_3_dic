@@ -21,6 +21,7 @@ import * as functions from "firebase-functions";
 import * as admin from "firebase-admin";
 import {sendTextMessage, validateMetaSignature} from "./whatsapp";
 import {classifyIntent, BotIntent} from "./claude";
+import {fetchMediaAndStore} from "./whatsappMedia";
 
 if (admin.apps.length === 0) {
   admin.initializeApp();
@@ -1028,17 +1029,53 @@ export const whatsappWebhook = onRequest(
           const buttonId = msg.interactive?.button_reply?.id ?? msg.interactive?.list_reply?.id;
           if (!buttonId) return;
           await processInteractiveReply(from, String(buttonId), waToken, config);
-        } else {
-          // Tipos no soportados (image, audio, video, document, location)
-          // Avisamos y escalamos
+        } else if (
+          msg.type === "image" || msg.type === "document" ||
+          msg.type === "audio" || msg.type === "video" || msg.type === "sticker"
+        ) {
+          // Extraemos el media_id y filename según el tipo. La estructura
+          // del payload de Meta varía: image/audio/video/sticker traen .id
+          // dentro del nodo del tipo; document además trae filename original.
+          const mediaNode = (msg as Record<string, {id?: string; filename?: string; caption?: string}>)[msg.type];
+          const mediaId = mediaNode?.id;
+          const filename = mediaNode?.filename;
+          const caption = mediaNode?.caption ?? "";
+
+          let stored: Awaited<ReturnType<typeof fetchMediaAndStore>> = null;
+          if (mediaId) {
+            stored = await fetchMediaAndStore(mediaId, waToken, from, filename);
+          }
+
           await sendTextMessage(
               {phoneId: config.whatsappPhoneId, token: waToken, to: from},
-              "Por ahora solo puedo procesar mensajes de texto. Te contactaremos desde recepción.",
+              "Hemos recibido tu archivo. Recepción lo revisará y te contactará en breve. " +
+              "Gracias.\n\n— SALUFIT",
+          );
+
+          // Notificar a recepción con link al archivo si lo hemos almacenado.
+          const link = stored ?
+            `Archivo: ${stored.signedUrl}\n` +
+            `Tipo: ${stored.mimeType} (${Math.round(stored.sizeBytes / 1024)} KB)\n` +
+            `Storage: ${stored.storagePath}\n` :
+            "(no se pudo descargar el archivo de Meta — atender manualmente)\n";
+          await notifyRecepcion(
+              config,
+              waToken,
+              `📎 ADJUNTO ${msg.type.toUpperCase()} de ${from}\n` +
+              link +
+              (caption ? `Texto adjunto: "${caption}"\n` : "") +
+              "Posible justificante (parte médico, baja, etc.).",
+          );
+        } else {
+          // Tipos sin media_id (location, contacts, reaction, etc.)
+          await sendTextMessage(
+              {phoneId: config.whatsappPhoneId, token: waToken, to: from},
+              "Por ahora no puedo procesar ese tipo de mensaje. Te contactaremos desde recepción.",
           );
           await notifyRecepcion(
               config,
               waToken,
-              `📎 Mensaje multimedia recibido de ${from} (tipo: ${msg.type}). Atender manualmente.`,
+              `📎 Mensaje recibido de ${from} (tipo: ${msg.type}). Atender manualmente.`,
           );
         }
       } catch (e) {
