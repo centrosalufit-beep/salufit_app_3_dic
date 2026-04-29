@@ -444,6 +444,53 @@ async function processIncomingText(
   }
 
   const inHours = isWithinBusinessHours(new Date(), config);
+
+  // ─── Gate fuera de horario ────────────────────────────────────────────────
+  // Cuando el mensaje entra fuera de L-V 09:00-20:00 (configurable), NO
+  // llamamos a Claude. Enviamos un aviso fijo una sola vez por conversación
+  // y dejamos que recepción atienda manualmente cuando abra. Evita molestar
+  // al cliente con respuestas elaboradas en madrugada y ahorra tokens.
+  if (!inHours) {
+    const yaAvisado = conv.data?.outOfHoursAvisado === true;
+    if (!yaAvisado) {
+      const aviso =
+        "Hola 👋 Hemos recibido tu mensaje fuera de nuestro horario de " +
+        "atención (L–V 9:00–20:00). Te leemos y recepción te contactará " +
+        "en cuanto abramos. Gracias por escribir a SALUFIT.";
+      functions.logger.info(
+          "Fuera de horario — enviando aviso único",
+          {telefono, convId: conv.id},
+      );
+      const r = await sendTextMessage(
+          {phoneId: config.whatsappPhoneId, token: waToken, to: telefono},
+          aviso,
+      );
+      functions.logger.info("aviso fuera de horario sendTextMessage resultado", {
+        success: r.success,
+        messageId: r.messageId,
+        error: r.error,
+      });
+      await db.collection("whatsapp_conversations").doc(conv.id).update({
+        outOfHoursAvisado: true,
+        estado: "pendiente_recepcion",
+        intencionDetectada: "fuera_horario",
+        mensajes: admin.firestore.FieldValue.arrayUnion({
+          rol: "bot",
+          texto: aviso,
+          timestamp: admin.firestore.Timestamp.now(),
+        }),
+      });
+    } else {
+      functions.logger.info(
+          "Fuera de horario — aviso ya enviado, silenciando",
+          {telefono, convId: conv.id},
+      );
+      // Solo dejamos rastro en logs; el mensaje del paciente ya fue
+      // registrado al crear/actualizar la conversación más arriba.
+    }
+    return;
+  }
+
   const horasHastaCita = cita ?
     (cita.fechaCita.getTime() - Date.now()) / (1000 * 60 * 60) :
     Number.POSITIVE_INFINITY;
