@@ -437,12 +437,53 @@ export const deleteUserData = functions.https.onCall(async (data, context) => {
     const collectionsToCleanByAsignadoA = ["staff_tasks"];
 
     try {
+        // Leer teléfono del usuario antes de borrar el perfil — necesario
+        // para limpiar las colecciones del bot WhatsApp que indexan por teléfono.
+        let telefonoParaBot: string | null = null;
+        try {
+            const userDoc = await db.collection("users_app").doc(targetUid).get();
+            const phoneRaw = (userDoc.data()?.telefono as string | undefined) || "";
+            // Normalizamos a E.164 sin '+' (el formato que el bot usa).
+            telefonoParaBot = phoneRaw.replace(/[^0-9]/g, "") || null;
+        } catch (e) {
+            console.warn("No se pudo leer teléfono para limpieza de bot WhatsApp:", e);
+        }
+
         // Borrar documentos por userId
         for (const col of collectionsToCleanByUserId) {
             const snap = await db.collection(col).where("userId", "==", targetUid).get();
             const batch = db.batch();
             snap.docs.forEach((d) => batch.delete(d.ref));
             if (snap.size > 0) await batch.commit();
+        }
+
+        // Limpieza de colecciones del bot WhatsApp (indexadas por teléfono).
+        if (telefonoParaBot) {
+            const botCollectionsByPhone = [
+                "whatsapp_conversations",
+                "clinni_appointments",
+            ];
+            for (const col of botCollectionsByPhone) {
+                const snap = await db.collection(col)
+                    .where("pacienteTelefono", "==", telefonoParaBot)
+                    .get();
+                const batch = db.batch();
+                snap.docs.forEach((d) => batch.delete(d.ref));
+                if (snap.size > 0) await batch.commit();
+            }
+            // Docs cuyo ID es directamente el teléfono.
+            const botCollectionsByDocId = [
+                "whatsapp_rate_limit",
+                "whatsapp_optouts",
+                "clinni_patients",
+            ];
+            for (const col of botCollectionsByDocId) {
+                try {
+                    await db.collection(col).doc(telefonoParaBot).delete();
+                } catch (e) {
+                    console.warn(`No se pudo borrar ${col}/${telefonoParaBot}:`, e);
+                }
+            }
         }
 
         // Borrar walk_in_attendance por clientId

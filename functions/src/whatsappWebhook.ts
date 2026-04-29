@@ -313,6 +313,42 @@ async function notifyRecepcion(
  * dos veces. Devuelve true si es el primer procesamiento, false si ya
  * estaba registrado (= duplicado a ignorar).
  */
+// ─── Opt-out RGPD ─────────────────────────────────────────────────────────
+// Cumplimiento del derecho a no recibir comunicaciones (LSSI / RGPD art. 21).
+// Si el paciente envía BAJA / STOP / UNSUBSCRIBE / "no contactar" / similar,
+// añadimos su teléfono a whatsapp_optouts y dejamos de procesar sus mensajes.
+// Antes de cada mensaje, si el teléfono está en la lista, silenciamos.
+const OPT_OUT_KEYWORDS = [
+  "baja", "stop", "unsubscribe", "darme de baja", "dar de baja",
+  "no quiero recibir", "no me escribáis", "no me contactéis",
+  "no contactar", "no me molestes", "no me molestéis",
+];
+
+function isOptOutMessage(texto: string): boolean {
+  const t = texto.trim().toLowerCase();
+  if (t.length === 0 || t.length > 60) return false;
+  return OPT_OUT_KEYWORDS.some((kw) => t === kw || t.startsWith(kw + " ") ||
+    t.endsWith(" " + kw) || t.includes(" " + kw + " "));
+}
+
+async function isOptedOut(telefono: string): Promise<boolean> {
+  try {
+    const doc = await db.collection("whatsapp_optouts").doc(telefono).get();
+    return doc.exists;
+  } catch (e) {
+    functions.logger.warn("isOptedOut falló — dejamos pasar", {telefono, error: String(e)});
+    return false;
+  }
+}
+
+async function recordOptOut(telefono: string, mensaje: string): Promise<void> {
+  await db.collection("whatsapp_optouts").doc(telefono).set({
+    telefono,
+    fechaBaja: admin.firestore.Timestamp.now(),
+    mensajeOriginal: mensaje.slice(0, 200),
+  });
+}
+
 // ─── Rate limiting ────────────────────────────────────────────────────────
 // Defensa anti-abuso: máximo 10 mensajes por teléfono en una ventana de 5 min.
 // Si un teléfono supera ese ratio, el bot calla por completo (no responde, no
@@ -391,9 +427,29 @@ async function processIncomingText(
     textoPreview: texto.slice(0, 60),
   });
 
+  // Opt-out RGPD: si el teléfono ya está dado de baja, silenciamos.
+  if (await isOptedOut(telefono)) {
+    functions.logger.info("Teléfono dado de baja, silenciando", {telefono});
+    return;
+  }
+
   // Rate limit: bloqueo silencioso si supera el ratio.
   const allowed = await checkRateLimit(telefono);
   if (!allowed) return;
+
+  // Si el mensaje es una solicitud de baja, registramos y respondemos una vez.
+  if (isOptOutMessage(texto)) {
+    functions.logger.info("Solicitud de baja detectada", {telefono, textoPreview: texto.slice(0, 60)});
+    await recordOptOut(telefono, texto);
+    const config = await loadConfig();
+    await sendTextMessage(
+        {phoneId: config.whatsappPhoneId, token: waToken, to: telefono},
+        "Hemos registrado tu solicitud de baja. No te volveremos a contactar " +
+        "automáticamente desde este número. Si quieres reactivar las " +
+        "comunicaciones, contacta con recepción. Gracias.\n\n— SALUFIT",
+    );
+    return;
+  }
 
   const config = await loadConfig();
   if (!config.activo) {
