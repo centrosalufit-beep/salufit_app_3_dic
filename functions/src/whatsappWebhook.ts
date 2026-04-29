@@ -470,10 +470,13 @@ async function processIncomingText(
         messageId: r.messageId,
         error: r.error,
       });
+      // Mantenemos la conv en estado "activa" para que findActiveConversation
+      // la siga encontrando en mensajes posteriores y silencie correctamente.
+      // Recepción la cerrará manualmente al atenderla por la mañana.
       await db.collection("whatsapp_conversations").doc(conv.id).update({
         outOfHoursAvisado: true,
-        estado: "pendiente_recepcion",
         intencionDetectada: "fuera_horario",
+        fechaUltimaInteraccion: admin.firestore.Timestamp.now(),
         mensajes: admin.firestore.FieldValue.arrayUnion({
           rol: "bot",
           texto: aviso,
