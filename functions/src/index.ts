@@ -20,6 +20,7 @@ export { importClinniAppointments } from "./clinniImport";
 export { whatsappWebhook } from "./whatsappWebhook";
 export { sendAppointmentReminders } from "./reminders";
 export { archiveOldAppointments } from "./archiveAppointments";
+export { checkConversationTimeouts } from "./conversationTimeouts";
 
 // Dominios autorizados a llamar nuestras funciones HTTP
 const ALLOWED_ORIGINS = [
