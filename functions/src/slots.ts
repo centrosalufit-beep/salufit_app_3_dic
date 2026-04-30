@@ -316,6 +316,22 @@ export interface FindOpts {
   restrictToBeforeMs?: number;
   // Días a buscar hacia adelante.
   diasVista?: number;
+  // Si true (default), no se ofrecen slots del mismo día en curso. Razón:
+  // los slots concertados por teléfono hoy mismo aún no están en
+  // clinni_appointments hasta el próximo import del Excel; ofrecer slots
+  // de hoy lleva riesgo de doble-reserva entre bot y recepción humana.
+  skipSameDay?: boolean;
+}
+
+/** Devuelve el inicio (00:00) del día siguiente en TZ Europe/Madrid, como Date UTC. */
+function startOfNextDayMadrid(now: Date): Date {
+  const fmt = now.toLocaleDateString("en-CA", {timeZone: "Europe/Madrid"});
+  // fmt = "2026-04-30"
+  const [Y, M, D] = fmt.split("-").map(Number);
+  // Base: mediodía UTC del día siguiente (siempre cae en ese día también en Madrid,
+  // independiente del DST). buildLocalDate normaliza a 00:00 Madrid.
+  const base = new Date(Date.UTC(Y, M - 1, D + 1, 12, 0, 0));
+  return buildLocalDate(base, "00:00");
 }
 
 /**
@@ -332,7 +348,14 @@ export async function findNextAvailableSlots(
 
   const buffer = (opts.bufferMinutosDesdeAhora ?? 60) * 60 * 1000;
   const dias = opts.diasVista ?? 14;
-  const desde = new Date(Date.now() + buffer);
+  const skipSameDay = opts.skipSameDay !== false;
+  const ahoraMasBuffer = new Date(Date.now() + buffer);
+  // Si skipSameDay, el primer slot debe ser del día siguiente o posterior
+  // (evita conflictos con citas que recepción concierte por teléfono hoy y
+  //  todavía no estén en clinni_appointments hasta el próximo import).
+  const desde = skipSameDay ?
+    new Date(Math.max(ahoraMasBuffer.getTime(), startOfNextDayMadrid(new Date()).getTime())) :
+    ahoraMasBuffer;
   const hastaWindow = new Date(desde.getTime() + dias * 24 * 60 * 60 * 1000);
   const hasta = opts.restrictToBeforeMs ?
     new Date(Math.min(hastaWindow.getTime(), opts.restrictToBeforeMs)) :
