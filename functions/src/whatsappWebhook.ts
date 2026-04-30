@@ -284,6 +284,57 @@ function formatFechaES(date: Date, lang: "es" | "en"): string {
   });
 }
 
+/**
+ * Construye un DM estructurado para enviar a recepción. Aplica una jerarquía
+ * visual consistente para que el ojo capte la info de un vistazo:
+ *
+ *   {ICONO} {TÍTULO EN MAYÚSCULAS}
+ *   👤 {nombre}
+ *   📞 {telefono}
+ *
+ *   {bloque opcional de citas / mensaje}
+ *
+ *   ➡️ {acción concreta para recepción}
+ *
+ * Usa los iconos consistentemente: ✅ positivo/nuevo, ❌ anterior/cancelado,
+ * ⚠️ atención, 🆘 urgencia, 🔄 reagendar, 📨 escalada, 📞 teléfono,
+ * 📅 fecha, 💬 mensaje del paciente, ➡️ acción.
+ */
+function buildRecepcionMsg(opts: {
+  icono: string;
+  titulo: string;
+  nombre?: string;
+  telefono: string;
+  citaAnterior?: string;
+  citaNueva?: string;
+  citaActual?: string;
+  mensajeOriginal?: string;
+  extra?: string[];
+  cta: string;
+}): string {
+  const lines: string[] = [];
+  lines.push(`${opts.icono} ${opts.titulo}`);
+  if (opts.nombre) lines.push(`👤 ${opts.nombre}`);
+  lines.push(`📞 ${opts.telefono}`);
+
+  const dataLines: string[] = [];
+  if (opts.citaActual) dataLines.push(`📅 Cita: ${opts.citaActual}`);
+  if (opts.citaAnterior) dataLines.push(`❌ Cita anterior: ${opts.citaAnterior}`);
+  if (opts.citaNueva) dataLines.push(`✅ Cita nueva: ${opts.citaNueva}`);
+  if (opts.mensajeOriginal && !opts.mensajeOriginal.startsWith("(botón:")) {
+    dataLines.push(`💬 "${opts.mensajeOriginal}"`);
+  }
+  for (const e of opts.extra ?? []) dataLines.push(e);
+  if (dataLines.length > 0) {
+    lines.push("");
+    lines.push(...dataLines);
+  }
+
+  lines.push("");
+  lines.push(`➡️ ${opts.cta}`);
+  return lines.join("\n");
+}
+
 async function notifyRecepcion(
     config: BotConfig,
     token: string,
@@ -529,14 +580,13 @@ async function processIncomingText(
       }),
     );
     // Notificación opcional a recepción para que sepa que un desconocido escribió.
-    await notifyRecepcion(
-        config,
-        waToken,
-        `🔕 Bot filtró mensaje de número no registrado.\n` +
-        `Tel: ${telefono}\n` +
-        `Mensaje: "${texto.slice(0, 200)}"\n` +
-        "(Se le ha enviado el teléfono de recepción.)",
-    );
+    await notifyRecepcion(config, waToken, buildRecepcionMsg({
+      icono: "🔕",
+      titulo: "NÚMERO NO REGISTRADO (filtrado)",
+      telefono,
+      mensajeOriginal: texto.slice(0, 200),
+      cta: "Bot redirigió al teléfono de recepción. Valorar si es un lead nuevo y crear ficha en CRM.",
+    }));
     return;
   }
 
@@ -680,16 +730,16 @@ async function processIncomingText(
           intencionDetectada: "escalate",
         },
     );
-    await notifyRecepcion(
-        config,
-        waToken,
-        `⚠️ Bot fallback: ${patient?.nombreCompleto || cita?.pacienteNombre || telefono}\n` +
-        `Tel: ${telefono}\n` +
-        `Mensaje: "${texto}"\n` +
-        (fallbackResult.success ?
-          "(IA no disponible, atender manualmente)" :
-          `(IA no disponible Y envío fallback FALLÓ: ${fallbackResult.error ?? "?"})`),
-    );
+    await notifyRecepcion(config, waToken, buildRecepcionMsg({
+      icono: "⚠️",
+      titulo: "BOT FALLBACK (IA caída)",
+      nombre: patient?.nombreCompleto || cita?.pacienteNombre,
+      telefono,
+      mensajeOriginal: texto,
+      cta: fallbackResult.success ?
+        "IA no disponible. Bot envió acuse genérico al paciente. Atender manualmente." :
+        `IA no disponible Y envío fallback FALLÓ (${fallbackResult.error ?? "?"}). Atender con urgencia.`,
+    }));
     return;
   }
 
@@ -785,12 +835,14 @@ async function executeAction(
           estado: "escalada",
           resultado: "confirmar_sin_cita",
         });
-        await notifyRecepcion(
-            config,
-            waToken,
-            `❓ Paciente confirma sin cita registrada:\n` +
-            `Tel: ${telefono}\nMensaje: "${mensajeOriginal}"`,
-        );
+        await notifyRecepcion(config, waToken, buildRecepcionMsg({
+          icono: "❓",
+          titulo: "CONFIRMACIÓN SIN CITA REGISTRADA",
+          nombre: pacienteNombre,
+          telefono,
+          mensajeOriginal,
+          cta: "El paciente quiere confirmar pero no tiene cita futura en clinni_appointments. Verificar.",
+        }));
       }
       return;
 
@@ -918,29 +970,27 @@ async function executeAction(
                 resultado,
               });
         }
-        const cabecera = fuerzaMayor ?
-          "🆘 [ALBA] CANCELACIÓN <48h CON FUERZA MAYOR ALEGADA" :
+        const icono = fuerzaMayor ? "🆘" :
+          slotsOfrecidosCancel.length > 0 ? "🔄" : "⚠️";
+        const titulo = fuerzaMayor ?
+          "[ALBA] CANCELACIÓN <48h — FUERZA MAYOR" :
           slotsOfrecidosCancel.length > 0 ?
-            "🔄 [ALBA] CANCELACIÓN <48h — SLOTS DE REAGENDAR OFRECIDOS AL PACIENTE" :
-            "⚠️ [ALBA] CANCELACIÓN DENTRO DE 48h";
-        const politica = fuerzaMayor ?
-          "(Política: paciente alega fuerza mayor — valorar exención. " +
-          "Si no procede, ofrecer reagendar +48h o 55€ Bizum.)" :
+            "[ALBA] CANCELACIÓN <48h — BOT YA OFRECIÓ SLOTS" :
+            "[ALBA] CANCELACIÓN DENTRO DE 48h";
+        const cta = fuerzaMayor ?
+          "Paciente alega fuerza mayor — valorar exención. Si no procede, ofrecer reagendar +48h o 55€ Bizum." :
           slotsOfrecidosCancel.length > 0 ?
-            "(Bot ya ofreció slots dentro de 48h via botones. Si paciente " +
-            "los rechaza, gestionar 55€ Bizum o nueva propuesta manual.)" :
-            "(Política: reagendar dentro de 48h — máx 2 veces — o 55€ Bizum. " +
-            "Decisión humana.)";
-        await notifyRecepcion(
-            config,
-            waToken,
-            `${cabecera} — ${cita.pacienteNombre}\n` +
-            `Cita: ${formatFechaES(cita.fechaCita, "es")}\n` +
-            `Profesional: ${cita.profesional}\n` +
-            `Tel: ${telefono}\n` +
-            `Mensaje: "${mensajeOriginal}"\n` +
-            politica,
-        );
+            "Bot ya ofreció slots dentro de 48h vía botones. Si el paciente los rechaza, gestionar 55€ Bizum o nueva propuesta manual." :
+            "Política 48h aplicada. Decisión humana: reagendar +48h máx 2 veces o cobrar 55€ Bizum.";
+        await notifyRecepcion(config, waToken, buildRecepcionMsg({
+          icono,
+          titulo,
+          nombre: cita.pacienteNombre,
+          telefono,
+          citaActual: `${formatFechaES(cita.fechaCita, "es")} con ${cita.profesional}`,
+          mensajeOriginal,
+          cta,
+        }));
       } else if (cita) {
         // Cancelación con más de 48h de antelación: gratuita.
         await db
@@ -959,20 +1009,22 @@ async function executeAction(
           estado: "resuelta",
           resultado: "cita_cancelada",
         });
-        await notifyRecepcion(
-            config,
-            waToken,
-            `🚫 CANCELACIÓN — ${cita.pacienteNombre}\n` +
-            `Cita: ${formatFechaES(cita.fechaCita, "es")}\n` +
-            `Profesional: ${cita.profesional}\n` +
-            `Tel: ${telefono}`,
-        );
+        await notifyRecepcion(config, waToken, buildRecepcionMsg({
+          icono: "❌",
+          titulo: "CITA CANCELADA (gratuita >48h)",
+          nombre: cita.pacienteNombre,
+          telefono,
+          citaActual: `${formatFechaES(cita.fechaCita, "es")} con ${cita.profesional}`,
+          cta: "Bot ya marcó la cita como cancelada en clinni_appointments. Sincronizar con Clinni manualmente si procede.",
+        }));
       } else {
-        await notifyRecepcion(
-            config,
-            waToken,
-            `❓ Cancelación sin cita registrada:\nTel: ${telefono}\nMensaje: "${mensajeOriginal}"`,
-        );
+        await notifyRecepcion(config, waToken, buildRecepcionMsg({
+          icono: "❓",
+          titulo: "CANCELACIÓN SIN CITA REGISTRADA",
+          telefono,
+          mensajeOriginal,
+          cta: "El paciente quiere cancelar pero no tiene cita futura en clinni_appointments. Verificar.",
+        }));
       }
       return;
 
@@ -998,9 +1050,14 @@ async function executeAction(
           estado: "reagendar_solicitada",
           resultado: "reagendar_sin_cita",
         });
-        await notifyRecepcion(config, waToken,
-            `🔄 REAGENDACIÓN sin cita registrada — ${pacienteNombre}\n` +
-            `Tel: ${telefono}\nMensaje: "${mensajeOriginal}"`);
+        await notifyRecepcion(config, waToken, buildRecepcionMsg({
+          icono: "🔄",
+          titulo: "REAGENDACIÓN SIN CITA REGISTRADA",
+          nombre: pacienteNombre,
+          telefono,
+          mensajeOriginal,
+          cta: "El paciente quiere reagendar pero no tiene cita futura en clinni_appointments. Verificar y gestionar manualmente.",
+        }));
         return;
       }
 
@@ -1041,11 +1098,15 @@ async function executeAction(
           resultado: "reagendar_escalado_recepcion",
           motivoEscalada: motivo,
         });
-        await notifyRecepcion(config, waToken,
-            `🔄 REAGENDACIÓN — ${pacienteNombre}\n` +
-            `Cita actual: ${formatFechaES(cita.fechaCita, "es")} con ${cita.profesional}\n` +
-            `Tel: ${telefono}\nMensaje: "${mensajeOriginal}"\n` +
-            `(Profesional ${motivo}; recepción gestiona manualmente.)`);
+        await notifyRecepcion(config, waToken, buildRecepcionMsg({
+          icono: "🔄",
+          titulo: "REAGENDACIÓN MANUAL",
+          nombre: pacienteNombre,
+          telefono,
+          citaActual: `${formatFechaES(cita.fechaCita, "es")} con ${cita.profesional}`,
+          mensajeOriginal,
+          cta: `Profesional ${motivo}; recepción gestiona manualmente.`,
+        }));
         return;
       }
 
@@ -1065,11 +1126,16 @@ async function executeAction(
           estado: "reagendar_solicitada",
           resultado: "reagendar_sin_huecos",
         });
-        await notifyRecepcion(config, waToken,
-            `🔄 REAGENDACIÓN sin huecos automáticos — ${pacienteNombre}\n` +
-            `Cita actual: ${formatFechaES(cita.fechaCita, "es")} con ${cita.profesional}\n` +
-            `Tel: ${telefono}\n` +
-            (dentro48h ? "(dentro de 48h: ventana limitada a +48h)" : "(ventana 14 días vista vacía)"));
+        await notifyRecepcion(config, waToken, buildRecepcionMsg({
+          icono: "🔄",
+          titulo: "REAGENDACIÓN SIN HUECOS AUTOMÁTICOS",
+          nombre: pacienteNombre,
+          telefono,
+          citaActual: `${formatFechaES(cita.fechaCita, "es")} con ${cita.profesional}`,
+          cta: dentro48h ?
+            "Bot dentro de ventana 48h sin slots libres. Buscar hueco manualmente o gestionar pago 55€ Bizum." :
+            "Ventana de 14 días vista vacía. Buscar hueco manualmente o ampliar agenda.",
+        }));
         return;
       }
 
@@ -1137,13 +1203,14 @@ async function executeAction(
           .collection("whatsapp_conversations")
           .doc(convId)
           .update({estado: "escalada", resultado: "escalado_a_recepcion"});
-      await notifyRecepcion(
-          config,
-          waToken,
-          `📨 ESCALADO — ${pacienteNombre}\n` +
-          `Tel: ${telefono}\nMensaje: "${mensajeOriginal}"\n` +
-          "(Bot derivó a humano)",
-      );
+      await notifyRecepcion(config, waToken, buildRecepcionMsg({
+        icono: "📨",
+        titulo: "ESCALADO A HUMANO",
+        nombre: pacienteNombre,
+        telefono,
+        mensajeOriginal,
+        cta: "Atender personalmente — el paciente solicitó hablar con una persona.",
+      }));
       return;
 
     case "fuera_horario":
@@ -1184,13 +1251,16 @@ async function processInteractiveReply(
           {phoneId: config.whatsappPhoneId, token: waToken, to: telefono},
           "Entendido. Recepción te contactará para buscarte otro horario que te encaje. Gracias.\n\n— SALUFIT",
       );
-      await notifyRecepcion(config, waToken,
-          `🔄 REAGENDACIÓN — paciente pidió "Otro horario"\n` +
-          `Tel: ${telefono}\n` +
-          (cita ? `Cita actual: ${formatFechaES(cita.fechaCita, "es")} con ${cita.profesional}\n` : "") +
-          "(Buscar hueco manualmente. El paciente NO espera profesional concreto: " +
-          "si la franja que pida no encaja con su profesional habitual, " +
-          "se puede ofrecer otro fisio del mismo servicio.)");
+      await notifyRecepcion(config, waToken, buildRecepcionMsg({
+        icono: "🔄",
+        titulo: "REAGENDACIÓN — \"OTRO HORARIO\"",
+        nombre: cita?.pacienteNombre || conv?.data?.pacienteNombre as string | undefined,
+        telefono,
+        citaActual: cita ?
+          `${formatFechaES(cita.fechaCita, "es")} con ${cita.profesional}` :
+          undefined,
+        cta: "Buscar hueco manualmente. El paciente NO espera profesional concreto: si la franja que pida no encaja con su profesional habitual, se puede ofrecer otro fisio del mismo servicio.",
+      }));
       return;
     }
 
@@ -1226,8 +1296,12 @@ async function processInteractiveReply(
           {phoneId: config.whatsappPhoneId, token: waToken, to: telefono},
           "No encontré ese horario en tu propuesta. Recepción te contactará.",
       );
-      await notifyRecepcion(config, waToken,
-          `⚠️ Botón slot fuera de rango: ${buttonId} (${idx}/${slots.length}) tel ${telefono}`);
+      await notifyRecepcion(config, waToken, buildRecepcionMsg({
+        icono: "⚠️",
+        titulo: "BOTÓN SLOT FUERA DE RANGO",
+        telefono,
+        cta: `El paciente pulsó botón ${buttonId} pero el slot[${idx}] no existe (count=${slots.length}). Posible bug; atender al paciente y reportar.`,
+      }));
       return;
     }
 
@@ -1268,12 +1342,17 @@ async function processInteractiveReply(
         timestamp: admin.firestore.Timestamp.now(),
       }),
     });
-    await notifyRecepcion(config, waToken,
-        `✅ REAGENDACIÓN solicitada por paciente — confirmar en Clinni\n` +
-        `Tel: ${telefono}\n` +
-        (cita ? `Cita anterior: ${formatFechaES(cita.fechaCita, "es")} con ${cita.profesional}\n` : "") +
-        `Cita nueva: ${fechaTexto} con ${slot.profesionalNombre}\n` +
-        "(Actualizar Clinni y avisar al paciente si hay incidencia.)");
+    await notifyRecepcion(config, waToken, buildRecepcionMsg({
+      icono: "✅",
+      titulo: "REAGENDACIÓN SOLICITADA",
+      nombre: cita?.pacienteNombre || conv?.data?.pacienteNombre as string | undefined,
+      telefono,
+      citaAnterior: cita ?
+        `${formatFechaES(cita.fechaCita, "es")} con ${cita.profesional}` :
+        undefined,
+      citaNueva: `${fechaTexto} con ${slot.profesionalNombre}`,
+      cta: "Actualizar Clinni y avisar al paciente si hay incidencia.",
+    }));
     return;
   }
 
@@ -1465,30 +1544,34 @@ export const whatsappWebhook = onRequest(
           );
 
           // Notificar a recepción con link al archivo si lo hemos almacenado.
-          const link = stored ?
-            `Archivo: ${stored.signedUrl}\n` +
-            `Tipo: ${stored.mimeType} (${Math.round(stored.sizeBytes / 1024)} KB)\n` +
-            `Storage: ${stored.storagePath}\n` :
-            "(no se pudo descargar el archivo de Meta — atender manualmente)\n";
-          await notifyRecepcion(
-              config,
-              waToken,
-              `📎 ADJUNTO ${msg.type.toUpperCase()} de ${from}\n` +
-              link +
-              (caption ? `Texto adjunto: "${caption}"\n` : "") +
-              "Posible justificante (parte médico, baja, etc.).",
-          );
+          const extra: string[] = [];
+          if (stored) {
+            extra.push(`📎 Archivo: ${stored.signedUrl}`);
+            extra.push(`   Tipo: ${stored.mimeType} (${Math.round(stored.sizeBytes / 1024)} KB)`);
+            extra.push(`   Storage: ${stored.storagePath}`);
+          } else {
+            extra.push("⚠️ No se pudo descargar el archivo de Meta — atender manualmente");
+          }
+          if (caption) extra.push(`💬 Texto adjunto: "${caption}"`);
+          await notifyRecepcion(config, waToken, buildRecepcionMsg({
+            icono: "📎",
+            titulo: `ADJUNTO ${msg.type.toUpperCase()}`,
+            telefono: from,
+            extra,
+            cta: "Posible justificante (parte médico, baja). Revisar el archivo y actuar.",
+          }));
         } else {
           // Tipos sin media_id (location, contacts, reaction, etc.)
           await sendTextMessage(
               {phoneId: config.whatsappPhoneId, token: waToken, to: from},
               "Por ahora no puedo procesar ese tipo de mensaje. Te contactaremos desde recepción.",
           );
-          await notifyRecepcion(
-              config,
-              waToken,
-              `📎 Mensaje recibido de ${from} (tipo: ${msg.type}). Atender manualmente.`,
-          );
+          await notifyRecepcion(config, waToken, buildRecepcionMsg({
+            icono: "📎",
+            titulo: `MENSAJE NO SOPORTADO (${msg.type})`,
+            telefono: from,
+            cta: "Tipo de mensaje no procesable por el bot (location/reaction/etc.). Atender manualmente.",
+          }));
         }
       } catch (e) {
         functions.logger.error("Webhook background processing error", e);
