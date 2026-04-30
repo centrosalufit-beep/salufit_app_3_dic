@@ -6,7 +6,13 @@
       "Bash(firebase firestore:rules:get)",
       "Bash(find /c/Proyectos/salufit_app_3_dic/lib -type f -name *alert* -o -name *task* -o -name *notification*)",
       "Bash(flutter pub:*)",
-      "Bash(grep -E \"lib.*\\\\.dart$\")"
+      "Bash(grep -E \"lib.*\\\\.dart$\")",
+      "Bash(git push:*)",
+      "Bash(firebase deploy:*)",
+      "Bash(firebase functions:log:*)",
+      "Bash(firebase login:*)",
+      "Bash(firebase use:*)",
+      "Bash(firebase projects:list)"
     ]
   }
 }

@@ -65,23 +65,41 @@ const db = admin.firestore();
 
 interface ParsedRow {
   pacienteNombre: string;
-  pacienteTelefono: string;
+  pacienteTelefono: string; // "" si el Excel no trae teléfono → enriquecer después
   fechaCita: Date;
   profesional: string;
   servicio: string;
   notas: string;
+  estadoOriginal: string; // Lo que pone el Excel: "Atendida"/"Ausente"/"Pendiente"/...
 }
 
 const COLUMN_ALIASES = {
   pacienteNombre: ["paciente", "nombre", "cliente"],
   pacienteTelefono: ["telefono", "teléfono", "movil", "móvil", "tel", "celular", "phone"],
   fecha: ["fecha", "fecha cita", "fecha de la cita", "fechacita", "date"],
-  hora: ["hora", "hora cita", "horacita", "time"],
+  hora: ["hora", "hora cita", "horacita", "time", "inicio cita", "inicio"],
   fechaHora: ["fecha y hora", "fechahora", "datetime"],
-  profesional: ["profesional", "doctor", "doctora", "médico", "medico", "terapeuta"],
-  servicio: ["servicio", "tratamiento", "tipo", "tipo cita", "service"],
+  profesional: ["profesional", "doctor", "doctora", "médico", "medico", "terapeuta",
+    "atendida por", "atendido por", "atiende"],
+  servicio: ["servicio", "tratamiento", "tipo", "tipo cita", "service", "proceso"],
   notas: ["notas", "observaciones", "comentarios", "notes"],
+  estado: ["estado", "status"],
 };
+
+/**
+ * Normaliza un nombre para comparación: minúsculas, sin acentos, sin
+ * dobles espacios. Usado para hacer match cruzado entre el "Paciente"
+ * del Excel de citas y el "nombreCompleto" de clinni_patients cuando
+ * el Excel de citas no incluye teléfono.
+ */
+function normalizeName(s: string): string {
+  return (s ?? "")
+      .normalize("NFD")
+      .replace(/[̀-ͯ]/g, "")
+      .toLowerCase()
+      .trim()
+      .replace(/\s+/g, " ");
+}
 
 function findColumn(
     headers: string[],
@@ -156,12 +174,15 @@ function parseWorkbook(buffer: Buffer): {rows: ParsedRow[]; errors: string[]} {
   const colProf = findColumn(headers, COLUMN_ALIASES.profesional);
   const colServ = findColumn(headers, COLUMN_ALIASES.servicio);
   const colNotas = findColumn(headers, COLUMN_ALIASES.notas);
+  const colEstado = findColumn(headers, COLUMN_ALIASES.estado);
 
+  // Teléfono es OPCIONAL: el informe de citas de Clinni no incluye
+  // teléfono, así que si falta lo enriqueceremos cruzando por
+  // nombreCompleto contra clinni_patients después del parseo.
   const requiredMissing: string[] = [];
   if (colNombre < 0) requiredMissing.push("Paciente/Nombre");
-  if (colTel < 0) requiredMissing.push("Teléfono");
   if (colFecha < 0 && colFechaHora < 0) requiredMissing.push("Fecha");
-  if (colProf < 0) requiredMissing.push("Profesional");
+  if (colProf < 0) requiredMissing.push("Profesional/Atendida por");
   if (requiredMissing.length > 0) {
     return {
       rows: [],
@@ -177,8 +198,8 @@ function parseWorkbook(buffer: Buffer): {rows: ParsedRow[]; errors: string[]} {
     if (!row || row.length === 0) continue;
     try {
       const nombre = String(row[colNombre] ?? "").trim();
-      const telRaw = String(row[colTel] ?? "").trim();
-      if (!nombre || !telRaw) {
+      const telRaw = colTel >= 0 ? String(row[colTel] ?? "").trim() : "";
+      if (!nombre) {
         continue; // fila vacía o incompleta, ignorar silenciosamente
       }
       let fecha: Date | null = null;
@@ -213,11 +234,12 @@ function parseWorkbook(buffer: Buffer): {rows: ParsedRow[]; errors: string[]} {
       }
       rows.push({
         pacienteNombre: nombre,
-        pacienteTelefono: normalizePhone(telRaw),
+        pacienteTelefono: telRaw ? normalizePhone(telRaw) : "",
         fechaCita: fecha,
         profesional,
         servicio: colServ >= 0 ? String(row[colServ] ?? "").trim() : "",
         notas: colNotas >= 0 ? String(row[colNotas] ?? "").trim() : "",
+        estadoOriginal: colEstado >= 0 ? String(row[colEstado] ?? "").trim() : "",
       });
     } catch (e) {
       errors.push(`Fila ${i + 1}: ${String(e)}`);
@@ -268,16 +290,101 @@ export const importClinniAppointments = onRequest(
           return;
         }
 
-        const {rows, errors} = parseWorkbook(buffer);
+        const {rows: rawRows, errors} = parseWorkbook(buffer);
+
+        // 1) Enriquecer teléfono cruzando por nombre con clinni_patients
+        //    (el informe de citas de Clinni no incluye teléfono).
+        const needsPhoneEnrichment = rawRows.some((r) => !r.pacienteTelefono);
+        let nameToPhone = new Map<string, string>();
+        const ambiguousNames = new Set<string>();
+        if (needsPhoneEnrichment) {
+          const snap = await db.collection("clinni_patients").get();
+          for (const d of snap.docs) {
+            const data = d.data();
+            const tel = String(data.telefono ?? d.id);
+            const nombre = normalizeName(String(data.nombreCompleto ?? ""));
+            if (!nombre) continue;
+            if (nameToPhone.has(nombre)) {
+              ambiguousNames.add(nombre);
+            } else {
+              nameToPhone.set(nombre, tel);
+            }
+          }
+          functions.logger.info("Cruce nombre→telefono", {
+            patientsLoaded: snap.size,
+            uniqueNames: nameToPhone.size,
+            ambiguous: ambiguousNames.size,
+          });
+        }
+
+        // 2) Filtrar filas: enriquecer teléfono + descartar pasadas + descartar
+        //    estados no relevantes (Atendida/Facturada/Cancelada/Ausente).
+        const now = new Date();
+        let skippedNoPhone = 0;
+        let skippedAmbiguous = 0;
+        let skippedPast = 0;
+        let skippedDoneState = 0;
+        const rows: ParsedRow[] = [];
+        const DONE_STATES = ["atendida", "facturada", "ausente",
+          "cancelada", "cancelado", "anulada", "anulado"];
+        for (const r of rawRows) {
+          // Enriquecer teléfono si falta
+          if (!r.pacienteTelefono) {
+            const norm = normalizeName(r.pacienteNombre);
+            if (ambiguousNames.has(norm)) {
+              skippedAmbiguous++;
+              continue;
+            }
+            const tel = nameToPhone.get(norm);
+            if (!tel) {
+              skippedNoPhone++;
+              continue;
+            }
+            r.pacienteTelefono = tel;
+          }
+          // Filtrar pasadas
+          if (r.fechaCita.getTime() < now.getTime()) {
+            skippedPast++;
+            continue;
+          }
+          // Filtrar estados ya finalizados
+          const estadoNorm = r.estadoOriginal.toLowerCase().trim();
+          if (DONE_STATES.includes(estadoNorm)) {
+            skippedDoneState++;
+            continue;
+          }
+          rows.push(r);
+        }
+        if (skippedNoPhone > 0) {
+          errors.push(`${skippedNoPhone} cita(s) descartadas: paciente sin teléfono en clinni_patients`);
+        }
+        if (skippedAmbiguous > 0) {
+          errors.push(`${skippedAmbiguous} cita(s) descartadas: nombre ambiguo (más de un paciente con ese nombre)`);
+        }
+        if (skippedPast > 0) {
+          errors.push(`${skippedPast} cita(s) descartadas: fecha pasada (el bot solo procesa citas futuras)`);
+        }
+        if (skippedDoneState > 0) {
+          errors.push(`${skippedDoneState} cita(s) descartadas: estado finalizado (Atendida/Facturada/Cancelada/Ausente)`);
+        }
+
         functions.logger.info("Clinni Excel parseado", {
           fileName: safeName,
+          rawRows: rawRows.length,
           rows: rows.length,
+          skippedNoPhone,
+          skippedAmbiguous,
+          skippedPast,
+          skippedDoneState,
           errors: errors.length,
         });
 
         let imported = 0;
         let duplicates = 0;
         const importedAt = admin.firestore.FieldValue.serverTimestamp();
+
+        // Liberar memoria del lookup map antes del bucle de inserción.
+        nameToPhone = new Map();
 
         // Insertar en lotes de 400 (límite Firestore 500/batch)
         for (let i = 0; i < rows.length; i += 400) {

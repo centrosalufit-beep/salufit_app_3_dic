@@ -46,14 +46,14 @@ const PRESETS = {
   },
   t24h: {
     docId: "test_david_t24h",
-    // 24h desde ahora redondeado al próximo cuarto de hora (>20h y <48h vista
-    // para entrar en la ventana del cron sendAppointmentReminders).
-    fechaCita: (() => {
-      const d = new Date(Date.now() + 24 * 60 * 60 * 1000);
-      d.setMinutes(0, 0, 0);
-      return d;
-    })(),
-    notas: "Cita generada para validar recordatorio T-24h y política 48h.",
+    // Sábado 2 mayo 2026, 09:00 hora Madrid (CEST=UTC+2 → 07:00 UTC).
+    // Elegido específicamente con Ibtissam (fisio que trabaja sábados 8-12)
+    // para que la ventana de 48h siguientes a la cita tenga slots disponibles
+    // (viernes 1 mayo es festivo y David solo trabaja L-V — con esta cita
+    // los slots ofrecidos serán del propio sábado 2 mayo después de las 9:00).
+    fechaCita: new Date(Date.UTC(2026, 4, 2, 7, 0, 0)),
+    profesional: "Ibtissam",
+    notas: "Cita generada para validar recordatorio T-24h y política 48h con ofrecimiento de slots.",
   },
 };
 
@@ -69,7 +69,7 @@ async function setPreset(preset) {
     pacienteNombre: "David Baydal",
     pacienteTelefono: "34667644475",
     fechaCita: admin.firestore.Timestamp.fromDate(preset.fechaCita),
-    profesional: "David",
+    profesional: preset.profesional || "David",
     servicio: "Fisioterapia",
     estado: "pendiente",
     duracionMinutos: 30,

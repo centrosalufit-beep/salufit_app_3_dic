@@ -4,13 +4,165 @@ import 'package:salufit_app/core/theme/app_colors.dart';
 import 'package:salufit_app/features/whatsapp_bot/domain/whatsapp_conversation_model.dart';
 import 'package:salufit_app/features/whatsapp_bot/presentation/widgets/conversation_detail_dialog.dart';
 
-class ConversationTableWidget extends StatelessWidget {
+const _closedStates = {
+  'resuelta',
+  'cerrada',
+  'no_registrado',
+};
+
+class ConversationTableWidget extends StatefulWidget {
   const ConversationTableWidget({required this.conversations, super.key});
 
   final List<WhatsAppConversation> conversations;
 
   @override
+  State<ConversationTableWidget> createState() =>
+      _ConversationTableWidgetState();
+}
+
+class _ConversationTableWidgetState extends State<ConversationTableWidget> {
+  String? _filterEstado;
+  String? _filterIntencion;
+  String _searchQuery = '';
+  bool _onlyActive = false;
+
+  List<WhatsAppConversation> get _filtered {
+    final q = _searchQuery.trim().toLowerCase();
+    return widget.conversations.where((c) {
+      if (_filterEstado != null && c.estado != _filterEstado) return false;
+      if (_filterIntencion != null && c.intencionDetectada != _filterIntencion) {
+        return false;
+      }
+      if (_onlyActive && _closedStates.contains(c.estado)) return false;
+      if (q.isNotEmpty) {
+        final hay = '${c.pacienteNombre} ${c.pacienteTelefono}'.toLowerCase();
+        if (!hay.contains(q)) return false;
+      }
+      return true;
+    }).toList();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final estados = widget.conversations.map((c) => c.estado).toSet().toList()
+      ..sort();
+    final intenciones = widget.conversations
+        .map((c) => c.intencionDetectada)
+        .whereType<String>()
+        .toSet()
+        .toList()
+      ..sort();
+    final filtered = _filtered;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: Wrap(
+            spacing: 12,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              SizedBox(
+                width: 240,
+                child: TextField(
+                  decoration: InputDecoration(
+                    isDense: true,
+                    prefixIcon: const Icon(Icons.search, size: 18),
+                    hintText: 'Buscar paciente o teléfono',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  onChanged: (v) => setState(() => _searchQuery = v),
+                ),
+              ),
+              _filterDropdown(
+                label: 'Estado',
+                value: _filterEstado,
+                options: estados,
+                onChanged: (v) => setState(() => _filterEstado = v),
+              ),
+              _filterDropdown(
+                label: 'Intención',
+                value: _filterIntencion,
+                options: intenciones,
+                onChanged: (v) => setState(() => _filterIntencion = v),
+              ),
+              FilterChip(
+                label: const Text('Solo activas'),
+                selected: _onlyActive,
+                onSelected: (v) => setState(() => _onlyActive = v),
+                selectedColor: AppColors.primary.withValues(alpha: 0.18),
+                checkmarkColor: AppColors.primary,
+              ),
+              if (_filterEstado != null ||
+                  _filterIntencion != null ||
+                  _onlyActive ||
+                  _searchQuery.isNotEmpty)
+                TextButton.icon(
+                  onPressed: () => setState(() {
+                    _filterEstado = null;
+                    _filterIntencion = null;
+                    _onlyActive = false;
+                    _searchQuery = '';
+                  }),
+                  icon: const Icon(Icons.clear, size: 16),
+                  label: const Text('Limpiar'),
+                ),
+              Text(
+                '${filtered.length}/${widget.conversations.length}',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey.shade600,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const Divider(height: 1),
+        Expanded(child: _buildTable(filtered)),
+      ],
+    );
+  }
+
+  Widget _filterDropdown({
+    required String label,
+    required String? value,
+    required List<String> options,
+    required ValueChanged<String?> onChanged,
+  }) {
+    return SizedBox(
+      width: 180,
+      child: DropdownButtonFormField<String?>(
+        key: ValueKey('dropdown_${label}_${value ?? 'null'}'),
+        initialValue: value,
+        decoration: InputDecoration(
+          isDense: true,
+          labelText: label,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(8),
+          ),
+        ),
+        items: [
+          const DropdownMenuItem<String?>(
+            child: Text('Todas'),
+          ),
+          ...options.map(
+            (e) => DropdownMenuItem<String?>(
+              value: e,
+              child: Text(e, overflow: TextOverflow.ellipsis),
+            ),
+          ),
+        ],
+        onChanged: onChanged,
+      ),
+    );
+  }
+
+  Widget _buildTable(List<WhatsAppConversation> conversations) {
     if (conversations.isEmpty) {
       return Center(
         child: Padding(
@@ -21,12 +173,16 @@ class ConversationTableWidget extends StatelessWidget {
               Icon(Icons.smart_toy, size: 48, color: Colors.grey.shade300),
               const SizedBox(height: 12),
               Text(
-                'Sin conversaciones aún',
+                widget.conversations.isEmpty
+                    ? 'Sin conversaciones aún'
+                    : 'Ningún resultado con los filtros activos',
                 style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
               ),
               const SizedBox(height: 4),
               Text(
-                'El bot las irá registrando aquí cuando los pacientes interactúen.',
+                widget.conversations.isEmpty
+                    ? 'El bot las irá registrando aquí cuando los pacientes interactúen.'
+                    : 'Cambia los filtros o pulsa "Limpiar".',
                 style: TextStyle(color: Colors.grey.shade400, fontSize: 12),
               ),
             ],
@@ -92,7 +248,6 @@ class ConversationTableWidget extends StatelessWidget {
 
   String _formatPhone(String raw) {
     if (raw.length < 4) return raw;
-    // Mostrar solo últimos 6 dígitos para discreción
     return '••• ${raw.substring(raw.length - 6)}';
   }
 }
@@ -196,12 +351,14 @@ class _StateBadge extends StatelessWidget {
   Color _stateColor(String estado) {
     switch (estado) {
       case 'resuelta':
+      case 'cerrada':
         return Colors.green.shade700;
       case 'escalada':
       case 'timeout_escalada':
         return Colors.red.shade700;
       case 'esperando_respuesta_boton':
       case 'esperando_respuesta_boton_2':
+      case 'esperando_respuesta_boton_reagendar':
         return Colors.orange.shade800;
       case 'activa':
         return Colors.blue.shade700;

@@ -257,6 +257,64 @@ export const sendAppointmentReminders = onSchedule(
  * Solo admins (rol "admin" o "administrador" en users_app/{uid}). Acepta
  * opcionalmente forceAppointmentId para procesar una sola cita.
  */
+/**
+ * Cron diario que marca como `vencida` las citas con estado="pendiente"
+ * cuya fechaCita haya pasado hace más de 6h. Sin esto, una cita olvidada
+ * en Clinni quedaría como "pendiente" para siempre y entraría una y otra
+ * vez en queries pasadas.
+ *
+ * Usamos margen de 6h por seguridad: si Clinni y Firestore tienen un
+ * desajuste horario (por timezone) o si el profesional aún no ha cerrado
+ * la cita en Clinni, no la cerramos en caliente. El cron corre cada
+ * madrugada a las 03:00 ES.
+ */
+async function runExpireAppointments(): Promise<{updated: number}> {
+  const cutoff = new Date(Date.now() - 6 * 60 * 60 * 1000);
+  const snap = await db
+      .collection("clinni_appointments")
+      .where("estado", "==", "pendiente")
+      .where("fechaCita", "<", admin.firestore.Timestamp.fromDate(cutoff))
+      .limit(500)
+      .get();
+
+  if (snap.empty) {
+    functions.logger.info("Sin citas pendientes vencidas");
+    return {updated: 0};
+  }
+
+  // Procesar en chunks de 400 (límite Firestore 500/batch).
+  let updated = 0;
+  for (let i = 0; i < snap.docs.length; i += 400) {
+    const chunk = snap.docs.slice(i, i + 400);
+    const batch = db.batch();
+    for (const doc of chunk) {
+      batch.update(doc.ref, {
+        estado: "vencida",
+        vencidaEn: admin.firestore.FieldValue.serverTimestamp(),
+        motivoVencida: "auto_expirada_cron",
+      });
+      updated++;
+    }
+    await batch.commit();
+  }
+
+  functions.logger.info("Citas auto-vencidas", {updated, scanned: snap.size});
+  return {updated};
+}
+
+export const expirePastAppointments = onSchedule(
+    {
+      schedule: "0 3 * * *",
+      region: "europe-west1",
+      timeZone: "Europe/Madrid",
+      memory: "256MiB",
+      timeoutSeconds: 540,
+    },
+    async () => {
+      await runExpireAppointments();
+    },
+);
+
 export const triggerRemindersNow = onCall(
     {
       region: "europe-west1",

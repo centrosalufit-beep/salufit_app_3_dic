@@ -1,16 +1,68 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:salufit_app/core/theme/app_colors.dart';
 import 'package:salufit_app/features/whatsapp_bot/domain/whatsapp_conversation_model.dart';
 
-class ConversationDetailDialog extends StatelessWidget {
+/// Estados que ya están cerrados; en estos no mostramos el botón
+/// "Marcar como resuelta".
+const _closedStates = {
+  'resuelta',
+  'cerrada',
+  'no_registrado',
+  'reagendar_confirmacion_pendiente',
+};
+
+class ConversationDetailDialog extends ConsumerStatefulWidget {
   const ConversationDetailDialog({required this.conversation, super.key});
 
   final WhatsAppConversation conversation;
 
   @override
+  ConsumerState<ConversationDetailDialog> createState() =>
+      _ConversationDetailDialogState();
+}
+
+class _ConversationDetailDialogState
+    extends ConsumerState<ConversationDetailDialog> {
+  bool _closing = false;
+
+  Future<void> _markResolved() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    setState(() => _closing = true);
+    try {
+      await FirebaseFirestore.instance
+          .collection('whatsapp_conversations')
+          .doc(widget.conversation.id)
+          .update({
+        'estado': 'resuelta',
+        'resultado': 'cerrada_manualmente',
+        'cerradaPor': user.uid,
+        'cerradaEn': FieldValue.serverTimestamp(),
+        'fechaUltimaInteraccion': FieldValue.serverTimestamp(),
+      });
+      if (!mounted) return;
+      Navigator.of(context).pop();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Conversación marcada como resuelta')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _closing = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error al cerrar: $e')),
+      );
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final dateFmt = DateFormat('dd/MM/yyyy HH:mm');
+    final c = widget.conversation;
+    final canClose = !_closedStates.contains(c.estado);
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: ConstrainedBox(
@@ -34,8 +86,8 @@ class ConversationDetailDialog extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          conversation.pacienteNombre.isNotEmpty
-                              ? conversation.pacienteNombre
+                          c.pacienteNombre.isNotEmpty
+                              ? c.pacienteNombre
                               : '(sin nombre)',
                           style: const TextStyle(
                             color: Colors.white,
@@ -44,7 +96,7 @@ class ConversationDetailDialog extends StatelessWidget {
                           ),
                         ),
                         Text(
-                          conversation.pacienteTelefono,
+                          c.pacienteTelefono,
                           style: const TextStyle(
                             color: Colors.white70,
                             fontSize: 12,
@@ -70,27 +122,27 @@ class ConversationDetailDialog extends StatelessWidget {
                 children: [
                   _Chip(
                     label: 'Tipo',
-                    value: conversation.tipo,
+                    value: c.tipo,
                   ),
                   _Chip(
                     label: 'Estado',
-                    value: conversation.estado,
-                    color: _stateColor(conversation.estado),
+                    value: c.estado,
+                    color: _stateColor(c.estado),
                   ),
-                  if (conversation.intencionDetectada != null)
+                  if (c.intencionDetectada != null)
                     _Chip(
                       label: 'Intención',
-                      value: conversation.intencionDetectada!,
+                      value: c.intencionDetectada!,
                     ),
-                  if (conversation.profesional.isNotEmpty)
+                  if (c.profesional.isNotEmpty)
                     _Chip(
                       label: 'Profesional',
-                      value: conversation.profesional,
+                      value: c.profesional,
                     ),
-                  if (conversation.fechaCita != null)
+                  if (c.fechaCita != null)
                     _Chip(
                       label: 'Cita',
-                      value: dateFmt.format(conversation.fechaCita!),
+                      value: dateFmt.format(c.fechaCita!),
                     ),
                 ],
               ),
@@ -100,9 +152,9 @@ class ConversationDetailDialog extends StatelessWidget {
             Expanded(
               child: ListView.builder(
                 padding: const EdgeInsets.all(12),
-                itemCount: conversation.mensajes.length,
+                itemCount: c.mensajes.length,
                 itemBuilder: (context, i) {
-                  final m = conversation.mensajes[i];
+                  final m = c.mensajes[i];
                   final isBot = m.rol == 'bot';
                   return Align(
                     alignment:
@@ -154,24 +206,47 @@ class ConversationDetailDialog extends StatelessWidget {
                 },
               ),
             ),
-            // Footer info
-            if (conversation.resultado != null)
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade50,
-                  border: Border(top: BorderSide(color: Colors.grey.shade200)),
-                ),
-                child: Text(
-                  'Resultado: ${conversation.resultado}',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey.shade700,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
+            // Footer info + acción cerrar
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade50,
+                border: Border(top: BorderSide(color: Colors.grey.shade200)),
               ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      c.resultado != null
+                          ? 'Resultado: ${c.resultado}'
+                          : 'Sin resultado registrado',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey.shade700,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  if (canClose)
+                    ElevatedButton.icon(
+                      onPressed: _closing ? null : _markResolved,
+                      icon: _closing
+                          ? const SizedBox(
+                              width: 14,
+                              height: 14,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.check_circle_outline, size: 18),
+                      label: const Text('Marcar resuelta'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.green.shade700,
+                        foregroundColor: Colors.white,
+                      ),
+                    ),
+                ],
+              ),
+            ),
           ],
         ),
       ),
@@ -181,12 +256,14 @@ class ConversationDetailDialog extends StatelessWidget {
   Color _stateColor(String estado) {
     switch (estado) {
       case 'resuelta':
+      case 'cerrada':
         return Colors.green;
       case 'escalada':
       case 'timeout_escalada':
         return Colors.red;
       case 'esperando_respuesta_boton':
       case 'esperando_respuesta_boton_2':
+      case 'esperando_respuesta_boton_reagendar':
         return Colors.orange;
       case 'activa':
         return Colors.blue;
