@@ -147,11 +147,14 @@ async function runReminders(opts?: {
     if (!telefono) continue;
 
     const fechaFmt = formatFecha(fechaCita);
+    // No mencionamos al profesional concreto al cliente (decisión opción B
+    // 2026-04-30): si recepción reasigna por agenda, el cliente no debe
+    // tener expectativa fijada con un nombre. Mostramos solo el servicio.
+    void profesional;
     const body =
       `Hola ${nombre}, te recordamos tu cita en Centro Salufit:\n\n` +
       `📅 ${fechaFmt}\n` +
-      `👤 Profesional: ${profesional}\n` +
-      (servicio ? `💼 Servicio: ${servicio}\n\n` : "\n") +
+      `💼 ${servicio || "Cita"}\n\n` +
       "Por favor, confirma tu asistencia:";
 
     const result = await sendButtonMessage(

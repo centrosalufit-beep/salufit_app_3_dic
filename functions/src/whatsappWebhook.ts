@@ -834,6 +834,9 @@ async function executeAction(
                 bufferMinutosDesdeAhora: 60,
                 diasVista: 14,
                 restrictToBeforeMs: restrict,
+                // Solo slots POSTERIORES a la cita actual — la regla 48h dice
+                // "dentro de las 48h SIGUIENTES" (no anteriores).
+                restrictToAfterMs: cita.fechaCita.getTime(),
               },
           );
           if (schedule && schedule.activo &&
@@ -992,9 +995,15 @@ async function executeAction(
         return;
       }
 
-      // Si dentro48h: la nueva cita debe estar dentro de 48h siguientes.
+      // Si dentro48h: la nueva cita debe estar dentro de las 48h SIGUIENTES
+      // a la cita actual (regla negocio). Por tanto cota inferior=cita.fechaCita
+      // y cota superior=cita.fechaCita+48h. Si está fuera de 48h, no aplica
+      // ni una ni otra; búsqueda libre en los próximos 14 días.
       const restrictToBeforeMs = dentro48h ?
         cita.fechaCita.getTime() + 48 * 60 * 60 * 1000 :
+        undefined;
+      const restrictToAfterMs = dentro48h ?
+        cita.fechaCita.getTime() :
         undefined;
 
       const {schedule, slots} = await findNextAvailableSlots(cita.profesional, {
@@ -1002,6 +1011,7 @@ async function executeAction(
         bufferMinutosDesdeAhora: 60,
         diasVista: 14,
         restrictToBeforeMs,
+        restrictToAfterMs,
       });
 
       // Profesional no encontrado, inactivo o configurado para escalar siempre.

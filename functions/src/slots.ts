@@ -314,6 +314,11 @@ export interface FindOpts {
   bufferMinutosDesdeAhora?: number;
   // Tope superior: ningún slot más tarde de este timestamp. Para regla 48h.
   restrictToBeforeMs?: number;
+  // Tope inferior: ningún slot antes de este timestamp. Útil cuando se
+  // reagenda dentro de la regla 48h y queremos ofrecer slots POSTERIORES
+  // a la cita actual (no anteriores), siguiendo "dentro de las 48h
+  // SIGUIENTES a la cita actual".
+  restrictToAfterMs?: number;
   // Días a buscar hacia adelante.
   diasVista?: number;
   // Si true (default), no se ofrecen slots del mismo día en curso. Razón:
@@ -350,12 +355,18 @@ export async function findNextAvailableSlots(
   const dias = opts.diasVista ?? 14;
   const skipSameDay = opts.skipSameDay !== false;
   const ahoraMasBuffer = new Date(Date.now() + buffer);
-  // Si skipSameDay, el primer slot debe ser del día siguiente o posterior
-  // (evita conflictos con citas que recepción concierte por teléfono hoy y
-  //  todavía no estén en clinni_appointments hasta el próximo import).
-  const desde = skipSameDay ?
-    new Date(Math.max(ahoraMasBuffer.getTime(), startOfNextDayMadrid(new Date()).getTime())) :
-    ahoraMasBuffer;
+  // El "desde" es el max de varios límites:
+  //   - ahora + buffer (no proponer slot demasiado inmediato)
+  //   - inicio del día siguiente local (skipSameDay, evita doble reserva)
+  //   - restrictToAfterMs si se pasó (slots POSTERIORES a una cita actual)
+  let desdeMs = ahoraMasBuffer.getTime();
+  if (skipSameDay) {
+    desdeMs = Math.max(desdeMs, startOfNextDayMadrid(new Date()).getTime());
+  }
+  if (opts.restrictToAfterMs) {
+    desdeMs = Math.max(desdeMs, opts.restrictToAfterMs);
+  }
+  const desde = new Date(desdeMs);
   const hastaWindow = new Date(desde.getTime() + dias * 24 * 60 * 60 * 1000);
   const hasta = opts.restrictToBeforeMs ?
     new Date(Math.min(hastaWindow.getTime(), opts.restrictToBeforeMs)) :
