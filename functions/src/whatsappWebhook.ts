@@ -796,10 +796,29 @@ async function executeAction(
 
     case "cancelar":
       if (cita && dentro48h) {
-        // POLÍTICA 48h: NO cancelamos automáticamente. Escalamos a Alba para
-        // que decida. El bot ya envió la respuesta explicando la política antes
-        // de llegar aquí. Si la IA detectó fuerza mayor, lo destacamos en el
-        // aviso para que Alba lo valore con prioridad.
+        // POLÍTICA 48h: NO cancelamos automáticamente. Escalamos a Alba.
+        // Si el flujo viene de un botón del recordatorio (o de cualquier
+        // vía donde Claude no haya respondido al paciente todavía), enviamos
+        // un mensaje fijo con la política. Si viene de texto, Claude ya
+        // respondió antes y no duplicamos.
+        const vieneDeBoton = mensajeOriginal.startsWith("(botón:");
+        if (vieneDeBoton) {
+          const saludoNombre = pacienteNombre.split(" ")[0] || "";
+          const msgPol = fuerzaMayor ?
+            `Hola${saludoNombre ? " " + saludoNombre : ""}, entendemos que es ` +
+            "una situación difícil. Recepción te contactará en breve para " +
+            "valorar tu caso con prioridad.\n\n— SALUFIT" :
+            `Hola${saludoNombre ? " " + saludoNombre : ""}, hemos recibido tu ` +
+            "solicitud de cancelación. Como tu cita es en menos de 48h, se " +
+            "aplica nuestra política: puedes reagendar (gratis, máximo 2 " +
+            "veces, dentro de las 48h siguientes a tu cita) o abonar 55€ " +
+            "por Bizum al +34 629 01 10 55. Recepción te contactará en " +
+            "breve para gestionarlo. Gracias.\n\n— SALUFIT";
+          await sendTextMessage(
+              {phoneId: config.whatsappPhoneId, token: waToken, to: telefono},
+              msgPol,
+          );
+        }
         const resultado = fuerzaMayor ?
           "cancelar_dentro_48h_fuerza_mayor" :
           "cancelar_dentro_48h_escalado";
@@ -1163,6 +1182,43 @@ async function processInteractiveReply(
   if (!intent) {
     functions.logger.info("Botón no reconocido", {buttonId});
     return;
+  }
+
+  // Bloqueo de re-pulsación: si el paciente ya pulsó algún botón del
+  // recordatorio para esta cita, ignoramos pulsaciones posteriores y
+  // respondemos con un acuse claro. Evita confusión cuando el cliente
+  // explora los botones tras haber tomado ya una decisión.
+  if (cita) {
+    try {
+      const citaSnap = await db.collection("clinni_appointments").doc(cita.id).get();
+      const data = citaSnap.data() ?? {};
+      if (data.recordatorioBotonPulsado === true) {
+        const tipoPrev = (data.recordatorioBotonPulsadoTipo as string | undefined) ?? "una opción";
+        functions.logger.info("Botón ya consumido — ignorando", {
+          citaId: cita.id, buttonIdActual: buttonId, tipoPrev,
+        });
+        await sendTextMessage(
+            {phoneId: config.whatsappPhoneId, token: waToken, to: telefono},
+            "Hemos recibido anteriormente tu respuesta sobre esta cita. " +
+            "Si necesitas algo más, escríbenos un mensaje y te atenderemos. " +
+            "Gracias.\n\n— SALUFIT",
+        );
+        return;
+      }
+      // Marcamos la cita ANTES de procesar para minimizar race con
+      // pulsaciones concurrentes. Si el process posterior falla, el flag
+      // queda set; recepción puede limpiarlo manualmente desde el panel.
+      await citaSnap.ref.update({
+        recordatorioBotonPulsado: true,
+        recordatorioBotonPulsadoEn: admin.firestore.Timestamp.now(),
+        recordatorioBotonPulsadoTipo: buttonId,
+      });
+    } catch (e) {
+      functions.logger.warn("No se pudo verificar/marcar recordatorioBotonPulsado", {
+        citaId: cita.id, error: String(e),
+      });
+      // No bloqueamos el flujo — preferimos procesar duplicado a no procesar.
+    }
   }
 
   const convId = conv?.id ?? await createConversation({
