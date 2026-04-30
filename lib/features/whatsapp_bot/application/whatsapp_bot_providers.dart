@@ -1,11 +1,46 @@
+import 'dart:convert';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:cloud_functions/cloud_functions.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:http/http.dart' as http;
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:salufit_app/core/providers/firebase_providers.dart';
 import 'package:salufit_app/features/whatsapp_bot/domain/clinni_appointment_model.dart';
 import 'package:salufit_app/features/whatsapp_bot/domain/whatsapp_conversation_model.dart';
 
 part 'whatsapp_bot_providers.g.dart';
+
+/// Las Cloud Functions de import son onRequest (HTTP) en lugar de onCall
+/// porque cloud_functions plugin de Flutter no soporta Windows desktop.
+/// Usamos HTTP directo con Firebase Auth ID token en header Authorization.
+const _cfBaseUrl = 'https://europe-southwest1-salufitnewapp.cloudfunctions.net';
+
+Future<Map<String, dynamic>> _postCloudFunction(
+  String functionName,
+  Map<String, dynamic> body,
+) async {
+  final user = FirebaseAuth.instance.currentUser;
+  if (user == null) {
+    throw StateError('No hay usuario autenticado');
+  }
+  final idToken = await user.getIdToken();
+  final url = Uri.parse('$_cfBaseUrl/$functionName');
+  final response = await http.post(
+    url,
+    headers: {
+      'Authorization': 'Bearer $idToken',
+      'Content-Type': 'application/json',
+    },
+    body: jsonEncode(body),
+  );
+  final raw = response.body.isEmpty ? '{}' : response.body;
+  final data = jsonDecode(raw) as Map<String, dynamic>;
+  if (response.statusCode != 200) {
+    final err = data['error']?.toString() ?? 'HTTP ${response.statusCode}';
+    throw StateError(err);
+  }
+  return data;
+}
 
 /// Stream con las conversaciones más recientes del bot, ordenadas por
 /// la última interacción (descendente). Limit 100 para no saturar la UI.
@@ -79,21 +114,20 @@ class ImportResult {
   final List<String> errorMessages;
 }
 
-/// Llama a la Cloud Function `importClinniAppointments` con el contenido
-/// del Excel codificado en base64.
+/// Llama a la Cloud Function `importClinniAppointments` (onRequest) con el
+/// contenido del Excel codificado en base64. Usa http POST con Firebase Auth
+/// ID token en header Authorization Bearer (cloud_functions plugin no
+/// soporta Windows desktop).
 @riverpod
 Future<ImportResult> importClinniExcel(
   Ref ref, {
   required String fileBase64,
   required String fileName,
 }) async {
-  final functions = FirebaseFunctions.instanceFor(region: 'europe-southwest1');
-  final callable = functions.httpsCallable('importClinniAppointments');
-  final response = await callable.call<Map<Object?, Object?>>({
+  final data = await _postCloudFunction('importClinniAppointments', {
     'fileBase64': fileBase64,
     'fileName': fileName,
   });
-  final data = Map<String, dynamic>.from(response.data);
   return ImportResult.fromMap(data);
 }
 
@@ -124,20 +158,17 @@ class ImportPatientsResult {
   final List<String> errorMessages;
 }
 
-/// Llama a la Cloud Function `importClinniPatients` con el contenido
-/// del Excel `listado_v26.xlsx` (o equivalente) codificado en base64.
+/// Llama a la Cloud Function `importClinniPatients` (onRequest) con el
+/// contenido del Excel `listado_v26.xlsx` codificado en base64.
 @riverpod
 Future<ImportPatientsResult> importClinniPatientsExcel(
   Ref ref, {
   required String fileBase64,
   required String fileName,
 }) async {
-  final functions = FirebaseFunctions.instanceFor(region: 'europe-southwest1');
-  final callable = functions.httpsCallable('importClinniPatients');
-  final response = await callable.call<Map<Object?, Object?>>({
+  final data = await _postCloudFunction('importClinniPatients', {
     'fileBase64': fileBase64,
     'fileName': fileName,
   });
-  final data = Map<String, dynamic>.from(response.data);
   return ImportPatientsResult.fromMap(data);
 }

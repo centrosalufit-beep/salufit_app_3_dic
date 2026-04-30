@@ -15,28 +15,53 @@
  *  - "Notas" | "Observaciones" -> notas (opcional)
  */
 
-import {onCall, HttpsError} from "firebase-functions/v2/https";
+import {onRequest} from "firebase-functions/v2/https";
 import * as functions from "firebase-functions";
 import * as admin from "firebase-admin";
 import * as XLSX from "xlsx";
 import {normalizePhone} from "./whatsapp";
 
+/**
+ * Verifica auth Bearer token en el header Authorization. Usado por los
+ * endpoints HTTP onRequest porque el plugin cloud_functions de Flutter no
+ * soporta Windows desktop oficialmente. El cliente envía el ID token de
+ * Firebase Auth como `Authorization: Bearer <idToken>` y aquí lo
+ * verificamos con admin.auth(). Devuelve null si no hay auth válida o si
+ * el usuario no es admin/administrador (la response ya incluye el código).
+ */
+async function verifyAdminBearer(
+    req: import("firebase-functions/v2/https").Request,
+    res: import("express").Response,
+): Promise<string | null> {
+  const authHeader = req.headers.authorization ?? "";
+  if (!authHeader.startsWith("Bearer ")) {
+    res.status(401).json({error: "Falta Authorization Bearer token"});
+    return null;
+  }
+  const idToken = authHeader.substring("Bearer ".length).trim();
+  let uid: string;
+  try {
+    const decoded = await admin.auth().verifyIdToken(idToken);
+    uid = decoded.uid;
+  } catch (e) {
+    functions.logger.warn("verifyIdToken falló", {error: String(e)});
+    res.status(401).json({error: "Token inválido o expirado"});
+    return null;
+  }
+  const userDoc = await admin.firestore()
+      .collection("users_app").doc(uid).get();
+  const rol = ((userDoc.data()?.rol as string) ?? "").toLowerCase();
+  if (!["admin", "administrador"].includes(rol)) {
+    res.status(403).json({error: "Solo admin puede invocar"});
+    return null;
+  }
+  return uid;
+}
+
 if (admin.apps.length === 0) {
   admin.initializeApp();
 }
 const db = admin.firestore();
-
-interface ImportRequestPayload {
-  fileBase64: string;
-  fileName: string;
-}
-
-interface ImportResultPayload {
-  imported: number;
-  duplicates: number;
-  errors: number;
-  errorMessages: string[];
-}
 
 interface ParsedRow {
   pacienteNombre: string;
@@ -201,27 +226,28 @@ function parseWorkbook(buffer: Buffer): {rows: ParsedRow[]; errors: string[]} {
   return {rows, errors};
 }
 
-export const importClinniAppointments = onCall<ImportRequestPayload, Promise<ImportResultPayload>>(
+export const importClinniAppointments = onRequest(
     {
       region: "europe-southwest1",
       memory: "512MiB",
       timeoutSeconds: 300,
+      cors: true,
     },
-    async (request) => {
-      // Solo admin / staff pueden importar
-      const callerUid = request.auth?.uid;
-      if (!callerUid) {
-        throw new HttpsError("unauthenticated", "Debe autenticarse");
+    async (req, res) => {
+      if (req.method !== "POST") {
+        res.status(405).json({error: "Solo POST"});
+        return;
       }
-      const userDoc = await db.collection("users_app").doc(callerUid).get();
-      const rol = (userDoc.data()?.rol as string | undefined) ?? "";
-      if (!["admin", "administrador"].includes(rol)) {
-        throw new HttpsError("permission-denied", "Solo admin");
-      }
+      const callerUid = await verifyAdminBearer(req, res);
+      if (!callerUid) return;
 
-      const {fileBase64, fileName} = request.data ?? {};
+      const {fileBase64, fileName} = (req.body ?? {}) as {
+        fileBase64?: string;
+        fileName?: string;
+      };
       if (!fileBase64 || typeof fileBase64 !== "string") {
-        throw new HttpsError("invalid-argument", "Falta fileBase64");
+        res.status(400).json({error: "Falta fileBase64"});
+        return;
       }
       const safeName = (fileName ?? "import.xlsx").replace(/[^a-zA-Z0-9._-]/g, "_");
 
@@ -229,13 +255,16 @@ export const importClinniAppointments = onCall<ImportRequestPayload, Promise<Imp
       try {
         buffer = Buffer.from(fileBase64, "base64");
       } catch {
-        throw new HttpsError("invalid-argument", "Base64 inválido");
+        res.status(400).json({error: "Base64 inválido"});
+        return;
       }
       if (buffer.byteLength === 0) {
-        throw new HttpsError("invalid-argument", "Archivo vacío");
+        res.status(400).json({error: "Archivo vacío"});
+        return;
       }
       if (buffer.byteLength > 15 * 1024 * 1024) {
-        throw new HttpsError("invalid-argument", "Archivo > 15MB");
+        res.status(400).json({error: "Archivo > 15MB"});
+        return;
       }
 
       const {rows, errors} = parseWorkbook(buffer);
@@ -324,12 +353,12 @@ export const importClinniAppointments = onCall<ImportRequestPayload, Promise<Imp
         functions.logger.warn("audit_logs write failed", e);
       }
 
-      return {
+      res.status(200).json({
         imported,
         duplicates,
         errors: errors.length,
         errorMessages: errors.slice(0, 20),
-      };
+      });
     },
 );
 
@@ -468,13 +497,6 @@ function parsePatientWorkbook(
   return {rows, errors};
 }
 
-interface ImportPatientsResult {
-  imported: number; // nuevos creados
-  updated: number;  // existentes sobrescritos (mismo telefono)
-  errors: number;
-  errorMessages: string[];
-}
-
 /**
  * Importa pacientes desde el Excel `listado_v26.xlsx` de Clinni a la
  * colección `clinni_patients`. El `telefono` normalizado se usa como
@@ -482,26 +504,28 @@ interface ImportPatientsResult {
  *
  * Solo admin/administrador pueden invocar.
  */
-export const importClinniPatients = onCall<ImportRequestPayload, Promise<ImportPatientsResult>>(
+export const importClinniPatients = onRequest(
     {
       region: "europe-southwest1",
       memory: "512MiB",
       timeoutSeconds: 540,
+      cors: true,
     },
-    async (request) => {
-      const callerUid = request.auth?.uid;
-      if (!callerUid) {
-        throw new HttpsError("unauthenticated", "Debe autenticarse");
+    async (req, res) => {
+      if (req.method !== "POST") {
+        res.status(405).json({error: "Solo POST"});
+        return;
       }
-      const userDoc = await db.collection("users_app").doc(callerUid).get();
-      const rol = (userDoc.data()?.rol as string | undefined) ?? "";
-      if (!["admin", "administrador"].includes(rol)) {
-        throw new HttpsError("permission-denied", "Solo admin");
-      }
+      const callerUid = await verifyAdminBearer(req, res);
+      if (!callerUid) return;
 
-      const {fileBase64, fileName} = request.data ?? {};
+      const {fileBase64, fileName} = (req.body ?? {}) as {
+        fileBase64?: string;
+        fileName?: string;
+      };
       if (!fileBase64 || typeof fileBase64 !== "string") {
-        throw new HttpsError("invalid-argument", "Falta fileBase64");
+        res.status(400).json({error: "Falta fileBase64"});
+        return;
       }
       const safeName = (fileName ?? "import_pacientes.xlsx")
           .replace(/[^a-zA-Z0-9._-]/g, "_");
@@ -510,13 +534,16 @@ export const importClinniPatients = onCall<ImportRequestPayload, Promise<ImportP
       try {
         buffer = Buffer.from(fileBase64, "base64");
       } catch {
-        throw new HttpsError("invalid-argument", "Base64 inválido");
+        res.status(400).json({error: "Base64 inválido"});
+        return;
       }
       if (buffer.byteLength === 0) {
-        throw new HttpsError("invalid-argument", "Archivo vacío");
+        res.status(400).json({error: "Archivo vacío"});
+        return;
       }
       if (buffer.byteLength > 30 * 1024 * 1024) {
-        throw new HttpsError("invalid-argument", "Archivo > 30MB");
+        res.status(400).json({error: "Archivo > 30MB"});
+        return;
       }
 
       const {rows, errors} = parsePatientWorkbook(buffer);
@@ -598,11 +625,11 @@ export const importClinniPatients = onCall<ImportRequestPayload, Promise<ImportP
         functions.logger.warn("audit_logs write failed", e);
       }
 
-      return {
+      res.status(200).json({
         imported,
         updated,
         errors: errors.length,
         errorMessages: errors.slice(0, 20),
-      };
+      });
     },
 );
