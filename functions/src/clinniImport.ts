@@ -234,131 +234,144 @@ export const importClinniAppointments = onRequest(
       cors: true,
     },
     async (req, res) => {
-      if (req.method !== "POST") {
-        res.status(405).json({error: "Solo POST"});
-        return;
-      }
-      const callerUid = await verifyAdminBearer(req, res);
-      if (!callerUid) return;
-
-      const {fileBase64, fileName} = (req.body ?? {}) as {
-        fileBase64?: string;
-        fileName?: string;
-      };
-      if (!fileBase64 || typeof fileBase64 !== "string") {
-        res.status(400).json({error: "Falta fileBase64"});
-        return;
-      }
-      const safeName = (fileName ?? "import.xlsx").replace(/[^a-zA-Z0-9._-]/g, "_");
-
-      let buffer: Buffer;
       try {
-        buffer = Buffer.from(fileBase64, "base64");
-      } catch {
-        res.status(400).json({error: "Base64 inválido"});
-        return;
-      }
-      if (buffer.byteLength === 0) {
-        res.status(400).json({error: "Archivo vacío"});
-        return;
-      }
-      if (buffer.byteLength > 15 * 1024 * 1024) {
-        res.status(400).json({error: "Archivo > 15MB"});
-        return;
-      }
+        if (req.method !== "POST") {
+          res.status(405).json({error: "Solo POST"});
+          return;
+        }
+        const callerUid = await verifyAdminBearer(req, res);
+        if (!callerUid) return;
 
-      const {rows, errors} = parseWorkbook(buffer);
-      functions.logger.info("Clinni Excel parseado", {
-        fileName: safeName,
-        rows: rows.length,
-        errors: errors.length,
-      });
+        const {fileBase64, fileName} = (req.body ?? {}) as {
+          fileBase64?: string;
+          fileName?: string;
+        };
+        if (!fileBase64 || typeof fileBase64 !== "string") {
+          res.status(400).json({error: "Falta fileBase64"});
+          return;
+        }
+        const safeName = (fileName ?? "import.xlsx").replace(/[^a-zA-Z0-9._-]/g, "_");
 
-      let imported = 0;
-      let duplicates = 0;
-      const importedAt = admin.firestore.FieldValue.serverTimestamp();
+        let buffer: Buffer;
+        try {
+          buffer = Buffer.from(fileBase64, "base64");
+        } catch {
+          res.status(400).json({error: "Base64 inválido"});
+          return;
+        }
+        if (buffer.byteLength === 0) {
+          res.status(400).json({error: "Archivo vacío"});
+          return;
+        }
+        if (buffer.byteLength > 15 * 1024 * 1024) {
+          res.status(400).json({error: "Archivo > 15MB"});
+          return;
+        }
 
-      // Insertar en lotes de 400 (límite Firestore 500/batch)
-      for (let i = 0; i < rows.length; i += 400) {
-        const slice = rows.slice(i, i + 400);
-        const dedupKeys = slice.map((r) =>
-          buildDeduplicationKey(r.pacienteTelefono, r.fechaCita, r.profesional),
-        );
-        // Comprobar duplicados existentes
-        const existing = await db
-            .collection("clinni_appointments")
-            .where("deduplicationKey", "in", dedupKeys.slice(0, 30))
-            .get();
-        const existingKeys = new Set(
-            existing.docs.map((d) => d.data().deduplicationKey as string),
-        );
-        // Para más de 30 hay que iterar; lo hacemos por simplicidad si hay
-        if (dedupKeys.length > 30) {
-          // Comprobar el resto en chunks de 30
-          for (let j = 30; j < dedupKeys.length; j += 30) {
-            const subKeys = dedupKeys.slice(j, j + 30);
-            const sub = await db
-                .collection("clinni_appointments")
-                .where("deduplicationKey", "in", subKeys)
-                .get();
-            for (const d of sub.docs) {
-              existingKeys.add(d.data().deduplicationKey as string);
+        const {rows, errors} = parseWorkbook(buffer);
+        functions.logger.info("Clinni Excel parseado", {
+          fileName: safeName,
+          rows: rows.length,
+          errors: errors.length,
+        });
+
+        let imported = 0;
+        let duplicates = 0;
+        const importedAt = admin.firestore.FieldValue.serverTimestamp();
+
+        // Insertar en lotes de 400 (límite Firestore 500/batch)
+        for (let i = 0; i < rows.length; i += 400) {
+          const slice = rows.slice(i, i + 400);
+          const dedupKeys = slice.map((r) =>
+            buildDeduplicationKey(r.pacienteTelefono, r.fechaCita, r.profesional),
+          );
+          // Comprobar duplicados existentes
+          const existing = await db
+              .collection("clinni_appointments")
+              .where("deduplicationKey", "in", dedupKeys.slice(0, 30))
+              .get();
+          const existingKeys = new Set(
+              existing.docs.map((d) => d.data().deduplicationKey as string),
+          );
+          // Para más de 30 hay que iterar; lo hacemos por simplicidad si hay
+          if (dedupKeys.length > 30) {
+            // Comprobar el resto en chunks de 30
+            for (let j = 30; j < dedupKeys.length; j += 30) {
+              const subKeys = dedupKeys.slice(j, j + 30);
+              const sub = await db
+                  .collection("clinni_appointments")
+                  .where("deduplicationKey", "in", subKeys)
+                  .get();
+              for (const d of sub.docs) {
+                existingKeys.add(d.data().deduplicationKey as string);
+              }
             }
           }
-        }
 
-        const batch = db.batch();
-        for (const row of slice) {
-          const key = buildDeduplicationKey(row.pacienteTelefono, row.fechaCita, row.profesional);
-          if (existingKeys.has(key)) {
-            duplicates++;
-            continue;
+          const batch = db.batch();
+          for (const row of slice) {
+            const key = buildDeduplicationKey(row.pacienteTelefono, row.fechaCita, row.profesional);
+            if (existingKeys.has(key)) {
+              duplicates++;
+              continue;
+            }
+            const ref = db.collection("clinni_appointments").doc();
+            batch.set(ref, {
+              pacienteNombre: row.pacienteNombre,
+              pacienteTelefono: row.pacienteTelefono,
+              fechaCita: admin.firestore.Timestamp.fromDate(row.fechaCita),
+              profesional: row.profesional,
+              servicio: row.servicio,
+              estado: "pendiente",
+              recordatorioEnviado: false,
+              fechaRecordatorio: null,
+              deduplicationKey: key,
+              importadoEn: importedAt,
+              origenExcel: safeName,
+              notas: row.notas,
+            });
+            imported++;
           }
-          const ref = db.collection("clinni_appointments").doc();
-          batch.set(ref, {
-            pacienteNombre: row.pacienteNombre,
-            pacienteTelefono: row.pacienteTelefono,
-            fechaCita: admin.firestore.Timestamp.fromDate(row.fechaCita),
-            profesional: row.profesional,
-            servicio: row.servicio,
-            estado: "pendiente",
-            recordatorioEnviado: false,
-            fechaRecordatorio: null,
-            deduplicationKey: key,
-            importadoEn: importedAt,
-            origenExcel: safeName,
-            notas: row.notas,
-          });
-          imported++;
+          await batch.commit();
         }
-        await batch.commit();
-      }
 
-      // Audit log
-      try {
-        await db.collection("audit_logs").add({
-          tipo: "CLINNI_IMPORT",
-          userId: callerUid,
-          timestamp: importedAt,
-          metadata: {
-            fileName: safeName,
-            imported,
-            duplicates,
-            errors: errors.length,
-            totalRows: rows.length,
-          },
-          status: "SUCCESS",
+        // Audit log
+        try {
+          await db.collection("audit_logs").add({
+            tipo: "CLINNI_IMPORT",
+            userId: callerUid,
+            timestamp: importedAt,
+            metadata: {
+              fileName: safeName,
+              imported,
+              duplicates,
+              errors: errors.length,
+              totalRows: rows.length,
+            },
+            status: "SUCCESS",
+          });
+        } catch (e) {
+          functions.logger.warn("audit_logs write failed", e);
+        }
+
+        res.status(200).json({
+          imported,
+          duplicates,
+          errors: errors.length,
+          errorMessages: errors.slice(0, 20),
         });
       } catch (e) {
-        functions.logger.warn("audit_logs write failed", e);
+        // Captura cualquier error inesperado (Firestore, memoria, timeout)
+        // y devuelve JSON al cliente en vez de "Internal Server Error".
+        functions.logger.error("importClinniAppointments exception", e);
+        res.status(500).json({
+          error: String(e),
+          imported: 0,
+          duplicates: 0,
+          errors: 1,
+          errorMessages: [String(e)],
+        });
       }
-
-      res.status(200).json({
-        imported,
-        duplicates,
-        errors: errors.length,
-        errorMessages: errors.slice(0, 20),
-      });
     },
 );
 
@@ -512,124 +525,147 @@ export const importClinniPatients = onRequest(
       cors: true,
     },
     async (req, res) => {
-      if (req.method !== "POST") {
-        res.status(405).json({error: "Solo POST"});
-        return;
-      }
-      const callerUid = await verifyAdminBearer(req, res);
-      if (!callerUid) return;
-
-      const {fileBase64, fileName} = (req.body ?? {}) as {
-        fileBase64?: string;
-        fileName?: string;
-      };
-      if (!fileBase64 || typeof fileBase64 !== "string") {
-        res.status(400).json({error: "Falta fileBase64"});
-        return;
-      }
-      const safeName = (fileName ?? "import_pacientes.xlsx")
-          .replace(/[^a-zA-Z0-9._-]/g, "_");
-
-      let buffer: Buffer;
       try {
-        buffer = Buffer.from(fileBase64, "base64");
-      } catch {
-        res.status(400).json({error: "Base64 inválido"});
-        return;
-      }
-      if (buffer.byteLength === 0) {
-        res.status(400).json({error: "Archivo vacío"});
-        return;
-      }
-      if (buffer.byteLength > 30 * 1024 * 1024) {
-        res.status(400).json({error: "Archivo > 30MB"});
-        return;
-      }
+        if (req.method !== "POST") {
+          res.status(405).json({error: "Solo POST"});
+          return;
+        }
+        const callerUid = await verifyAdminBearer(req, res);
+        if (!callerUid) return;
 
-      const {rows, errors} = parsePatientWorkbook(buffer);
-      functions.logger.info("Clinni pacientes Excel parseado", {
-        fileName: safeName,
-        rows: rows.length,
-        errors: errors.length,
-      });
+        const {fileBase64, fileName} = (req.body ?? {}) as {
+          fileBase64?: string;
+          fileName?: string;
+        };
+        if (!fileBase64 || typeof fileBase64 !== "string") {
+          res.status(400).json({error: "Falta fileBase64"});
+          return;
+        }
+        const safeName = (fileName ?? "import_pacientes.xlsx")
+            .replace(/[^a-zA-Z0-9._-]/g, "_");
 
-      let imported = 0;
-      let updated = 0;
-      const importedAt = admin.firestore.FieldValue.serverTimestamp();
+        let buffer: Buffer;
+        try {
+          buffer = Buffer.from(fileBase64, "base64");
+        } catch {
+          res.status(400).json({error: "Base64 inválido"});
+          return;
+        }
+        if (buffer.byteLength === 0) {
+          res.status(400).json({error: "Archivo vacío"});
+          return;
+        }
+        if (buffer.byteLength > 30 * 1024 * 1024) {
+          res.status(400).json({error: "Archivo > 30MB"});
+          return;
+        }
 
-      // Procesamos en batches de 400. Cada paciente se identifica por
-      // telefono normalizado como doc ID. Antes del set comprobamos
-      // existencia para distinguir imported vs updated en el reporte.
-      for (let i = 0; i < rows.length; i += 400) {
-        const slice = rows.slice(i, i + 400);
-        const ids = slice.map((r) => r.telefono);
+        const {rows: rawRows, errors} = parsePatientWorkbook(buffer);
+        // Filtramos rows con telefono inválido (normalizePhone devolvió "").
+        // Quedan en `errors` para que el cliente vea cuántas se descartaron.
+        const rows = rawRows.filter((r) => r.telefono);
+        const skipped = rawRows.length - rows.length;
+        if (skipped > 0) {
+          errors.push(`${skipped} fila(s) descartadas por teléfono inválido o vacío`);
+        }
+        functions.logger.info("Clinni pacientes Excel parseado", {
+          fileName: safeName,
+          rows: rows.length,
+          rawRows: rawRows.length,
+          skipped,
+          errors: errors.length,
+        });
 
-        // Comprobar cuáles ya existen (en chunks de 30 por la limitación
-        // de Firestore "in" queries).
-        const existingIds = new Set<string>();
-        for (let j = 0; j < ids.length; j += 30) {
-          const sub = ids.slice(j, j + 30);
-          const snap = await db
-              .collection("clinni_patients")
-              .where(admin.firestore.FieldPath.documentId(), "in", sub)
-              .get();
-          for (const d of snap.docs) {
-            existingIds.add(d.id);
+        let imported = 0;
+        let updated = 0;
+        const importedAt = admin.firestore.FieldValue.serverTimestamp();
+
+        // Procesamos en batches de 400. Cada paciente se identifica por
+        // telefono normalizado como doc ID. Antes del set comprobamos
+        // existencia para distinguir imported vs updated en el reporte.
+        for (let i = 0; i < rows.length; i += 400) {
+          const slice = rows.slice(i, i + 400);
+          const ids = slice.map((r) => r.telefono);
+
+          // Comprobar cuáles ya existen (en chunks de 30 por la limitación
+          // de Firestore "in" queries).
+          const existingIds = new Set<string>();
+          for (let j = 0; j < ids.length; j += 30) {
+            const sub = ids.slice(j, j + 30);
+            const snap = await db
+                .collection("clinni_patients")
+                .where(admin.firestore.FieldPath.documentId(), "in", sub)
+                .get();
+            for (const d of snap.docs) {
+              existingIds.add(d.id);
+            }
           }
+
+          const batch = db.batch();
+          for (const r of slice) {
+            if (!r.telefono) continue;
+            const ref = db.collection("clinni_patients").doc(r.telefono);
+            batch.set(ref, {
+              numeroHistoria: r.numeroHistoria,
+              nombreCompleto: r.nombreCompleto,
+              sexo: r.sexo,
+              dni: r.dni,
+              telefono: r.telefono,
+              email: r.email,
+              fechaNacimiento: r.fechaNacimiento ?
+                admin.firestore.Timestamp.fromDate(r.fechaNacimiento) :
+                null,
+              derivadoPor: r.derivadoPor,
+              etiquetas: r.etiquetas,
+              recibirMailing: r.recibirMailing,
+              proteccionDatosFirmada: r.proteccionDatosFirmada,
+              infoSegundoTutor: r.infoSegundoTutor,
+              origenExcel: safeName,
+              importadoEn: importedAt,
+            }, {merge: true});
+            if (existingIds.has(r.telefono)) updated++;
+            else imported++;
+          }
+          await batch.commit();
         }
 
-        const batch = db.batch();
-        for (const r of slice) {
-          if (!r.telefono) continue;
-          const ref = db.collection("clinni_patients").doc(r.telefono);
-          batch.set(ref, {
-            numeroHistoria: r.numeroHistoria,
-            nombreCompleto: r.nombreCompleto,
-            sexo: r.sexo,
-            dni: r.dni,
-            telefono: r.telefono,
-            email: r.email,
-            fechaNacimiento: r.fechaNacimiento ?
-              admin.firestore.Timestamp.fromDate(r.fechaNacimiento) :
-              null,
-            derivadoPor: r.derivadoPor,
-            etiquetas: r.etiquetas,
-            recibirMailing: r.recibirMailing,
-            proteccionDatosFirmada: r.proteccionDatosFirmada,
-            infoSegundoTutor: r.infoSegundoTutor,
-            origenExcel: safeName,
-            importadoEn: importedAt,
-          }, {merge: true});
-          if (existingIds.has(r.telefono)) updated++;
-          else imported++;
+        // Audit log
+        try {
+          await db.collection("audit_logs").add({
+            tipo: "CLINNI_PATIENTS_IMPORT",
+            userId: callerUid,
+            timestamp: importedAt,
+            metadata: {
+              fileName: safeName,
+              imported,
+              updated,
+              errors: errors.length,
+              totalRows: rows.length,
+            },
+            status: "SUCCESS",
+          });
+        } catch (e) {
+          functions.logger.warn("audit_logs write failed", e);
         }
-        await batch.commit();
-      }
 
-      // Audit log
-      try {
-        await db.collection("audit_logs").add({
-          tipo: "CLINNI_PATIENTS_IMPORT",
-          userId: callerUid,
-          timestamp: importedAt,
-          metadata: {
-            fileName: safeName,
-            imported,
-            updated,
-            errors: errors.length,
-            totalRows: rows.length,
-          },
-          status: "SUCCESS",
+        res.status(200).json({
+          imported,
+          updated,
+          errors: errors.length,
+          errorMessages: errors.slice(0, 20),
         });
       } catch (e) {
-        functions.logger.warn("audit_logs write failed", e);
+        // Captura cualquier error inesperado (Firestore INVALID_ARGUMENT,
+        // memoria, timeout, etc.) y devuelve JSON al cliente en vez del
+        // texto plano "Internal Server Error" que rompe el parser.
+        functions.logger.error("importClinniPatients exception", e);
+        res.status(500).json({
+          error: String(e),
+          imported: 0,
+          updated: 0,
+          errors: 1,
+          errorMessages: [String(e)],
+        });
       }
-
-      res.status(200).json({
-        imported,
-        updated,
-        errors: errors.length,
-        errorMessages: errors.slice(0, 20),
-      });
     },
 );

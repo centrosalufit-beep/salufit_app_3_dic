@@ -218,11 +218,16 @@ export function validateMetaSignature(
  * Acepta "+34 629 011 055", "0034629011055", "629011055" (asume España).
  */
 export function normalizePhone(input: string): string {
-  let p = input.replace(/[\s+\-()]/g, "");
+  let p = (input ?? "").replace(/[\s+\-()]/g, "");
   if (p.startsWith("00")) p = p.slice(2);
   if (p.length === 9 && /^[6-9]/.test(p)) {
     // Móvil/fijo español sin prefijo internacional
     p = "34" + p;
   }
+  // Validación: solo dígitos, entre 9 y 15 caracteres (E.164 sin '+').
+  // Si no cumple, devolvemos "" para que el caller lo descarte. Esto evita
+  // que filas malformadas del Excel rompan los doc IDs de Firestore (Firestore
+  // rechaza IDs con "/", ".", "..", o vacíos).
+  if (!/^\d{9,15}$/.test(p)) return "";
   return p;
 }
