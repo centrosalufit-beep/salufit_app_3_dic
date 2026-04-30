@@ -19,9 +19,10 @@ import {onRequest} from "firebase-functions/v2/https";
 import {defineSecret} from "firebase-functions/params";
 import * as functions from "firebase-functions";
 import * as admin from "firebase-admin";
-import {sendTextMessage, validateMetaSignature} from "./whatsapp";
+import {sendTextMessage, sendButtonMessage, validateMetaSignature} from "./whatsapp";
 import {classifyIntent, BotIntent} from "./claude";
 import {fetchMediaAndStore} from "./whatsappMedia";
+import {findNextAvailableSlots, shortLabelForSlot, longLabelForSlot} from "./slots";
 
 if (admin.apps.length === 0) {
   admin.initializeApp();
@@ -841,22 +842,114 @@ async function executeAction(
       }
       return;
 
-    case "reagendar":
-      // FASE 2: implementar búsqueda de huecos + botones interactivos.
-      // En Fase 1 acusamos recibo y delegamos en recepción con tel directo.
-      await appendMessageToConversation(convId, "bot", "(reagendación delegada a recepción)", {
-        estado: "reagendar_solicitada",
-        resultado: "reagendar_delegado_recepcion",
+    case "reagendar": {
+      // FASE 2: búsqueda automática de huecos del MISMO profesional + botones.
+      //
+      // Si no hay cita asociada, no hay profesional desde el que buscar →
+      // escalamos. Si el profesional tiene escalaDirectaParaReagendar=true
+      // (odontología, Estela, Andressa) o no está activo → escalamos.
+      // Si encuentra ≥1 slot libre, ofrecemos como botones interactivos.
+
+      if (!cita) {
+        await appendMessageToConversation(convId, "bot",
+            "(reagendación sin cita registrada — delegada a recepción)", {
+              estado: "reagendar_solicitada",
+              resultado: "reagendar_sin_cita",
+            });
+        await notifyRecepcion(config, waToken,
+            `🔄 REAGENDACIÓN sin cita registrada — ${pacienteNombre}\n` +
+            `Tel: ${telefono}\nMensaje: "${mensajeOriginal}"`);
+        return;
+      }
+
+      // Si dentro48h: la nueva cita debe estar dentro de 48h siguientes.
+      const restrictToBeforeMs = dentro48h ?
+        cita.fechaCita.getTime() + 48 * 60 * 60 * 1000 :
+        undefined;
+
+      const {schedule, slots} = await findNextAvailableSlots(cita.profesional, {
+        count: 2,
+        bufferMinutosDesdeAhora: 60,
+        diasVista: 14,
+        restrictToBeforeMs,
       });
-      await notifyRecepcion(
-          config,
-          waToken,
-          `🔄 REAGENDACIÓN — ${pacienteNombre}\n` +
-          `${cita ? `Cita actual: ${formatFechaES(cita.fechaCita, "es")} con ${cita.profesional}` : "(sin cita registrada)"}\n` +
-          `Tel: ${telefono}\nMensaje: "${mensajeOriginal}"\n` +
-          "(Búsqueda automática de huecos pendiente fase 2)",
+
+      // Profesional no encontrado, inactivo o configurado para escalar siempre.
+      if (!schedule || !schedule.activo || schedule.escalaDirectaParaReagendar) {
+        const motivo = !schedule ? "no encontrado en professional_schedules" :
+          !schedule.activo ? "inactivo" :
+            schedule.motivoEscalaDirecta ?? "escalada directa configurada";
+        await appendMessageToConversation(convId, "bot",
+            `(reagendación → escalada: profesional ${motivo})`, {
+              estado: "reagendar_solicitada",
+              resultado: "reagendar_escalado_recepcion",
+            });
+        await notifyRecepcion(config, waToken,
+            `🔄 REAGENDACIÓN — ${pacienteNombre}\n` +
+            `Cita actual: ${formatFechaES(cita.fechaCita, "es")} con ${cita.profesional}\n` +
+            `Tel: ${telefono}\nMensaje: "${mensajeOriginal}"\n` +
+            `(Profesional ${motivo}; recepción gestiona manualmente.)`);
+        return;
+      }
+
+      // Sin huecos en la ventana → escalar.
+      if (slots.length === 0) {
+        await appendMessageToConversation(convId, "bot",
+            "(reagendación → sin huecos disponibles, escalada)", {
+              estado: "reagendar_solicitada",
+              resultado: "reagendar_sin_huecos",
+            });
+        await notifyRecepcion(config, waToken,
+            `🔄 REAGENDACIÓN sin huecos automáticos — ${pacienteNombre}\n` +
+            `Cita actual: ${formatFechaES(cita.fechaCita, "es")} con ${cita.profesional}\n` +
+            `Tel: ${telefono}\n` +
+            (dentro48h ? "(dentro de 48h: ventana limitada a +48h)" : "(ventana 14 días vista vacía)"));
+        return;
+      }
+
+      // Hueco(s) encontrado(s). Construimos botones (max 3 en WhatsApp).
+      const slotsParaGuardar = slots.map((s) => ({
+        inicio: admin.firestore.Timestamp.fromDate(s.inicio),
+        fin: admin.firestore.Timestamp.fromDate(s.fin),
+        profesionalId: s.profesionalId,
+        profesionalNombre: s.profesionalNombre,
+      }));
+      const detalleTextos = slots
+          .map((s, i) => `${i + 1}. ${longLabelForSlot(s)}`)
+          .join("\n");
+      const body =
+        `Tenemos estos huecos con ${schedule.nombre}:\n\n${detalleTextos}\n\n` +
+        "Pulsa el horario que prefieras o \"Otro horario\" si ninguno te conviene.";
+      const botones = [
+        ...slots.map((s, i) => ({
+          id: `slot_${convId}_${i}`,
+          title: shortLabelForSlot(s),
+        })),
+        {id: "slot_other", title: "Otro horario"},
+      ].slice(0, 3);
+
+      const r = await sendButtonMessage(
+          {phoneId: config.whatsappPhoneId, token: waToken, to: telefono},
+          body,
+          botones,
       );
+      functions.logger.info("Reagendar — botones de slots enviados", {
+        convId, success: r.success, error: r.error, slotsCount: slots.length,
+      });
+
+      await db.collection("whatsapp_conversations").doc(convId).update({
+        estado: "esperando_respuesta_boton_reagendar",
+        intencionDetectada: "reagendar",
+        slotsOfrecidos: slotsParaGuardar,
+        fechaUltimaInteraccion: admin.firestore.Timestamp.now(),
+        mensajes: admin.firestore.FieldValue.arrayUnion({
+          rol: "bot",
+          texto: body,
+          timestamp: admin.firestore.Timestamp.now(),
+        }),
+      });
       return;
+    }
 
     case "consulta":
       // La respuesta ya se envió en classifyIntent. Marcar como consulta pendiente.
@@ -897,10 +990,116 @@ async function processInteractiveReply(
     waToken: string,
     config: BotConfig,
 ): Promise<void> {
-  // FASE 2: el botón ID lleva info del slot seleccionado, ej: "slot_2026-05-02_10:00_DraValles"
-  // Por ahora solo gestionamos la respuesta del recordatorio: ["confirm", "reschedule", "cancel"]
   const conv = await findActiveConversation(telefono);
   const cita = await findUpcomingAppointment(telefono);
+
+  // FASE 2: botones de selección de slot. ID con forma "slot_<convId>_<idx>"
+  // o el comodín "slot_other". El convId del id debe coincidir con la conv
+  // activa (defensa contra usuarios pulsando botones viejos de otra conv).
+  if (buttonId.startsWith("slot_")) {
+    if (buttonId === "slot_other") {
+      // Paciente pide otro horario → escalamos a recepción.
+      const convId = conv?.id ?? null;
+      if (convId) {
+        await db.collection("whatsapp_conversations").doc(convId).update({
+          estado: "escalada",
+          resultado: "reagendar_otro_horario",
+          fechaUltimaInteraccion: admin.firestore.Timestamp.now(),
+        });
+        await appendMessageToConversation(convId, "paciente", "(botón: Otro horario)");
+      }
+      await sendTextMessage(
+          {phoneId: config.whatsappPhoneId, token: waToken, to: telefono},
+          "Entendido. Recepción te contactará para buscarte otro horario que te encaje. Gracias.\n\n— SALUFIT",
+      );
+      await notifyRecepcion(config, waToken,
+          `🔄 REAGENDACIÓN — paciente pidió "Otro horario"\n` +
+          `Tel: ${telefono}\n` +
+          (cita ? `Cita actual: ${formatFechaES(cita.fechaCita, "es")} con ${cita.profesional}\n` : "") +
+          "(Buscar hueco manualmente y confirmar.)");
+      return;
+    }
+
+    // slot_<convId>_<idx>
+    const m = buttonId.match(/^slot_(.+)_(\d+)$/);
+    if (!m) {
+      functions.logger.warn("Botón slot con formato inesperado", {buttonId});
+      return;
+    }
+    const buttonConvId = m[1];
+    const idx = Number(m[2]);
+    if (!conv || conv.id !== buttonConvId) {
+      functions.logger.warn("Botón slot apunta a conv distinta de la activa", {
+        buttonId, activaId: conv?.id, esperada: buttonConvId,
+      });
+      await sendTextMessage(
+          {phoneId: config.whatsappPhoneId, token: waToken, to: telefono},
+          "Ese horario ya no está vigente. Por favor escríbenos de nuevo y te buscamos uno actualizado.",
+      );
+      return;
+    }
+
+    const slots = (conv.data?.slotsOfrecidos as Array<{
+      inicio: admin.firestore.Timestamp;
+      fin: admin.firestore.Timestamp;
+      profesionalId: string;
+      profesionalNombre: string;
+    }> | undefined) ?? [];
+    const slot = slots[idx];
+    if (!slot) {
+      functions.logger.warn("Slot fuera de rango", {buttonId, idx, count: slots.length});
+      await sendTextMessage(
+          {phoneId: config.whatsappPhoneId, token: waToken, to: telefono},
+          "No encontré ese horario en tu propuesta. Recepción te contactará.",
+      );
+      await notifyRecepcion(config, waToken,
+          `⚠️ Botón slot fuera de rango: ${buttonId} (${idx}/${slots.length}) tel ${telefono}`);
+      return;
+    }
+
+    const inicio = slot.inicio.toDate();
+    const fechaTexto = inicio.toLocaleString("es-ES", {
+      timeZone: "Europe/Madrid",
+      weekday: "long",
+      day: "numeric",
+      month: "long",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    });
+
+    // Confirmamos al paciente y pedimos a recepción que actualice Clinni.
+    // (No tocamos clinni_appointments aquí porque el bot no es la fuente de
+    //  verdad: la cita real vive en Clinni y se sincroniza por Excel diario.)
+    await sendTextMessage(
+        {phoneId: config.whatsappPhoneId, token: waToken, to: telefono},
+        `Anotado: te reagendamos para el ${fechaTexto} con ${slot.profesionalNombre}. ` +
+        "Recepción confirmará el cambio en breve. Gracias.\n\n— SALUFIT",
+    );
+    await db.collection("whatsapp_conversations").doc(conv.id).update({
+      estado: "reagendar_confirmacion_pendiente",
+      resultado: "reagendar_slot_seleccionado",
+      slotSeleccionado: {
+        inicio: slot.inicio,
+        fin: slot.fin,
+        profesionalId: slot.profesionalId,
+        profesionalNombre: slot.profesionalNombre,
+      },
+      fechaUltimaInteraccion: admin.firestore.Timestamp.now(),
+      mensajes: admin.firestore.FieldValue.arrayUnion({
+        rol: "paciente",
+        texto: `(botón slot: ${fechaTexto} con ${slot.profesionalNombre})`,
+        timestamp: admin.firestore.Timestamp.now(),
+      }),
+    });
+    await notifyRecepcion(config, waToken,
+        `✅ REAGENDACIÓN solicitada por paciente — confirmar en Clinni\n` +
+        `Tel: ${telefono}\n` +
+        (cita ? `Cita anterior: ${formatFechaES(cita.fechaCita, "es")} con ${cita.profesional}\n` : "") +
+        `Cita nueva: ${fechaTexto} con ${slot.profesionalNombre}\n` +
+        "(Actualizar Clinni y avisar al paciente si hay incidencia.)");
+    return;
+  }
 
   let intent: BotIntent | null = null;
   if (buttonId === "btn_confirm") intent = "confirmar";
@@ -908,7 +1107,7 @@ async function processInteractiveReply(
   else if (buttonId === "btn_reschedule") intent = "reagendar";
 
   if (!intent) {
-    functions.logger.info("Botón no reconocido (probablemente slot fase 2)", {buttonId});
+    functions.logger.info("Botón no reconocido", {buttonId});
     return;
   }
 

@@ -1,0 +1,171 @@
+{
+  "ibtissam": {
+    "nombre": "Ibtissam",
+    "especialidad": "fisioterapia",
+    "duracionSlotMinutos": 30,
+    "activo": true,
+    "escalaDirectaParaReagendar": false,
+    "horarios": [
+      { "dia": 1, "inicio": "15:00", "fin": "17:00" },
+      { "dia": 1, "inicio": "19:00", "fin": "20:30" },
+      { "dia": 2, "inicio": "10:00", "fin": "13:00" },
+      { "dia": 2, "inicio": "15:00", "fin": "20:00" },
+      { "dia": 4, "inicio": "15:00", "fin": "20:30" },
+      { "dia": 5, "inicio": "15:00", "fin": "20:30" },
+      { "dia": 6, "inicio": "08:00", "fin": "12:00" }
+    ]
+  },
+  "alvaro": {
+    "nombre": "Álvaro",
+    "especialidad": "fisioterapia",
+    "duracionSlotMinutos": 30,
+    "activo": true,
+    "escalaDirectaParaReagendar": false,
+    "horarios": [
+      { "dia": 1, "inicio": "15:00", "fin": "20:00" },
+      { "dia": 2, "inicio": "15:00", "fin": "20:00" },
+      { "dia": 3, "inicio": "15:00", "fin": "17:00" },
+      { "dia": 3, "inicio": "19:00", "fin": "20:00" },
+      { "dia": 4, "inicio": "10:00", "fin": "13:00" },
+      { "dia": 4, "inicio": "15:00", "fin": "20:30" },
+      { "dia": 5, "inicio": "15:00", "fin": "20:00" }
+    ]
+  },
+  "david": {
+    "nombre": "David",
+    "nombreCompleto": "David Baydal",
+    "especialidad": "fisioterapia",
+    "duracionSlotMinutos": 30,
+    "activo": true,
+    "escalaDirectaParaReagendar": false,
+    "horarios": [
+      { "dia": 1, "inicio": "09:00", "fin": "13:00" },
+      { "dia": 2, "inicio": "09:00", "fin": "13:00" },
+      { "dia": 3, "inicio": "09:00", "fin": "13:00" },
+      { "dia": 4, "inicio": "09:00", "fin": "13:00" },
+      { "dia": 5, "inicio": "09:00", "fin": "13:00" }
+    ]
+  },
+  "sara_bentahar": {
+    "nombre": "Sara Bentahar",
+    "especialidad": "fisioterapia_pediatrica",
+    "duracionSlotMinutos": 60,
+    "activo": true,
+    "escalaDirectaParaReagendar": false,
+    "horarios": [
+      { "dia": 1, "inicio": "17:00", "fin": "20:00" },
+      { "dia": 3, "inicio": "17:00", "fin": "20:00" }
+    ]
+  },
+  "noelia": {
+    "nombre": "Noelia",
+    "especialidad": "psicologia",
+    "duracionSlotMinutos": 60,
+    "activo": true,
+    "escalaDirectaParaReagendar": false,
+    "horarios": [
+      { "dia": 1, "inicio": "09:00", "fin": "13:00" },
+      { "dia": 1, "inicio": "16:00", "fin": "20:00" },
+      { "dia": 2, "inicio": "09:00", "fin": "13:00" },
+      { "dia": 2, "inicio": "16:00", "fin": "20:00" },
+      { "dia": 3, "inicio": "09:00", "fin": "13:00" },
+      { "dia": 3, "inicio": "16:00", "fin": "20:00" },
+      { "dia": 4, "inicio": "09:00", "fin": "13:00" },
+      { "dia": 4, "inicio": "16:00", "fin": "20:00" },
+      { "dia": 5, "inicio": "09:00", "fin": "13:00" },
+      { "dia": 5, "inicio": "16:00", "fin": "20:00" }
+    ]
+  },
+  "ignacio": {
+    "nombre": "Ignacio",
+    "especialidad": "psicologia",
+    "duracionSlotMinutos": 60,
+    "activo": true,
+    "escalaDirectaParaReagendar": false,
+    "horarios": [
+      { "dia": 2, "inicio": "12:00", "fin": "13:00" },
+      { "dia": 4, "inicio": "16:00", "fin": "20:00" },
+      { "dia": 5, "inicio": "17:00", "fin": "20:00" }
+    ]
+  },
+  "carla": {
+    "nombre": "Carla",
+    "especialidad": "odontologia",
+    "duracionSlotMinutos": 30,
+    "activo": true,
+    "escalaDirectaParaReagendar": true,
+    "motivoEscalaDirecta": "odontología — duración variable por servicio",
+    "horarios": [
+      { "dia": 1, "inicio": "09:00", "fin": "13:00" },
+      { "dia": 1, "inicio": "16:00", "fin": "20:00" },
+      { "dia": 2, "inicio": "09:00", "fin": "13:00" },
+      { "dia": 2, "inicio": "16:00", "fin": "20:00" },
+      { "dia": 3, "inicio": "09:00", "fin": "13:00" },
+      { "dia": 3, "inicio": "16:00", "fin": "20:00" },
+      { "dia": 4, "inicio": "16:00", "fin": "20:00" },
+      { "dia": 5, "inicio": "09:00", "fin": "13:00" },
+      { "dia": 5, "inicio": "16:00", "fin": "20:00" },
+      { "dia": 6, "inicio": "09:00", "fin": "13:00" }
+    ]
+  },
+  "blanca": {
+    "nombre": "Blanca",
+    "especialidad": "odontologia",
+    "duracionSlotMinutos": 30,
+    "activo": true,
+    "escalaDirectaParaReagendar": true,
+    "motivoEscalaDirecta": "odontología — duración variable por servicio",
+    "horarios": [
+      { "dia": 3, "inicio": "09:00", "fin": "13:00" },
+      { "dia": 3, "inicio": "16:00", "fin": "20:00" },
+      { "dia": 5, "inicio": "09:00", "fin": "13:00" },
+      { "dia": 5, "inicio": "16:00", "fin": "20:00" },
+      { "dia": 6, "inicio": "09:00", "fin": "13:00" }
+    ]
+  },
+  "maria": {
+    "nombre": "María",
+    "especialidad": "odontologia",
+    "duracionSlotMinutos": 30,
+    "activo": true,
+    "escalaDirectaParaReagendar": true,
+    "motivoEscalaDirecta": "odontología — duración variable por servicio",
+    "horarios": [
+      { "dia": 1, "inicio": "09:00", "fin": "13:00" },
+      { "dia": 2, "inicio": "09:00", "fin": "13:00" },
+      { "dia": 3, "inicio": "09:00", "fin": "13:00" },
+      { "dia": 4, "inicio": "09:00", "fin": "13:00" },
+      { "dia": 5, "inicio": "09:00", "fin": "13:00" }
+    ]
+  },
+  "noemi": {
+    "nombre": "Noemí",
+    "especialidad": "odontologia",
+    "duracionSlotMinutos": 30,
+    "activo": true,
+    "escalaDirectaParaReagendar": true,
+    "motivoEscalaDirecta": "odontología — duración variable por servicio",
+    "horarios": [
+      { "dia": 2, "inicio": "15:00", "fin": "20:00" },
+      { "dia": 3, "inicio": "15:00", "fin": "20:00" }
+    ]
+  },
+  "estela": {
+    "nombre": "Estela",
+    "especialidad": "odontologia",
+    "duracionSlotMinutos": 30,
+    "activo": false,
+    "escalaDirectaParaReagendar": true,
+    "motivoEscalaDirecta": "horario quincenal — recepción gestiona manualmente",
+    "horarios": []
+  },
+  "andressa": {
+    "nombre": "Andressa",
+    "especialidad": "odontologia",
+    "duracionSlotMinutos": 30,
+    "activo": false,
+    "escalaDirectaParaReagendar": true,
+    "motivoEscalaDirecta": "bajo demanda — recepción gestiona manualmente",
+    "horarios": []
+  }
+}
