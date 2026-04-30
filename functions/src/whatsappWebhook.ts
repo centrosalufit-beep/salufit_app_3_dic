@@ -806,15 +806,24 @@ async function executeAction(
         const saludoNombreCancel = pacienteNombre.split(" ")[0] || "";
 
         if (vieneDeBoton) {
+          // Texto rediseñado aplicando principios de behavioral economics
+          // (loss aversion, default option, reciprocity, reframing positivo).
+          // Ver auditoría en CLAUDE.md o commit feat(bot): nudge cancelación
+          // dentro 48h.
           const msgPol = fuerzaMayor ?
-            `Hola${saludoNombreCancel ? " " + saludoNombreCancel : ""}, ` +
-            "entendemos que es una situación difícil. Recepción te " +
-            "contactará en breve para valorar tu caso con prioridad.\n\n— SALUFIT" :
-            `Hola${saludoNombreCancel ? " " + saludoNombreCancel : ""}, hemos ` +
-            "recibido tu solicitud de cancelación. Como tu cita es en menos " +
-            "de 48h, se aplica nuestra política: puedes reagendar (gratis, " +
-            "máximo 2 veces, dentro de las 48h siguientes a tu cita) o " +
-            "abonar 55€ por Bizum al +34 629 01 10 55.\n\n— SALUFIT";
+            `Hola${saludoNombreCancel ? " " + saludoNombreCancel : ""} 🙏 ` +
+            "Entendemos que estás en una situación difícil. Recepción te " +
+            "contactará en breve para valorar tu caso con prioridad y " +
+            "encontrar la mejor solución.\n\n— SALUFIT" :
+            `Hola${saludoNombreCancel ? " " + saludoNombreCancel : ""} 👋 ` +
+            "Gracias por avisar a tiempo.\n\n" +
+            "Tu hueco con nosotros es en menos de 48h y ya está reservado " +
+            "para ti. Para no dejarlo sin uso, podemos hacer dos cosas:\n\n" +
+            "✅ Reagendarlo gratis dentro de las próximas 48h\n" +
+            "   (te mostramos huecos disponibles a continuación 👇)\n\n" +
+            "💳 O, si no puedes en ese plazo, cerrar la cita con\n" +
+            "   una aportación de 55€ por Bizum al +34 629 01 10 55.\n\n" +
+            "Lo más fácil es lo primero. Mira los huecos a continuación.\n\n— SALUFIT";
           await sendTextMessage(
               {phoneId: config.whatsappPhoneId, token: waToken, to: telefono},
               msgPol,
@@ -846,11 +855,11 @@ async function executeAction(
                 .map((s, i) => `${i + 1}. ${longLabelForSlot(s)}`)
                 .join("\n");
             const body =
-              "Si quieres reagendar, tenemos estos huecos disponibles " +
-              "(dentro del plazo de 48h):\n\n" +
+              "Estos son los huecos que tenemos disponibles para ti:\n\n" +
               `${detalleTextos}\n\n` +
-              "Pulsa el horario que prefieras o \"Otro horario\" si " +
-              "ninguno te conviene o prefieres pagar los 55€.";
+              "Pulsa el que mejor te encaje. Si ninguno te viene bien o " +
+              "prefieres la opción del Bizum, pulsa \"Otro horario\" y " +
+              "recepción se pone en contacto contigo.";
             const botones = [
               ...slots.map((s, i) => ({
                 id: `slot_${convId}_${i}`,
