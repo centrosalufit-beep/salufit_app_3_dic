@@ -1623,29 +1623,33 @@ export const whatsappWebhook = onRequest(
           const texto = String(msg.text?.body ?? "").trim();
           if (!texto) return;
           await processIncomingText(from, texto, waToken, appSecret, anthropicKey);
-        } else if (msg.type === "interactive") {
-          // Pulsaciones de botones interactivos. Tres tipos:
-          //  - button_reply.id de un sendButtonMessage (texto libre con botones).
-          //  - list_reply.id (no usado actualmente).
-          //  - quick_reply de un template message (Meta genera un id auto y
-          //    pasa el `title` configurado en el template).
-          // Los templates aprobados de Meta no permiten IDs custom; por eso
-          // mapeamos `title` ("Confirmar"/"Cambiar cita"/"Cancelar") a los
-          // IDs internos btn_confirm/btn_reschedule/btn_cancel para que el
-          // resto del flujo siga siendo idéntico.
+        } else if (msg.type === "interactive" || msg.type === "button") {
+          // Pulsaciones de botones. Hay dos formatos según origen:
+          //  - msg.type === "interactive" → botones de sendButtonMessage
+          //    (texto libre con botones). Llega .interactive.button_reply.id
+          //    con el ID que pusimos al enviarlos (btn_confirm, slot_X, etc.).
+          //  - msg.type === "button" → quick_reply de un TEMPLATE aprobado
+          //    de Meta. Llega .button.text y .button.payload con el texto
+          //    del botón ("Confirmar", "Cambiar cita", "Cancelar"). Meta
+          //    NO permite IDs custom en templates, solo el text.
+          //
+          // Mapeamos el text/title a los IDs internos para que el resto
+          // del flujo (executeAction, política 48h, slots) sea idéntico
+          // sin importar el origen del botón.
           const rawId = msg.interactive?.button_reply?.id ??
             msg.interactive?.list_reply?.id;
           const rawTitle = msg.interactive?.button_reply?.title ??
-            msg.interactive?.list_reply?.title;
+            msg.interactive?.list_reply?.title ??
+            (msg as Record<string, {text?: string; payload?: string}>).button?.text ??
+            (msg as Record<string, {text?: string; payload?: string}>).button?.payload;
           let buttonId = rawId ? String(rawId) : "";
           if (!buttonId.startsWith("btn_") && !buttonId.startsWith("slot_")) {
-            // Posible quick_reply de template — mapeamos por title.
             const titleLower = (rawTitle ?? "").toLowerCase().trim();
             if (titleLower === "confirmar") buttonId = "btn_confirm";
             else if (titleLower === "cambiar cita") buttonId = "btn_reschedule";
             else if (titleLower === "cancelar") buttonId = "btn_cancel";
-            functions.logger.info("Botón template normalizado", {
-              rawId, rawTitle, mappedTo: buttonId,
+            functions.logger.info("Botón template/interactive normalizado", {
+              msgType: msg.type, rawId, rawTitle, mappedTo: buttonId,
             });
           }
           if (!buttonId) return;
