@@ -1519,6 +1519,32 @@ export const whatsappWebhook = onRequest(
         const anthropicKey = ANTHROPIC_API_KEY.value();
         const config = await loadConfig();
 
+        // ─── Filtro 1: silencio absoluto al propio teléfono de recepción ─
+        // Recepción usa el bot para escalado, no debería convertirse en
+        // paciente del mismo bot. Si recepción reacciona con un emoji a un
+        // DM nuestro, Meta nos manda un evento "reaction" que sin este
+        // filtro provocaría loop (aviso de "no soportado" → reaction al
+        // aviso → otro aviso → ...). Aplicamos también a otros tipos por
+        // seguridad: que recepción "escriba" al bot no genere flujo bot.
+        if (config.grupoRecepcionId && from === config.grupoRecepcionId) {
+          functions.logger.info(
+              "Mensaje del propio teléfono de recepción ignorado",
+              {from, type: msg.type},
+          );
+          return;
+        }
+
+        // ─── Filtro 2: ignorar reactions (emojis sobre nuestros mensajes) ─
+        // Las reactions son feedback al mensaje original, no son mensajes
+        // nuevos. No queremos responder ni escalar.
+        if (msg.type === "reaction") {
+          functions.logger.info("Reaction ignorada", {
+            from,
+            emoji: (msg as Record<string, {emoji?: string}>).reaction?.emoji,
+          });
+          return;
+        }
+
         if (msg.type === "text") {
           const texto = String(msg.text?.body ?? "").trim();
           if (!texto) return;
