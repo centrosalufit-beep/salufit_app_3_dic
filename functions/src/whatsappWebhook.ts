@@ -917,8 +917,12 @@ async function executeAction(
       const detalleTextos = slots
           .map((s, i) => `${i + 1}. ${longLabelForSlot(s)}`)
           .join("\n");
+      // Opción B (decidida con el usuario 2026-04-30): NO mencionamos al
+      // profesional concreto en el mensaje al cliente. Si pulsa slot, recepción
+      // confirma a quién le toca; si pulsa "Otro horario", recepción puede
+      // ofrecer otro fisio sin que el cliente espere al original.
       const body =
-        `Tenemos estos huecos con ${schedule.nombre}:\n\n${detalleTextos}\n\n` +
+        `Tenemos estos huecos disponibles:\n\n${detalleTextos}\n\n` +
         "Pulsa el horario que prefieras o \"Otro horario\" si ninguno te conviene.";
       const botones = [
         ...slots.map((s, i) => ({
@@ -1016,7 +1020,9 @@ async function processInteractiveReply(
           `🔄 REAGENDACIÓN — paciente pidió "Otro horario"\n` +
           `Tel: ${telefono}\n` +
           (cita ? `Cita actual: ${formatFechaES(cita.fechaCita, "es")} con ${cita.profesional}\n` : "") +
-          "(Buscar hueco manualmente y confirmar.)");
+          "(Buscar hueco manualmente. El paciente NO espera profesional concreto: " +
+          "si la franja que pida no encaja con su profesional habitual, " +
+          "se puede ofrecer otro fisio del mismo servicio.)");
       return;
     }
 
@@ -1071,9 +1077,11 @@ async function processInteractiveReply(
     // Confirmamos al paciente y pedimos a recepción que actualice Clinni.
     // (No tocamos clinni_appointments aquí porque el bot no es la fuente de
     //  verdad: la cita real vive en Clinni y se sincroniza por Excel diario.)
+    // Opción B: no mencionamos al profesional al cliente para que recepción
+    // tenga libertad de reasignar si el slot acaba siendo con otro.
     await sendTextMessage(
         {phoneId: config.whatsappPhoneId, token: waToken, to: telefono},
-        `Anotado: te reagendamos para el ${fechaTexto} con ${slot.profesionalNombre}. ` +
+        `Anotado: te reagendamos para el ${fechaTexto}. ` +
         "Recepción confirmará el cambio en breve. Gracias.\n\n— SALUFIT",
     );
     await db.collection("whatsapp_conversations").doc(conv.id).update({
