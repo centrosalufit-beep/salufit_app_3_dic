@@ -428,6 +428,29 @@
       "density": "SPARSE_ALL"
     },
     {
+      "collectionGroup": "clinni_appointments",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "estado",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "profesional",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "fechaCita",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "ASCENDING"
+        }
+      ],
+      "density": "SPARSE_ALL"
+    },
+    {
       "collectionGroup": "whatsapp_conversations",
       "queryScope": "COLLECTION",
       "fields": [
