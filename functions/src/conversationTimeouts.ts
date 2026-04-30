@@ -136,11 +136,15 @@ export const checkConversationTimeouts = onSchedule(
         });
       }
 
-      // 2) Conversaciones esperando_respuesta_boton_2 con timeout pasado.
-      // Escalamos a recepción y cerramos como timeout.
+      // 2) Conversaciones esperando_respuesta_boton_2 O paciente abandonó
+      // tras ver slots de reagendar (esperando_respuesta_boton_reagendar)
+      // con timeout pasado. Escalamos a recepción y cerramos como timeout.
       const snapSegundo = await db
           .collection("whatsapp_conversations")
-          .where("estado", "==", "esperando_respuesta_boton_2")
+          .where("estado", "in", [
+            "esperando_respuesta_boton_2",
+            "esperando_respuesta_boton_reagendar",
+          ])
           .where(
               "fechaUltimaInteraccion",
               "<=",
@@ -154,14 +158,19 @@ export const checkConversationTimeouts = onSchedule(
         const data = conv.data();
         const telefono = (data.pacienteTelefono as string) ?? "";
         const nombre = (data.pacienteNombre as string) ?? "(sin nombre)";
+        const estadoPrev = (data.estado as string) ?? "";
 
         // Notificar a recepción.
         if (config.grupoRecepcionId) {
-          const aviso =
-            `⏰ TIMEOUT — ${nombre}\n` +
-            `Tel: ${telefono}\n` +
+          const motivoTimeout = estadoPrev === "esperando_respuesta_boton_reagendar" ?
+            "El paciente vio los slots de reagendar y no respondió. " +
+            "Probable abandono — contactar manualmente." :
             "El paciente no respondió a 2 recordatorios sobre su cita. " +
             "Atender manualmente.";
+          const aviso =
+            `⏰ TIMEOUT — ${nombre}\n` +
+            `📞 ${telefono}\n\n` +
+            `➡️ ${motivoTimeout}`;
           const r = await sendTextMessage(
               {phoneId: config.whatsappPhoneId, token: waToken, to: config.grupoRecepcionId},
               aviso,
@@ -169,19 +178,22 @@ export const checkConversationTimeouts = onSchedule(
           functions.logger.info("Timeout 2: escalado a recepción", {
             convId: conv.id,
             telefono,
+            estadoPrev,
             success: r.success,
             messageId: r.messageId,
           });
         } else {
           functions.logger.warn(
               "Timeout 2 sin grupoRecepcionId configurado, escalada solo en BBDD",
-              {convId: conv.id, telefono},
+              {convId: conv.id, telefono, estadoPrev},
           );
         }
 
         await conv.ref.update({
           estado: "escalada",
-          resultado: "timeout_sin_respuesta",
+          resultado: estadoPrev === "esperando_respuesta_boton_reagendar" ?
+            "timeout_sin_respuesta_reagendar" :
+            "timeout_sin_respuesta",
           fechaUltimaInteraccion: admin.firestore.Timestamp.now(),
         });
         escalados++;

@@ -310,7 +310,7 @@ function buildRecepcionMsg(opts: {
   citaActual?: string;
   mensajeOriginal?: string;
   extra?: string[];
-  cta: string;
+  cta?: string;
 }): string {
   const lines: string[] = [];
   lines.push(`${opts.icono} ${opts.titulo}`);
@@ -318,9 +318,12 @@ function buildRecepcionMsg(opts: {
   lines.push(`📞 ${opts.telefono}`);
 
   const dataLines: string[] = [];
-  if (opts.citaActual) dataLines.push(`📅 Cita: ${opts.citaActual}`);
-  if (opts.citaAnterior) dataLines.push(`❌ Cita anterior: ${opts.citaAnterior}`);
-  if (opts.citaNueva) dataLines.push(`✅ Cita nueva: ${opts.citaNueva}`);
+  // Las etiquetas "Cita:", "Cita anterior:", "Cita nueva:" se omiten porque
+  // los iconos ya las identifican (📅 actual, ❌ anterior, ✅ nueva). Tipografía
+  // más limpia y menos texto que recepción tenga que leer.
+  if (opts.citaActual) dataLines.push(`📅 ${opts.citaActual}`);
+  if (opts.citaAnterior) dataLines.push(`❌ ${opts.citaAnterior}`);
+  if (opts.citaNueva) dataLines.push(`✅ ${opts.citaNueva}`);
   if (opts.mensajeOriginal && !opts.mensajeOriginal.startsWith("(botón:")) {
     dataLines.push(`💬 "${opts.mensajeOriginal}"`);
   }
@@ -330,8 +333,10 @@ function buildRecepcionMsg(opts: {
     lines.push(...dataLines);
   }
 
-  lines.push("");
-  lines.push(`➡️ ${opts.cta}`);
+  if (opts.cta) {
+    lines.push("");
+    lines.push(`➡️ ${opts.cta}`);
+  }
   return lines.join("\n");
 }
 
@@ -970,27 +975,30 @@ async function executeAction(
                 resultado,
               });
         }
-        const icono = fuerzaMayor ? "🆘" :
-          slotsOfrecidosCancel.length > 0 ? "🔄" : "⚠️";
-        const titulo = fuerzaMayor ?
-          "[ALBA] CANCELACIÓN <48h — FUERZA MAYOR" :
-          slotsOfrecidosCancel.length > 0 ?
-            "[ALBA] CANCELACIÓN <48h — BOT YA OFRECIÓ SLOTS" :
+        // Si el bot ofreció slots al paciente, NO notificamos a recepción
+        // ahora — el paciente está en mitad del flujo y aún no decidió. Si
+        // pulsa un slot, processInteractiveReply mandará "✅ REAGENDACIÓN
+        // SOLICITADA"; si pulsa "Otro horario", el handler de slot_other
+        // mandará otro DM; si abandona, checkConversationTimeouts escalará.
+        // Evita ruido de mensajes a recepción.
+        if (slotsOfrecidosCancel.length === 0) {
+          const icono = fuerzaMayor ? "🆘" : "⚠️";
+          const titulo = fuerzaMayor ?
+            "[ALBA] CANCELACIÓN <48h — FUERZA MAYOR" :
             "[ALBA] CANCELACIÓN DENTRO DE 48h";
-        const cta = fuerzaMayor ?
-          "Paciente alega fuerza mayor — valorar exención. Si no procede, ofrecer reagendar +48h o 55€ Bizum." :
-          slotsOfrecidosCancel.length > 0 ?
-            "Bot ya ofreció slots dentro de 48h vía botones. Si el paciente los rechaza, gestionar 55€ Bizum o nueva propuesta manual." :
+          const cta = fuerzaMayor ?
+            "Paciente alega fuerza mayor — valorar exención. Si no procede, ofrecer reagendar +48h o 55€ Bizum." :
             "Política 48h aplicada. Decisión humana: reagendar +48h máx 2 veces o cobrar 55€ Bizum.";
-        await notifyRecepcion(config, waToken, buildRecepcionMsg({
-          icono,
-          titulo,
-          nombre: cita.pacienteNombre,
-          telefono,
-          citaActual: `${formatFechaES(cita.fechaCita, "es")} con ${cita.profesional}`,
-          mensajeOriginal,
-          cta,
-        }));
+          await notifyRecepcion(config, waToken, buildRecepcionMsg({
+            icono,
+            titulo,
+            nombre: cita.pacienteNombre,
+            telefono,
+            citaActual: `${formatFechaES(cita.fechaCita, "es")} con ${cita.profesional}`,
+            mensajeOriginal,
+            cta,
+          }));
+        }
       } else if (cita) {
         // Cancelación con más de 48h de antelación: gratuita.
         await db
@@ -1351,7 +1359,6 @@ async function processInteractiveReply(
         `${formatFechaES(cita.fechaCita, "es")} con ${cita.profesional}` :
         undefined,
       citaNueva: `${fechaTexto} con ${slot.profesionalNombre}`,
-      cta: "Actualizar Clinni y avisar al paciente si hay incidencia.",
     }));
     return;
   }
