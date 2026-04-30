@@ -22,7 +22,7 @@ import * as admin from "firebase-admin";
 import {sendTextMessage, sendButtonMessage, validateMetaSignature} from "./whatsapp";
 import {classifyIntent, BotIntent} from "./claude";
 import {fetchMediaAndStore} from "./whatsappMedia";
-import {findNextAvailableSlots, shortLabelForSlot, longLabelForSlot} from "./slots";
+import {findNextAvailableSlots, shortLabelForSlot, longLabelForSlot, Slot} from "./slots";
 
 if (admin.apps.length === 0) {
   admin.initializeApp();
@@ -796,45 +796,129 @@ async function executeAction(
 
     case "cancelar":
       if (cita && dentro48h) {
-        // POLÍTICA 48h: NO cancelamos automáticamente. Escalamos a Alba.
-        // Si el flujo viene de un botón del recordatorio (o de cualquier
-        // vía donde Claude no haya respondido al paciente todavía), enviamos
-        // un mensaje fijo con la política. Si viene de texto, Claude ya
-        // respondió antes y no duplicamos.
+        // POLÍTICA 48h: NO cancelamos automáticamente. Si viene de botón
+        // (Claude no respondió antes), enviamos mensaje con la política
+        // y, en cancelaciones SIN fuerza mayor, también ofrecemos slots de
+        // reagendación dentro de las 48h siguientes a la cita actual para
+        // que el paciente pueda tomar la decisión rápido sin esperar a
+        // recepción.
         const vieneDeBoton = mensajeOriginal.startsWith("(botón:");
+        const saludoNombreCancel = pacienteNombre.split(" ")[0] || "";
+
         if (vieneDeBoton) {
-          const saludoNombre = pacienteNombre.split(" ")[0] || "";
           const msgPol = fuerzaMayor ?
-            `Hola${saludoNombre ? " " + saludoNombre : ""}, entendemos que es ` +
-            "una situación difícil. Recepción te contactará en breve para " +
-            "valorar tu caso con prioridad.\n\n— SALUFIT" :
-            `Hola${saludoNombre ? " " + saludoNombre : ""}, hemos recibido tu ` +
-            "solicitud de cancelación. Como tu cita es en menos de 48h, se " +
-            "aplica nuestra política: puedes reagendar (gratis, máximo 2 " +
-            "veces, dentro de las 48h siguientes a tu cita) o abonar 55€ " +
-            "por Bizum al +34 629 01 10 55. Recepción te contactará en " +
-            "breve para gestionarlo. Gracias.\n\n— SALUFIT";
+            `Hola${saludoNombreCancel ? " " + saludoNombreCancel : ""}, ` +
+            "entendemos que es una situación difícil. Recepción te " +
+            "contactará en breve para valorar tu caso con prioridad.\n\n— SALUFIT" :
+            `Hola${saludoNombreCancel ? " " + saludoNombreCancel : ""}, hemos ` +
+            "recibido tu solicitud de cancelación. Como tu cita es en menos " +
+            "de 48h, se aplica nuestra política: puedes reagendar (gratis, " +
+            "máximo 2 veces, dentro de las 48h siguientes a tu cita) o " +
+            "abonar 55€ por Bizum al +34 629 01 10 55.\n\n— SALUFIT";
           await sendTextMessage(
               {phoneId: config.whatsappPhoneId, token: waToken, to: telefono},
               msgPol,
           );
         }
+
+        // En fuerza mayor NO ofrecemos slots — escalada limpia para Alba.
+        // En cancelación normal dentro de 48h sí intentamos ofrecer slots
+        // dentro de la ventana 48h-after-cita para acelerar el reagendado.
+        let slotsOfrecidosCancel: Slot[] = [];
+        if (vieneDeBoton && !fuerzaMayor) {
+          const restrict = cita.fechaCita.getTime() + 48 * 60 * 60 * 1000;
+          const {schedule, slots} = await findNextAvailableSlots(
+              cita.profesional,
+              {
+                count: 2,
+                bufferMinutosDesdeAhora: 60,
+                diasVista: 14,
+                restrictToBeforeMs: restrict,
+              },
+          );
+          if (schedule && schedule.activo &&
+              !schedule.escalaDirectaParaReagendar && slots.length > 0) {
+            slotsOfrecidosCancel = slots;
+            const detalleTextos = slots
+                .map((s, i) => `${i + 1}. ${longLabelForSlot(s)}`)
+                .join("\n");
+            const body =
+              "Si quieres reagendar, tenemos estos huecos disponibles " +
+              "(dentro del plazo de 48h):\n\n" +
+              `${detalleTextos}\n\n` +
+              "Pulsa el horario que prefieras o \"Otro horario\" si " +
+              "ninguno te conviene o prefieres pagar los 55€.";
+            const botones = [
+              ...slots.map((s, i) => ({
+                id: `slot_${convId}_${i}`,
+                title: shortLabelForSlot(s),
+              })),
+              {id: "slot_other", title: "Otro horario"},
+            ].slice(0, 3);
+            const r = await sendButtonMessage(
+                {phoneId: config.whatsappPhoneId, token: waToken, to: telefono},
+                body,
+                botones,
+            );
+            functions.logger.info("Cancelar+48h — botones de slots enviados", {
+              convId, success: r.success, slotsCount: slots.length,
+            });
+            const slotsParaGuardar = slots.map((s) => ({
+              inicio: admin.firestore.Timestamp.fromDate(s.inicio),
+              fin: admin.firestore.Timestamp.fromDate(s.fin),
+              profesionalId: s.profesionalId,
+              profesionalNombre: s.profesionalNombre,
+            }));
+            await db.collection("whatsapp_conversations").doc(convId).update({
+              estado: "esperando_respuesta_boton_reagendar",
+              intencionDetectada: "reagendar",
+              origenReagendar: "cancelacion_dentro_48h",
+              slotsOfrecidos: slotsParaGuardar,
+              fechaUltimaInteraccion: admin.firestore.Timestamp.now(),
+              mensajes: admin.firestore.FieldValue.arrayUnion({
+                rol: "bot",
+                texto: body,
+                timestamp: admin.firestore.Timestamp.now(),
+              }),
+            });
+          } else {
+            functions.logger.info(
+                "Cancelar+48h — sin slots para ofrecer, solo escalada",
+                {convId, motivo: !schedule ? "sin schedule" :
+                  !schedule.activo ? "inactivo" :
+                    schedule.escalaDirectaParaReagendar ? "escalaDirecta" :
+                      "0 slots en ventana 48h"},
+            );
+          }
+        }
+
         const resultado = fuerzaMayor ?
           "cancelar_dentro_48h_fuerza_mayor" :
-          "cancelar_dentro_48h_escalado";
-        await appendMessageToConversation(convId, "bot",
-            "(cancelación dentro de 48h, decisión recepción)", {
-              estado: "cancelacion_solicitada",
-              resultado,
-            });
+          slotsOfrecidosCancel.length > 0 ?
+            "cancelar_dentro_48h_slots_ofrecidos" :
+            "cancelar_dentro_48h_escalado";
+        if (slotsOfrecidosCancel.length === 0) {
+          // Solo persistimos un mensaje genérico si no hubo slots — si
+          // hubo, el update de la conv ya añadió el body de slots.
+          await appendMessageToConversation(convId, "bot",
+              "(cancelación dentro de 48h, decisión recepción)", {
+                estado: "cancelacion_solicitada",
+                resultado,
+              });
+        }
         const cabecera = fuerzaMayor ?
           "🆘 [ALBA] CANCELACIÓN <48h CON FUERZA MAYOR ALEGADA" :
-          "⚠️ [ALBA] CANCELACIÓN DENTRO DE 48h";
+          slotsOfrecidosCancel.length > 0 ?
+            "🔄 [ALBA] CANCELACIÓN <48h — SLOTS DE REAGENDAR OFRECIDOS AL PACIENTE" :
+            "⚠️ [ALBA] CANCELACIÓN DENTRO DE 48h";
         const politica = fuerzaMayor ?
           "(Política: paciente alega fuerza mayor — valorar exención. " +
           "Si no procede, ofrecer reagendar +48h o 55€ Bizum.)" :
-          "(Política: reagendar dentro de 48h — máx 2 veces — o 55€ Bizum. " +
-          "Decisión humana.)";
+          slotsOfrecidosCancel.length > 0 ?
+            "(Bot ya ofreció slots dentro de 48h via botones. Si paciente " +
+            "los rechaza, gestionar 55€ Bizum o nueva propuesta manual.)" :
+            "(Política: reagendar dentro de 48h — máx 2 veces — o 55€ Bizum. " +
+            "Decisión humana.)";
         await notifyRecepcion(
             config,
             waToken,
