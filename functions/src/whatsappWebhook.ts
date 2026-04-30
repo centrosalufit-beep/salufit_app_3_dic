@@ -204,6 +204,7 @@ async function findActiveConversation(
           "activa",
           "esperando_respuesta_boton",
           "esperando_respuesta_boton_2",
+          "esperando_respuesta_boton_reagendar",
         ])
         .orderBy("fechaUltimaInteraccion", "desc")
         .limit(1)
