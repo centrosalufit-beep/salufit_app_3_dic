@@ -893,7 +893,7 @@ async function executeAction(
         let slotsOfrecidosCancel: Slot[] = [];
         if (vieneDeBoton && !fuerzaMayor) {
           const restrict = cita.fechaCita.getTime() + 48 * 60 * 60 * 1000;
-          const {schedule, slots} = await findNextAvailableSlots(
+          const primerIntentoCancel = await findNextAvailableSlots(
               cita.profesional,
               {
                 count: 2,
@@ -905,13 +905,43 @@ async function executeAction(
                 restrictToAfterMs: cita.fechaCita.getTime(),
               },
           );
+          const schedule = primerIntentoCancel.schedule;
+          let slots = primerIntentoCancel.slots;
+          // Opción B: si dentro 48h no hay slots, ampliamos a 14 días vista.
+          let slotsFueraDe48hCancel = false;
+          if (slots.length === 0 && schedule && schedule.activo &&
+              !schedule.escalaDirectaParaReagendar) {
+            const segundo = await findNextAvailableSlots(cita.profesional, {
+              count: 2,
+              bufferMinutosDesdeAhora: 60,
+              diasVista: 14,
+              restrictToAfterMs: cita.fechaCita.getTime(),
+              // sin restrictToBeforeMs → 14 días por defecto
+            });
+            if (segundo.slots.length > 0) {
+              slots = segundo.slots;
+              slotsFueraDe48hCancel = true;
+              functions.logger.info(
+                  "Cancelar+48h: 0 slots en 48h, ampliando ventana 14 días",
+                  {convId, slotsFallback: segundo.slots.length},
+              );
+            }
+          }
           if (schedule && schedule.activo &&
               !schedule.escalaDirectaParaReagendar && slots.length > 0) {
             slotsOfrecidosCancel = slots;
             const detalleTextos = slots
                 .map((s, i) => `${i + 1}. ${longLabelForSlot(s)}`)
                 .join("\n");
-            const body =
+            const body = slotsFueraDe48hCancel ?
+              "Dentro del plazo de 48h no tenemos huecos. Te proponemos las " +
+              "primeras alternativas más allá del plazo:\n\n" +
+              `${detalleTextos}\n\n` +
+              "Si te encaja alguno, pulsa el horario y recepción se pondrá " +
+              "en contacto contigo para confirmarlo (al estar fuera del " +
+              "plazo, valorarán si se aplica nuestra política de cancelación " +
+              "o si lo gestionamos como caso especial). Si prefieres pagar " +
+              "los 55€ por Bizum, pulsa \"Otro horario\"." :
               "Estos son los huecos que tenemos disponibles para ti:\n\n" +
               `${detalleTextos}\n\n` +
               "Pulsa el que mejor te encaje. Si ninguno te viene bien o " +
@@ -943,6 +973,7 @@ async function executeAction(
               intencionDetectada: "reagendar",
               origenReagendar: "cancelacion_dentro_48h",
               slotsOfrecidos: slotsParaGuardar,
+              slotsFueraDePlazo: slotsFueraDe48hCancel,
               fechaUltimaInteraccion: admin.firestore.Timestamp.now(),
               mensajes: admin.firestore.FieldValue.arrayUnion({
                 rol: "bot",
@@ -1080,13 +1111,41 @@ async function executeAction(
         cita.fechaCita.getTime() :
         undefined;
 
-      const {schedule, slots} = await findNextAvailableSlots(cita.profesional, {
+      const primerIntento = await findNextAvailableSlots(cita.profesional, {
         count: 2,
         bufferMinutosDesdeAhora: 60,
         diasVista: 14,
         restrictToBeforeMs,
         restrictToAfterMs,
       });
+      const schedule = primerIntento.schedule;
+      let slots = primerIntento.slots;
+      // Opción B (decisión 2026-04-30): si dentro48h Y no hay slots en
+      // ventana 48h estricta, ampliamos búsqueda a 14 días vista (sin
+      // restrictToBeforeMs) para no obligar a recepción a gestionar a
+      // mano. El mensaje al cliente avisa explícitamente que esos huecos
+      // están fuera del plazo de 48h y recepción decidirá si aplica
+      // política (55€) o lo gestiona como caso especial.
+      let slotsFueraDe48h = false;
+      if (dentro48h && slots.length === 0 && primerIntento.schedule &&
+          primerIntento.schedule.activo &&
+          !primerIntento.schedule.escalaDirectaParaReagendar) {
+        const segundoIntento = await findNextAvailableSlots(cita.profesional, {
+          count: 2,
+          bufferMinutosDesdeAhora: 60,
+          diasVista: 14,
+          restrictToAfterMs: cita.fechaCita.getTime(),
+          // sin restrictToBeforeMs → busca en toda la ventana de 14 días
+        });
+        if (segundoIntento.slots.length > 0) {
+          slots = segundoIntento.slots;
+          slotsFueraDe48h = true;
+          functions.logger.info(
+              "Reagendar: 0 slots en 48h, ampliando ventana 14 días",
+              {convId, slotsFallback: segundoIntento.slots.length},
+          );
+        }
+      }
 
       // Profesional no encontrado, inactivo o configurado para escalar siempre.
       if (!schedule || !schedule.activo || schedule.escalaDirectaParaReagendar) {
@@ -1161,7 +1220,15 @@ async function executeAction(
       // profesional concreto en el mensaje al cliente. Si pulsa slot, recepción
       // confirma a quién le toca; si pulsa "Otro horario", recepción puede
       // ofrecer otro fisio sin que el cliente espere al original.
-      const body =
+      const body = slotsFueraDe48h ?
+        `Hola${saludoNombre ? " " + saludoNombre : ""}, dentro del plazo de ` +
+        "48h no tenemos huecos disponibles. Te proponemos las primeras " +
+        "alternativas más allá de ese plazo:\n\n" +
+        `${detalleTextos}\n\n` +
+        "Si te encaja alguno, pulsa el horario y recepción se pondrá en " +
+        "contacto contigo para confirmar (al estar fuera del plazo de 48h, " +
+        "valorarán si se aplica nuestra política o si lo gestionamos como " +
+        "caso especial). Si prefieres otra opción, pulsa \"Otro horario\"." :
         `Hola${saludoNombre ? " " + saludoNombre : ""}, ` +
         "te mostramos los huecos disponibles para reagendar tu cita:\n\n" +
         `${detalleTextos}\n\n` +
@@ -1187,6 +1254,7 @@ async function executeAction(
         estado: "esperando_respuesta_boton_reagendar",
         intencionDetectada: "reagendar",
         slotsOfrecidos: slotsParaGuardar,
+        slotsFueraDePlazo: slotsFueraDe48h,
         fechaUltimaInteraccion: admin.firestore.Timestamp.now(),
         mensajes: admin.firestore.FieldValue.arrayUnion({
           rol: "bot",
@@ -1350,15 +1418,21 @@ async function processInteractiveReply(
         timestamp: admin.firestore.Timestamp.now(),
       }),
     });
+    const fueraDePlazo = conv?.data?.slotsFueraDePlazo === true;
     await notifyRecepcion(config, waToken, buildRecepcionMsg({
-      icono: "✅",
-      titulo: "REAGENDACIÓN SOLICITADA",
+      icono: fueraDePlazo ? "⚠️" : "✅",
+      titulo: fueraDePlazo ?
+        "REAGENDACIÓN SOLICITADA — FUERA DE PLAZO 48h" :
+        "REAGENDACIÓN SOLICITADA",
       nombre: cita?.pacienteNombre || conv?.data?.pacienteNombre as string | undefined,
       telefono,
       citaAnterior: cita ?
         `${formatFechaES(cita.fechaCita, "es")} con ${cita.profesional}` :
         undefined,
       citaNueva: `${fechaTexto} con ${slot.profesionalNombre}`,
+      cta: fueraDePlazo ?
+        "El bot ofreció esta alternativa fuera del plazo de 48h porque no había huecos dentro. Decide si aplica política (55€) o caso especial." :
+        undefined,
     }));
     return;
   }
