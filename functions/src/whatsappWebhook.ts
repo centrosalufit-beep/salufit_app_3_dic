@@ -1550,9 +1550,32 @@ export const whatsappWebhook = onRequest(
           if (!texto) return;
           await processIncomingText(from, texto, waToken, appSecret, anthropicKey);
         } else if (msg.type === "interactive") {
-          const buttonId = msg.interactive?.button_reply?.id ?? msg.interactive?.list_reply?.id;
+          // Pulsaciones de botones interactivos. Tres tipos:
+          //  - button_reply.id de un sendButtonMessage (texto libre con botones).
+          //  - list_reply.id (no usado actualmente).
+          //  - quick_reply de un template message (Meta genera un id auto y
+          //    pasa el `title` configurado en el template).
+          // Los templates aprobados de Meta no permiten IDs custom; por eso
+          // mapeamos `title` ("Confirmar"/"Cambiar cita"/"Cancelar") a los
+          // IDs internos btn_confirm/btn_reschedule/btn_cancel para que el
+          // resto del flujo siga siendo idéntico.
+          const rawId = msg.interactive?.button_reply?.id ??
+            msg.interactive?.list_reply?.id;
+          const rawTitle = msg.interactive?.button_reply?.title ??
+            msg.interactive?.list_reply?.title;
+          let buttonId = rawId ? String(rawId) : "";
+          if (!buttonId.startsWith("btn_") && !buttonId.startsWith("slot_")) {
+            // Posible quick_reply de template — mapeamos por title.
+            const titleLower = (rawTitle ?? "").toLowerCase().trim();
+            if (titleLower === "confirmar") buttonId = "btn_confirm";
+            else if (titleLower === "cambiar cita") buttonId = "btn_reschedule";
+            else if (titleLower === "cancelar") buttonId = "btn_cancel";
+            functions.logger.info("Botón template normalizado", {
+              rawId, rawTitle, mappedTo: buttonId,
+            });
+          }
           if (!buttonId) return;
-          await processInteractiveReply(from, String(buttonId), waToken, config);
+          await processInteractiveReply(from, buttonId, waToken, config);
         } else if (
           msg.type === "image" || msg.type === "document" ||
           msg.type === "audio" || msg.type === "video" || msg.type === "sticker"

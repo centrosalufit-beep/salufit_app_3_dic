@@ -21,7 +21,7 @@ import {onCall, HttpsError} from "firebase-functions/v2/https";
 import {defineSecret} from "firebase-functions/params";
 import * as functions from "firebase-functions";
 import * as admin from "firebase-admin";
-import {sendButtonMessage} from "./whatsapp";
+import {sendButtonMessage, sendTemplateMessage} from "./whatsapp";
 
 if (admin.apps.length === 0) {
   admin.initializeApp();
@@ -157,15 +157,39 @@ async function runReminders(opts?: {
       `💼 ${servicio || "Cita"}\n\n` +
       "Por favor, confirma tu asistencia:";
 
-    const result = await sendButtonMessage(
+    // ENVÍO PRINCIPAL: template aprobado por Meta. Pasa la regla de la
+    // ventana 24h (puede iniciarse conversación sin que el paciente haya
+    // escrito antes). Las {{1}}, {{2}}, {{3}} se mapean en orden:
+    //   {{1}} = nombre paciente
+    //   {{2}} = fecha formateada
+    //   {{3}} = servicio (o "Cita" si vacío)
+    // Quick-reply buttons del template ("Confirmar", "Cambiar cita",
+    // "Cancelar") los maneja processInteractiveReply detectando por title.
+    let result = await sendTemplateMessage(
         {phoneId: config.whatsappPhoneId, token: waToken, to: telefono},
-        body,
-        [
-          {id: "btn_confirm", title: "Confirmar"},
-          {id: "btn_reschedule", title: "Cambiar cita"},
-          {id: "btn_cancel", title: "Cancelar"},
-        ],
+        "recordatorio_cita_v2",
+        "es",
+        [nombre || "paciente", fechaFmt, servicio || "Cita"],
     );
+
+    // FALLBACK: si la API rechaza el template (no aprobado, error, etc.)
+    // intentamos texto libre con botones interactivos. SOLO funcionará si
+    // el paciente ya tiene una ventana 24h abierta con el bot.
+    if (!result.success) {
+      functions.logger.warn(
+          "Template recordatorio_cita_v2 falló, intentando texto libre",
+          {error: result.error, telefono},
+      );
+      result = await sendButtonMessage(
+          {phoneId: config.whatsappPhoneId, token: waToken, to: telefono},
+          body,
+          [
+            {id: "btn_confirm", title: "Confirmar"},
+            {id: "btn_reschedule", title: "Cambiar cita"},
+            {id: "btn_cancel", title: "Cancelar"},
+          ],
+      );
+    }
 
     if (result.success) {
       sent++;

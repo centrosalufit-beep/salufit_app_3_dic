@@ -123,6 +123,68 @@ export async function sendButtonMessage(
 }
 
 /**
+ * Envía un mensaje basado en un template aprobado por Meta. Permite
+ * mandar mensajes proactivos a usuarios que NO han escrito al bot en las
+ * últimas 24h (la regla de la ventana de servicio de WhatsApp Business).
+ *
+ * @param templateName Nombre del template aprobado (case-sensitive).
+ * @param languageCode Código de idioma (ej. "es", "en_US").
+ * @param bodyParams Parámetros que rellenan {{1}}, {{2}}, ... del body
+ *                   IGUAL que en el template. ORDEN IMPORTA.
+ *                   Si el template usa named_params, pasar como
+ *                   `{name: "nombre", value: "..."}` en su lugar.
+ */
+export async function sendTemplateMessage(
+    options: SendOptions,
+    templateName: string,
+    languageCode: string,
+    bodyParams: string[],
+): Promise<{success: boolean; error?: string; messageId?: string}> {
+  const url = `https://graph.facebook.com/${WHATSAPP_API_VERSION}/${options.phoneId}/messages`;
+  try {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${options.token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        messaging_product: "whatsapp",
+        to: options.to,
+        type: "template",
+        template: {
+          name: templateName,
+          language: {code: languageCode},
+          components: bodyParams.length > 0 ? [
+            {
+              type: "body",
+              parameters: bodyParams.map((p) => ({type: "text", text: p})),
+            },
+          ] : [],
+        },
+      }),
+    });
+    const data = await response.json() as {
+      messages?: Array<{id: string}>;
+      error?: {message: string};
+    };
+    if (!response.ok) {
+      functions.logger.warn("WhatsApp template send failed", {
+        templateName,
+        status: response.status,
+        error: data.error,
+        to: options.to,
+      });
+      return {success: false, error: data.error?.message ?? `HTTP ${response.status}`};
+    }
+    return {success: true, messageId: data.messages?.[0]?.id};
+  } catch (e) {
+    functions.logger.error("WhatsApp template send exception", e);
+    return {success: false, error: String(e)};
+  }
+}
+
+/**
  * Valida la firma X-Hub-Signature-256 de un webhook entrante de Meta.
  * Si la firma no coincide, el webhook debe rechazarse con 401.
  *
