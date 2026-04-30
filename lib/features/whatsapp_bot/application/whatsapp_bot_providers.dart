@@ -96,3 +96,48 @@ Future<ImportResult> importClinniExcel(
   final data = Map<String, dynamic>.from(response.data);
   return ImportResult.fromMap(data);
 }
+
+/// Resultado de `importClinniPatients` (idempotente: imported = nuevos
+/// creados, updated = existentes sobrescritos por mismo telefono).
+class ImportPatientsResult {
+  const ImportPatientsResult({
+    required this.imported,
+    required this.updated,
+    required this.errors,
+    required this.errorMessages,
+  });
+
+  factory ImportPatientsResult.fromMap(Map<String, dynamic> map) {
+    return ImportPatientsResult(
+      imported: (map['imported'] as num?)?.toInt() ?? 0,
+      updated: (map['updated'] as num?)?.toInt() ?? 0,
+      errors: (map['errors'] as num?)?.toInt() ?? 0,
+      errorMessages: ((map['errorMessages'] as List?) ?? const [])
+          .map((e) => e.toString())
+          .toList(),
+    );
+  }
+
+  final int imported;
+  final int updated;
+  final int errors;
+  final List<String> errorMessages;
+}
+
+/// Llama a la Cloud Function `importClinniPatients` con el contenido
+/// del Excel `listado_v26.xlsx` (o equivalente) codificado en base64.
+@riverpod
+Future<ImportPatientsResult> importClinniPatientsExcel(
+  Ref ref, {
+  required String fileBase64,
+  required String fileName,
+}) async {
+  final functions = FirebaseFunctions.instanceFor(region: 'europe-southwest1');
+  final callable = functions.httpsCallable('importClinniPatients');
+  final response = await callable.call<Map<Object?, Object?>>({
+    'fileBase64': fileBase64,
+    'fileName': fileName,
+  });
+  final data = Map<String, dynamic>.from(response.data);
+  return ImportPatientsResult.fromMap(data);
+}

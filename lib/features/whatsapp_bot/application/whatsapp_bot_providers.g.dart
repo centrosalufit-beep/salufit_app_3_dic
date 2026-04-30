@@ -255,3 +255,109 @@ final class ImportClinniExcelFamily extends $Family
   @override
   String toString() => r'importClinniExcelProvider';
 }
+
+/// Llama a la Cloud Function `importClinniPatients` con el contenido
+/// del Excel `listado_v26.xlsx` (o equivalente) codificado en base64.
+
+@ProviderFor(importClinniPatientsExcel)
+const importClinniPatientsExcelProvider = ImportClinniPatientsExcelFamily._();
+
+/// Llama a la Cloud Function `importClinniPatients` con el contenido
+/// del Excel `listado_v26.xlsx` (o equivalente) codificado en base64.
+
+final class ImportClinniPatientsExcelProvider
+    extends
+        $FunctionalProvider<
+          AsyncValue<ImportPatientsResult>,
+          ImportPatientsResult,
+          FutureOr<ImportPatientsResult>
+        >
+    with
+        $FutureModifier<ImportPatientsResult>,
+        $FutureProvider<ImportPatientsResult> {
+  /// Llama a la Cloud Function `importClinniPatients` con el contenido
+  /// del Excel `listado_v26.xlsx` (o equivalente) codificado en base64.
+  const ImportClinniPatientsExcelProvider._({
+    required ImportClinniPatientsExcelFamily super.from,
+    required ({String fileBase64, String fileName}) super.argument,
+  }) : super(
+         retry: null,
+         name: r'importClinniPatientsExcelProvider',
+         isAutoDispose: true,
+         dependencies: null,
+         $allTransitiveDependencies: null,
+       );
+
+  @override
+  String debugGetCreateSourceHash() => _$importClinniPatientsExcelHash();
+
+  @override
+  String toString() {
+    return r'importClinniPatientsExcelProvider'
+        ''
+        '$argument';
+  }
+
+  @$internal
+  @override
+  $FutureProviderElement<ImportPatientsResult> $createElement(
+    $ProviderPointer pointer,
+  ) => $FutureProviderElement(pointer);
+
+  @override
+  FutureOr<ImportPatientsResult> create(Ref ref) {
+    final argument = this.argument as ({String fileBase64, String fileName});
+    return importClinniPatientsExcel(
+      ref,
+      fileBase64: argument.fileBase64,
+      fileName: argument.fileName,
+    );
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return other is ImportClinniPatientsExcelProvider &&
+        other.argument == argument;
+  }
+
+  @override
+  int get hashCode {
+    return argument.hashCode;
+  }
+}
+
+String _$importClinniPatientsExcelHash() =>
+    r'8290a14f64bb98f6549c88624b7d1297851d3c9f';
+
+/// Llama a la Cloud Function `importClinniPatients` con el contenido
+/// del Excel `listado_v26.xlsx` (o equivalente) codificado en base64.
+
+final class ImportClinniPatientsExcelFamily extends $Family
+    with
+        $FunctionalFamilyOverride<
+          FutureOr<ImportPatientsResult>,
+          ({String fileBase64, String fileName})
+        > {
+  const ImportClinniPatientsExcelFamily._()
+    : super(
+        retry: null,
+        name: r'importClinniPatientsExcelProvider',
+        dependencies: null,
+        $allTransitiveDependencies: null,
+        isAutoDispose: true,
+      );
+
+  /// Llama a la Cloud Function `importClinniPatients` con el contenido
+  /// del Excel `listado_v26.xlsx` (o equivalente) codificado en base64.
+
+  ImportClinniPatientsExcelProvider call({
+    required String fileBase64,
+    required String fileName,
+  }) => ImportClinniPatientsExcelProvider._(
+    argument: (fileBase64: fileBase64, fileName: fileName),
+    from: this,
+  );
+
+  @override
+  String toString() => r'importClinniPatientsExcelProvider';
+}

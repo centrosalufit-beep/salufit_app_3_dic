@@ -30,6 +30,8 @@ class WhatsAppBotScreen extends ConsumerWidget {
             child: Row(
               children: [
                 const ImportExcelButton(),
+                const SizedBox(width: 8),
+                const ImportPatientsButton(),
                 const SizedBox(width: 16),
                 upcomingAsync.maybeWhen(
                   data: (list) => _StatPill(

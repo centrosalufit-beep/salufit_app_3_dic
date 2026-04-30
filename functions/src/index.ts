@@ -16,7 +16,7 @@ import * as functions from "firebase-functions";
 import * as admin from "firebase-admin";
 
 // Re-export WhatsApp Bot Cloud Functions (Fase 1)
-export { importClinniAppointments } from "./clinniImport";
+export { importClinniAppointments, importClinniPatients } from "./clinniImport";
 export { whatsappWebhook } from "./whatsappWebhook";
 export { sendAppointmentReminders, triggerRemindersNow } from "./reminders";
 export { archiveOldAppointments } from "./archiveAppointments";

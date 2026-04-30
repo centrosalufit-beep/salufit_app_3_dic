@@ -139,3 +139,143 @@ class _ImportExcelButtonState extends ConsumerState<ImportExcelButton> {
     );
   }
 }
+
+/// Botón gemelo del anterior pero para importar el listado de pacientes
+/// (`listado_v26.xlsx` o equivalente) a la colección `clinni_patients`.
+/// Idempotente: si un paciente ya existe (mismo teléfono normalizado), se
+/// sobrescribe con los nuevos datos. Útil para refrescar tras altas/bajas
+/// en Clinni.
+class ImportPatientsButton extends ConsumerStatefulWidget {
+  const ImportPatientsButton({super.key});
+
+  @override
+  ConsumerState<ImportPatientsButton> createState() =>
+      _ImportPatientsButtonState();
+}
+
+class _ImportPatientsButtonState extends ConsumerState<ImportPatientsButton> {
+  bool _processing = false;
+
+  Future<void> _pickAndImport() async {
+    setState(() => _processing = true);
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['xlsx', 'xls'],
+        withData: true,
+      );
+      if (result == null || result.files.isEmpty) {
+        return;
+      }
+      final file = result.files.first;
+      final bytes = file.bytes;
+      if (bytes == null) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No se pudo leer el archivo')),
+        );
+        return;
+      }
+      final base64Str = base64Encode(bytes);
+      final import = await ref.read(
+        importClinniPatientsExcelProvider(
+          fileBase64: base64Str,
+          fileName: file.name,
+        ).future,
+      );
+
+      if (!mounted) return;
+      await showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Row(
+            children: [
+              Icon(
+                import.errors > 0 ? Icons.warning_amber : Icons.check_circle,
+                color: import.errors > 0 ? Colors.orange : Colors.green,
+              ),
+              const SizedBox(width: 8),
+              const Text('Importación pacientes'),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Nuevos creados: ${import.imported}'),
+              Text('Existentes actualizados: ${import.updated}'),
+              Text('Errores: ${import.errors}'),
+              if (import.errorMessages.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                const Text(
+                  'Detalles de errores:',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 4),
+                Container(
+                  constraints: const BoxConstraints(maxHeight: 200),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade100,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  padding: const EdgeInsets.all(8),
+                  child: SingleChildScrollView(
+                    child: Text(
+                      import.errorMessages.join('\n'),
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontFamily: 'monospace',
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+          actions: [
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+              ),
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Aceptar'),
+            ),
+          ],
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _processing = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ElevatedButton.icon(
+      onPressed: _processing ? null : _pickAndImport,
+      icon: _processing
+          ? const SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : const Icon(Icons.people_outline),
+      label: Text(_processing ? 'Importando…' : 'Importar pacientes'),
+      style: ElevatedButton.styleFrom(
+        backgroundColor: Colors.indigo,
+        foregroundColor: Colors.white,
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ),
+    );
+  }
+}

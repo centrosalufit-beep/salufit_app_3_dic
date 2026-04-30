@@ -332,3 +332,277 @@ export const importClinniAppointments = onCall<ImportRequestPayload, Promise<Imp
       };
     },
 );
+
+// ─── Importación de pacientes (clinni_patients) ──────────────────────────
+
+const PATIENT_COLUMN_ALIASES = {
+  numeroHistoria: ["número de historia", "numero de historia", "historia", "nº historia",
+    "n historia", "history number", "id paciente"],
+  nombre: ["nombre"],
+  apellidos: ["apellidos", "apellido"],
+  nombreCompleto: ["nombrecompleto", "nombre completo", "fullname"],
+  sexo: ["sexo", "género", "genero", "gender"],
+  dni: ["dni", "nif", "documento"],
+  telefono: ["teléfono", "telefono", "móvil", "movil", "tel", "phone"],
+  email: ["email", "correo", "e-mail"],
+  fechaNacimiento: ["fecha nacimiento", "fecha de nacimiento", "f. nacimiento", "birth"],
+  derivadoPor: ["derivado por", "derivado", "referido por"],
+  etiquetas: ["etiquetas", "tags", "labels"],
+  recibirMailing: ["recibir mailing", "mailing", "consentimiento marketing"],
+  proteccionDatos: ["protección de datos firmada", "proteccion de datos firmada",
+    "rgpd", "consentimiento rgpd", "proteccion datos"],
+  infoSegundoTutor: ["info 2º tutor/a", "info 2º tutor", "info segundo tutor",
+    "tutor secundario"],
+};
+
+interface ParsedPatient {
+  numeroHistoria: string;
+  nombreCompleto: string;
+  sexo: string;
+  dni: string;
+  telefono: string;
+  email: string;
+  fechaNacimiento: Date | null;
+  derivadoPor: string;
+  etiquetas: string[];
+  recibirMailing: boolean;
+  proteccionDatosFirmada: boolean;
+  infoSegundoTutor: string;
+}
+
+function parseBoolCell(raw: unknown): boolean {
+  if (raw === undefined || raw === null) return false;
+  if (typeof raw === "boolean") return raw;
+  if (typeof raw === "number") return raw !== 0;
+  const s = String(raw).trim().toLowerCase();
+  return ["sí", "si", "yes", "y", "true", "1", "x", "✓", "✔"].includes(s);
+}
+
+function parsePatientWorkbook(
+    buffer: Buffer,
+): {rows: ParsedPatient[]; errors: string[]} {
+  const wb = XLSX.read(buffer, {type: "buffer", cellDates: true});
+  const sheetName = wb.SheetNames[0];
+  if (!sheetName) {
+    return {rows: [], errors: ["El Excel no contiene hojas"]};
+  }
+  const sheet = wb.Sheets[sheetName];
+  const json = XLSX.utils.sheet_to_json(sheet, {
+    header: 1,
+    raw: true,
+    defval: "",
+  }) as unknown[][];
+  if (json.length < 2) {
+    return {rows: [], errors: ["El Excel está vacío o solo tiene cabecera"]};
+  }
+  const headers = json[0].map((h) => String(h ?? "").trim());
+  const cols = {
+    numeroHistoria: findColumn(headers, PATIENT_COLUMN_ALIASES.numeroHistoria),
+    nombre: findColumn(headers, PATIENT_COLUMN_ALIASES.nombre),
+    apellidos: findColumn(headers, PATIENT_COLUMN_ALIASES.apellidos),
+    nombreCompleto: findColumn(headers, PATIENT_COLUMN_ALIASES.nombreCompleto),
+    sexo: findColumn(headers, PATIENT_COLUMN_ALIASES.sexo),
+    dni: findColumn(headers, PATIENT_COLUMN_ALIASES.dni),
+    telefono: findColumn(headers, PATIENT_COLUMN_ALIASES.telefono),
+    email: findColumn(headers, PATIENT_COLUMN_ALIASES.email),
+    fechaNacimiento: findColumn(headers, PATIENT_COLUMN_ALIASES.fechaNacimiento),
+    derivadoPor: findColumn(headers, PATIENT_COLUMN_ALIASES.derivadoPor),
+    etiquetas: findColumn(headers, PATIENT_COLUMN_ALIASES.etiquetas),
+    recibirMailing: findColumn(headers, PATIENT_COLUMN_ALIASES.recibirMailing),
+    proteccionDatos: findColumn(headers, PATIENT_COLUMN_ALIASES.proteccionDatos),
+    infoSegundoTutor: findColumn(headers, PATIENT_COLUMN_ALIASES.infoSegundoTutor),
+  };
+
+  if (cols.telefono < 0) {
+    return {rows: [], errors: ["Falta columna obligatoria: Teléfono"]};
+  }
+
+  const rows: ParsedPatient[] = [];
+  const errors: string[] = [];
+
+  for (let i = 1; i < json.length; i++) {
+    const row = json[i];
+    if (!row || row.length === 0) continue;
+    try {
+      const telRaw = String(row[cols.telefono] ?? "").trim();
+      if (!telRaw) continue; // sin teléfono no podemos identificar
+
+      const nombre = cols.nombre >= 0 ? String(row[cols.nombre] ?? "").trim() : "";
+      const apellidos = cols.apellidos >= 0 ? String(row[cols.apellidos] ?? "").trim() : "";
+      const nombreCompletoRaw = cols.nombreCompleto >= 0 ?
+        String(row[cols.nombreCompleto] ?? "").trim() : "";
+      const nombreCompleto = nombreCompletoRaw ||
+        `${nombre} ${apellidos}`.trim() ||
+        "(sin nombre)";
+
+      const etiquetasRaw = cols.etiquetas >= 0 ?
+        String(row[cols.etiquetas] ?? "").trim() : "";
+      const etiquetas = etiquetasRaw ?
+        etiquetasRaw.split(/[,;|]/).map((e) => e.trim()).filter((e) => e) :
+        [];
+
+      rows.push({
+        numeroHistoria: cols.numeroHistoria >= 0 ?
+          String(row[cols.numeroHistoria] ?? "").trim() : "",
+        nombreCompleto,
+        sexo: cols.sexo >= 0 ? String(row[cols.sexo] ?? "").trim() : "",
+        dni: cols.dni >= 0 ? String(row[cols.dni] ?? "").trim() : "",
+        telefono: normalizePhone(telRaw),
+        email: cols.email >= 0 ? String(row[cols.email] ?? "").trim() : "",
+        fechaNacimiento: cols.fechaNacimiento >= 0 ?
+          parseDate(row[cols.fechaNacimiento]) : null,
+        derivadoPor: cols.derivadoPor >= 0 ?
+          String(row[cols.derivadoPor] ?? "").trim() : "",
+        etiquetas,
+        recibirMailing: cols.recibirMailing >= 0 ?
+          parseBoolCell(row[cols.recibirMailing]) : false,
+        proteccionDatosFirmada: cols.proteccionDatos >= 0 ?
+          parseBoolCell(row[cols.proteccionDatos]) : false,
+        infoSegundoTutor: cols.infoSegundoTutor >= 0 ?
+          String(row[cols.infoSegundoTutor] ?? "").trim() : "",
+      });
+    } catch (e) {
+      errors.push(`Fila ${i + 1}: ${String(e)}`);
+    }
+  }
+  return {rows, errors};
+}
+
+interface ImportPatientsResult {
+  imported: number; // nuevos creados
+  updated: number;  // existentes sobrescritos (mismo telefono)
+  errors: number;
+  errorMessages: string[];
+}
+
+/**
+ * Importa pacientes desde el Excel `listado_v26.xlsx` de Clinni a la
+ * colección `clinni_patients`. El `telefono` normalizado se usa como
+ * doc ID para que reimportar el mismo paciente sobrescriba (idempotente).
+ *
+ * Solo admin/administrador pueden invocar.
+ */
+export const importClinniPatients = onCall<ImportRequestPayload, Promise<ImportPatientsResult>>(
+    {
+      region: "europe-southwest1",
+      memory: "512MiB",
+      timeoutSeconds: 540,
+    },
+    async (request) => {
+      const callerUid = request.auth?.uid;
+      if (!callerUid) {
+        throw new HttpsError("unauthenticated", "Debe autenticarse");
+      }
+      const userDoc = await db.collection("users_app").doc(callerUid).get();
+      const rol = (userDoc.data()?.rol as string | undefined) ?? "";
+      if (!["admin", "administrador"].includes(rol)) {
+        throw new HttpsError("permission-denied", "Solo admin");
+      }
+
+      const {fileBase64, fileName} = request.data ?? {};
+      if (!fileBase64 || typeof fileBase64 !== "string") {
+        throw new HttpsError("invalid-argument", "Falta fileBase64");
+      }
+      const safeName = (fileName ?? "import_pacientes.xlsx")
+          .replace(/[^a-zA-Z0-9._-]/g, "_");
+
+      let buffer: Buffer;
+      try {
+        buffer = Buffer.from(fileBase64, "base64");
+      } catch {
+        throw new HttpsError("invalid-argument", "Base64 inválido");
+      }
+      if (buffer.byteLength === 0) {
+        throw new HttpsError("invalid-argument", "Archivo vacío");
+      }
+      if (buffer.byteLength > 30 * 1024 * 1024) {
+        throw new HttpsError("invalid-argument", "Archivo > 30MB");
+      }
+
+      const {rows, errors} = parsePatientWorkbook(buffer);
+      functions.logger.info("Clinni pacientes Excel parseado", {
+        fileName: safeName,
+        rows: rows.length,
+        errors: errors.length,
+      });
+
+      let imported = 0;
+      let updated = 0;
+      const importedAt = admin.firestore.FieldValue.serverTimestamp();
+
+      // Procesamos en batches de 400. Cada paciente se identifica por
+      // telefono normalizado como doc ID. Antes del set comprobamos
+      // existencia para distinguir imported vs updated en el reporte.
+      for (let i = 0; i < rows.length; i += 400) {
+        const slice = rows.slice(i, i + 400);
+        const ids = slice.map((r) => r.telefono);
+
+        // Comprobar cuáles ya existen (en chunks de 30 por la limitación
+        // de Firestore "in" queries).
+        const existingIds = new Set<string>();
+        for (let j = 0; j < ids.length; j += 30) {
+          const sub = ids.slice(j, j + 30);
+          const snap = await db
+              .collection("clinni_patients")
+              .where(admin.firestore.FieldPath.documentId(), "in", sub)
+              .get();
+          for (const d of snap.docs) {
+            existingIds.add(d.id);
+          }
+        }
+
+        const batch = db.batch();
+        for (const r of slice) {
+          if (!r.telefono) continue;
+          const ref = db.collection("clinni_patients").doc(r.telefono);
+          batch.set(ref, {
+            numeroHistoria: r.numeroHistoria,
+            nombreCompleto: r.nombreCompleto,
+            sexo: r.sexo,
+            dni: r.dni,
+            telefono: r.telefono,
+            email: r.email,
+            fechaNacimiento: r.fechaNacimiento ?
+              admin.firestore.Timestamp.fromDate(r.fechaNacimiento) :
+              null,
+            derivadoPor: r.derivadoPor,
+            etiquetas: r.etiquetas,
+            recibirMailing: r.recibirMailing,
+            proteccionDatosFirmada: r.proteccionDatosFirmada,
+            infoSegundoTutor: r.infoSegundoTutor,
+            origenExcel: safeName,
+            importadoEn: importedAt,
+          }, {merge: true});
+          if (existingIds.has(r.telefono)) updated++;
+          else imported++;
+        }
+        await batch.commit();
+      }
+
+      // Audit log
+      try {
+        await db.collection("audit_logs").add({
+          tipo: "CLINNI_PATIENTS_IMPORT",
+          userId: callerUid,
+          timestamp: importedAt,
+          metadata: {
+            fileName: safeName,
+            imported,
+            updated,
+            errors: errors.length,
+            totalRows: rows.length,
+          },
+          status: "SUCCESS",
+        });
+      } catch (e) {
+        functions.logger.warn("audit_logs write failed", e);
+      }
+
+      return {
+        imported,
+        updated,
+        errors: errors.length,
+        errorMessages: errors.slice(0, 20),
+      };
+    },
+);
