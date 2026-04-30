@@ -11,9 +11,13 @@
  *
  * Tras enviar, marca recordatorioEnviado=true y crea conversación
  * en `whatsapp_conversations`.
+ *
+ * También expone `triggerRemindersNow` (callable HTTPS) para disparar
+ * la misma lógica manualmente desde un script de admin (útil para test).
  */
 
 import {onSchedule} from "firebase-functions/v2/scheduler";
+import {onCall, HttpsError} from "firebase-functions/v2/https";
 import {defineSecret} from "firebase-functions/params";
 import * as functions from "firebase-functions";
 import * as admin from "firebase-admin";
@@ -70,6 +74,139 @@ function formatFecha(date: Date): string {
   });
 }
 
+/**
+ * Lógica reusable del recordatorio. Se invoca tanto desde el cron como
+ * desde el callable manual. Si `forceWindow` se pasa, la búsqueda usa
+ * esa ventana en lugar de la calculada con horasAntelacionRecordatorio
+ * (útil para test: pasar una ventana amplia y forzar envío inmediato).
+ */
+async function runReminders(opts?: {
+  forceWindowHoursStart?: number;
+  forceWindowHoursEnd?: number;
+  forceAppointmentId?: string;
+  waTokenOverride?: string;
+}): Promise<{sent: number; failed: number; scanned: number}> {
+  const config = await loadConfig();
+  if (!config.activo) {
+    functions.logger.info("Bot inactivo, recordatorios no enviados");
+    return {sent: 0, failed: 0, scanned: 0};
+  }
+
+  const waToken = opts?.waTokenOverride ?? WHATSAPP_TOKEN.value();
+  const now = new Date();
+
+  let docsSnap: FirebaseFirestore.QuerySnapshot;
+  if (opts?.forceAppointmentId) {
+    // Modo test: forzar UNA cita específica por ID, ignora ventana y flags.
+    const single = await db.collection("clinni_appointments")
+        .doc(opts.forceAppointmentId).get();
+    if (!single.exists) {
+      functions.logger.warn("forceAppointmentId no existe", {
+        id: opts.forceAppointmentId,
+      });
+      return {sent: 0, failed: 0, scanned: 0};
+    }
+    docsSnap = {
+      docs: [single],
+      empty: false,
+      size: 1,
+    } as unknown as FirebaseFirestore.QuerySnapshot;
+  } else {
+    const horasIni = opts?.forceWindowHoursStart ??
+      (config.horasAntelacionRecordatorio - 4);
+    const horasFin = opts?.forceWindowHoursEnd ??
+      (config.horasAntelacionRecordatorio + 24);
+    const desde = new Date(now.getTime() + horasIni * 60 * 60 * 1000);
+    const hasta = new Date(now.getTime() + horasFin * 60 * 60 * 1000);
+
+    docsSnap = await db
+        .collection("clinni_appointments")
+        .where("recordatorioEnviado", "==", false)
+        .where("estado", "==", "pendiente")
+        .where("fechaCita", ">=", admin.firestore.Timestamp.fromDate(desde))
+        .where("fechaCita", "<=", admin.firestore.Timestamp.fromDate(hasta))
+        .limit(50)
+        .get();
+  }
+
+  if (docsSnap.empty) {
+    functions.logger.info("Sin citas pendientes de recordatorio");
+    return {sent: 0, failed: 0, scanned: 0};
+  }
+
+  let sent = 0;
+  let failed = 0;
+
+  for (const doc of docsSnap.docs) {
+    const data = doc.data();
+    const telefono = (data.pacienteTelefono as string) ?? "";
+    const nombre = (data.pacienteNombre as string) ?? "";
+    const profesional = (data.profesional as string) ?? "";
+    const servicio = (data.servicio as string) ?? "";
+    const fechaCita = (data.fechaCita as admin.firestore.Timestamp).toDate();
+    if (!telefono) continue;
+
+    const fechaFmt = formatFecha(fechaCita);
+    const body =
+      `Hola ${nombre}, te recordamos tu cita en Centro Salufit:\n\n` +
+      `📅 ${fechaFmt}\n` +
+      `👤 Profesional: ${profesional}\n` +
+      (servicio ? `💼 Servicio: ${servicio}\n\n` : "\n") +
+      "Por favor, confirma tu asistencia:";
+
+    const result = await sendButtonMessage(
+        {phoneId: config.whatsappPhoneId, token: waToken, to: telefono},
+        body,
+        [
+          {id: "btn_confirm", title: "Confirmar"},
+          {id: "btn_reschedule", title: "Cambiar cita"},
+          {id: "btn_cancel", title: "Cancelar"},
+        ],
+    );
+
+    if (result.success) {
+      sent++;
+      await doc.ref.update({
+        recordatorioEnviado: true,
+        fechaRecordatorio: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      await db.collection("whatsapp_conversations").add({
+        pacienteNombre: nombre,
+        pacienteTelefono: telefono,
+        appointmentId: doc.id,
+        tipo: "recordatorio",
+        estado: "activa",
+        intencionDetectada: null,
+        resultado: null,
+        mensajes: [
+          {
+            rol: "bot",
+            texto: body,
+            timestamp: admin.firestore.Timestamp.now(),
+          },
+        ],
+        fechaCreacion: admin.firestore.FieldValue.serverTimestamp(),
+        fechaUltimaInteraccion: admin.firestore.FieldValue.serverTimestamp(),
+        gestionadoPor: "bot",
+        profesional,
+        fechaCita: data.fechaCita,
+      });
+    } else {
+      failed++;
+      functions.logger.warn("Recordatorio falló", {
+        telefono,
+        appointmentId: doc.id,
+        error: result.error,
+      });
+    }
+  }
+
+  functions.logger.info("Recordatorios procesados", {
+    sent, failed, total: docsSnap.size,
+  });
+  return {sent, failed, scanned: docsSnap.size};
+}
+
 export const sendAppointmentReminders = onSchedule(
     {
       schedule: "every 30 minutes",
@@ -82,103 +219,46 @@ export const sendAppointmentReminders = onSchedule(
       timeoutSeconds: 540,
     },
     async () => {
-      const config = await loadConfig();
-      if (!config.activo) {
-        functions.logger.info("Bot inactivo, recordatorios no enviados");
-        return;
+      await runReminders();
+    },
+);
+
+/**
+ * Callable HTTPS para disparar recordatorios manualmente. Usado en tests
+ * y por el panel admin si se quiere forzar el envío sin esperar al cron.
+ *
+ * Solo admins (rol "admin" o "administrador" en users_app/{uid}). Acepta
+ * opcionalmente forceAppointmentId para procesar una sola cita.
+ */
+export const triggerRemindersNow = onCall(
+    {
+      region: "europe-west1",
+      secrets: [WHATSAPP_TOKEN],
+      memory: "256MiB",
+      timeoutSeconds: 300,
+    },
+    async (req) => {
+      if (!req.auth) {
+        throw new HttpsError("unauthenticated", "Debes iniciar sesión.");
+      }
+      // Verificar rol admin.
+      const userDoc = await db.collection("users_app").doc(req.auth.uid).get();
+      const rol = ((userDoc.data()?.rol as string) ?? "").toLowerCase();
+      if (!["admin", "administrador"].includes(rol)) {
+        throw new HttpsError("permission-denied", "Solo admins pueden disparar recordatorios.");
       }
 
-      const now = new Date();
-      const desde = new Date(
-          now.getTime() + (config.horasAntelacionRecordatorio - 4) * 60 * 60 * 1000,
-      );
-      const hasta = new Date(
-          now.getTime() + (config.horasAntelacionRecordatorio + 24) * 60 * 60 * 1000,
-      );
+      const data = (req.data ?? {}) as {
+        forceAppointmentId?: string;
+        forceWindowHoursStart?: number;
+        forceWindowHoursEnd?: number;
+      };
 
-      const snap = await db
-          .collection("clinni_appointments")
-          .where("recordatorioEnviado", "==", false)
-          .where("estado", "==", "pendiente")
-          .where("fechaCita", ">=", admin.firestore.Timestamp.fromDate(desde))
-          .where("fechaCita", "<=", admin.firestore.Timestamp.fromDate(hasta))
-          .limit(50)
-          .get();
-
-      if (snap.empty) {
-        functions.logger.info("Sin citas pendientes de recordatorio");
-        return;
-      }
-
-      const waToken = WHATSAPP_TOKEN.value();
-      let sent = 0;
-      let failed = 0;
-
-      for (const doc of snap.docs) {
-        const data = doc.data();
-        const telefono = (data.pacienteTelefono as string) ?? "";
-        const nombre = (data.pacienteNombre as string) ?? "";
-        const profesional = (data.profesional as string) ?? "";
-        const servicio = (data.servicio as string) ?? "";
-        const fechaCita = (data.fechaCita as admin.firestore.Timestamp).toDate();
-        if (!telefono) continue;
-
-        const fechaFmt = formatFecha(fechaCita);
-        const body =
-        `Hola ${nombre}, te recordamos tu cita en Centro Salufit:\n\n` +
-        `📅 ${fechaFmt}\n` +
-        `👤 Profesional: ${profesional}\n` +
-        (servicio ? `💼 Servicio: ${servicio}\n\n` : "\n") +
-        "Por favor, confirma tu asistencia:";
-
-        const result = await sendButtonMessage(
-            {phoneId: config.whatsappPhoneId, token: waToken, to: telefono},
-            body,
-            [
-              {id: "btn_confirm", title: "Confirmar"},
-              {id: "btn_reschedule", title: "Cambiar cita"},
-              {id: "btn_cancel", title: "Cancelar"},
-            ],
-        );
-
-        if (result.success) {
-          sent++;
-          await doc.ref.update({
-            recordatorioEnviado: true,
-            fechaRecordatorio: admin.firestore.FieldValue.serverTimestamp(),
-          });
-          // Crear conversación de tipo recordatorio
-          await db.collection("whatsapp_conversations").add({
-            pacienteNombre: nombre,
-            pacienteTelefono: telefono,
-            appointmentId: doc.id,
-            tipo: "recordatorio",
-            estado: "activa",
-            intencionDetectada: null,
-            resultado: null,
-            mensajes: [
-              {
-                rol: "bot",
-                texto: body,
-                timestamp: admin.firestore.Timestamp.now(),
-              },
-            ],
-            fechaCreacion: admin.firestore.FieldValue.serverTimestamp(),
-            fechaUltimaInteraccion: admin.firestore.FieldValue.serverTimestamp(),
-            gestionadoPor: "bot",
-            profesional,
-            fechaCita: data.fechaCita,
-          });
-        } else {
-          failed++;
-          functions.logger.warn("Recordatorio falló", {
-            telefono,
-            appointmentId: doc.id,
-            error: result.error,
-          });
-        }
-      }
-
-      functions.logger.info("Recordatorios procesados", {sent, failed, total: snap.size});
+      const result = await runReminders({
+        forceAppointmentId: data.forceAppointmentId,
+        forceWindowHoursStart: data.forceWindowHoursStart,
+        forceWindowHoursEnd: data.forceWindowHoursEnd,
+      });
+      return {success: true, ...result};
     },
 );

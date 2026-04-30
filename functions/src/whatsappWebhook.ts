@@ -693,25 +693,43 @@ async function processIncomingText(
     return;
   }
 
-  // Enviar respuesta breve al paciente
-  functions.logger.info("Enviando respuesta a paciente...", {
-    phoneId: config.whatsappPhoneId,
-    to: telefono,
-  });
-  const sendResult = await sendTextMessage(
-      {phoneId: config.whatsappPhoneId, token: waToken, to: telefono},
-      classification.respuesta,
-  );
-  functions.logger.info("sendTextMessage resultado", {
-    success: sendResult.success,
-    error: sendResult.error,
-    messageId: sendResult.messageId,
-  });
+  // Enviar respuesta breve al paciente.
+  // Excepción: para intent="reagendar", el case correspondiente del switch en
+  // executeAction enviará un único mensaje completo (saludo + slots concretos
+  // o saludo + acuse de escalada). Si enviamos también el texto de Claude
+  // antes, generamos redundancia y exponemos posibles alucinaciones de hora /
+  // profesional. Para el resto de intenciones, el texto de Claude es el
+  // mensaje principal (la lógica de executeAction es solo persistencia).
+  const skipClaudeMessage = classification.intencion === "reagendar";
+  if (!skipClaudeMessage) {
+    functions.logger.info("Enviando respuesta a paciente...", {
+      phoneId: config.whatsappPhoneId,
+      to: telefono,
+    });
+    const sendResult = await sendTextMessage(
+        {phoneId: config.whatsappPhoneId, token: waToken, to: telefono},
+        classification.respuesta,
+    );
+    functions.logger.info("sendTextMessage resultado", {
+      success: sendResult.success,
+      error: sendResult.error,
+      messageId: sendResult.messageId,
+    });
+  } else {
+    functions.logger.info(
+        "Mensaje de Claude suprimido (intent=reagendar) — case enviará bloque único",
+        {convId: conv.id},
+    );
+  }
+  // Persistimos la respuesta de Claude en la conv aunque no la enviemos al
+  // paciente (sirve de auditoría + multi-turno). El campo `noEnviado:true`
+  // marca que ese texto NO se mandó por WhatsApp.
   await appendMessageToConversation(conv.id, "bot", classification.respuesta, {
     intencionDetectada: classification.intencion,
     idiomaDetectado: classification.idiomaDetectado,
     dentro48h: classification.dentro48h,
     fuerzaMayor: classification.fuerzaMayor,
+    ...(skipClaudeMessage ? {claudeMessageSuppressed: true} : {}),
   });
 
   // Ejecutar acción según intención
@@ -851,12 +869,20 @@ async function executeAction(
       // (odontología, Estela, Andressa) o no está activo → escalamos.
       // Si encuentra ≥1 slot libre, ofrecemos como botones interactivos.
 
+      const saludoNombre = pacienteNombre.split(" ")[0] || "";
       if (!cita) {
-        await appendMessageToConversation(convId, "bot",
-            "(reagendación sin cita registrada — delegada a recepción)", {
-              estado: "reagendar_solicitada",
-              resultado: "reagendar_sin_cita",
-            });
+        const msgPaciente =
+          `Hola${saludoNombre ? " " + saludoNombre : ""}, hemos recibido tu solicitud. ` +
+          "Recepción te contactará en breve para gestionar el cambio de cita. " +
+          "Gracias.\n\n— SALUFIT";
+        await sendTextMessage(
+            {phoneId: config.whatsappPhoneId, token: waToken, to: telefono},
+            msgPaciente,
+        );
+        await appendMessageToConversation(convId, "bot", msgPaciente, {
+          estado: "reagendar_solicitada",
+          resultado: "reagendar_sin_cita",
+        });
         await notifyRecepcion(config, waToken,
             `🔄 REAGENDACIÓN sin cita registrada — ${pacienteNombre}\n` +
             `Tel: ${telefono}\nMensaje: "${mensajeOriginal}"`);
@@ -880,11 +906,19 @@ async function executeAction(
         const motivo = !schedule ? "no encontrado en professional_schedules" :
           !schedule.activo ? "inactivo" :
             schedule.motivoEscalaDirecta ?? "escalada directa configurada";
-        await appendMessageToConversation(convId, "bot",
-            `(reagendación → escalada: profesional ${motivo})`, {
-              estado: "reagendar_solicitada",
-              resultado: "reagendar_escalado_recepcion",
-            });
+        const msgPaciente =
+          `Hola${saludoNombre ? " " + saludoNombre : ""}, hemos recibido tu solicitud. ` +
+          "Recepción te contactará en breve para gestionar el cambio de cita. " +
+          "Gracias.\n\n— SALUFIT";
+        await sendTextMessage(
+            {phoneId: config.whatsappPhoneId, token: waToken, to: telefono},
+            msgPaciente,
+        );
+        await appendMessageToConversation(convId, "bot", msgPaciente, {
+          estado: "reagendar_solicitada",
+          resultado: "reagendar_escalado_recepcion",
+          motivoEscalada: motivo,
+        });
         await notifyRecepcion(config, waToken,
             `🔄 REAGENDACIÓN — ${pacienteNombre}\n` +
             `Cita actual: ${formatFechaES(cita.fechaCita, "es")} con ${cita.profesional}\n` +
@@ -895,11 +929,20 @@ async function executeAction(
 
       // Sin huecos en la ventana → escalar.
       if (slots.length === 0) {
-        await appendMessageToConversation(convId, "bot",
-            "(reagendación → sin huecos disponibles, escalada)", {
-              estado: "reagendar_solicitada",
-              resultado: "reagendar_sin_huecos",
-            });
+        const msgPaciente =
+          `Hola${saludoNombre ? " " + saludoNombre : ""}, hemos recibido tu solicitud. ` +
+          (dentro48h ?
+            "Por la cercanía de tu cita, recepción te contactará en breve para encontrarte un hueco compatible. " :
+            "Recepción te contactará en breve para encontrarte un hueco. ") +
+          "Gracias.\n\n— SALUFIT";
+        await sendTextMessage(
+            {phoneId: config.whatsappPhoneId, token: waToken, to: telefono},
+            msgPaciente,
+        );
+        await appendMessageToConversation(convId, "bot", msgPaciente, {
+          estado: "reagendar_solicitada",
+          resultado: "reagendar_sin_huecos",
+        });
         await notifyRecepcion(config, waToken,
             `🔄 REAGENDACIÓN sin huecos automáticos — ${pacienteNombre}\n` +
             `Cita actual: ${formatFechaES(cita.fechaCita, "es")} con ${cita.profesional}\n` +
@@ -923,7 +966,9 @@ async function executeAction(
       // confirma a quién le toca; si pulsa "Otro horario", recepción puede
       // ofrecer otro fisio sin que el cliente espere al original.
       const body =
-        `Tenemos estos huecos disponibles:\n\n${detalleTextos}\n\n` +
+        `Hola${saludoNombre ? " " + saludoNombre : ""}, ` +
+        "te mostramos los huecos disponibles para reagendar tu cita:\n\n" +
+        `${detalleTextos}\n\n` +
         "Pulsa el horario que prefieras o \"Otro horario\" si ninguno te conviene.";
       const botones = [
         ...slots.map((s, i) => ({
