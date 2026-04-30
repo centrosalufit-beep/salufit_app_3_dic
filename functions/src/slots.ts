@@ -37,6 +37,49 @@ export interface ProfessionalSchedule {
   escalaDirectaParaReagendar: boolean;
   motivoEscalaDirecta?: string;
   horarios: Array<{dia: number; inicio: string; fin: string}>;
+  // Aliases opcionales: nombres adicionales con los que puede aparecer este
+  // profesional en clinni_appointments.profesional. Útil si Clinni envía el
+  // nombre con prefijo o apellidos que no encajan con la heurística de match.
+  nombresClinni?: string[];
+}
+
+/** Normaliza nombres de profesional: quita prefijos médicos, acentos, espacios. */
+function normalizeName(name: string): string {
+  if (!name) return "";
+  return name
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[̀-ͯ]/g, "") // quita acentos
+      .replace(/^(dr|dra|d\.|dr\.|dra\.|lic|lic\.|lcda|lcdo|doctor|doctora)\s+/i, "")
+      .replace(/\./g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+}
+
+/**
+ * Devuelve true si el nombre que viene de Clinni corresponde al schedule.
+ * Lógica:
+ *   1) Match exacto contra nombre (case-sensitive).
+ *   2) Match exacto contra nombresClinni[] (alias manuales).
+ *   3) Match heurístico: tras normalizar ambos, comprobar que el nombre del
+ *      schedule está contenido como sub-cadena del nombre clinni o viceversa.
+ *      Esto pilla "Dra. María Vallés" → "María", "Dr. Álvaro García" → "Álvaro",
+ *      etc. Funciona porque los nombres del equipo no se repiten.
+ */
+function nombreEncaja(schedule: ProfessionalSchedule, nombreClinni: string): boolean {
+  if (!nombreClinni) return false;
+  if (schedule.nombre === nombreClinni) return true;
+  if (schedule.nombresClinni?.includes(nombreClinni)) return true;
+  const a = normalizeName(schedule.nombre);
+  const b = normalizeName(nombreClinni);
+  if (!a || !b) return false;
+  if (a === b) return true;
+  // Comprobamos como palabra completa, no sub-cadena cualquiera, para evitar
+  // falsos positivos del estilo "Sara" matcheando "Sarai".
+  const tokensB = b.split(" ");
+  const tokensA = a.split(" ");
+  return tokensA.every((t) => tokensB.includes(t)) ||
+         tokensB.every((t) => tokensA.includes(t));
 }
 
 export interface Slot {
@@ -53,66 +96,62 @@ export async function loadSchedule(
   try {
     const doc = await db.collection("professional_schedules").doc(profesionalId).get();
     if (!doc.exists) return null;
-    const data = doc.data() ?? {};
-    return {
-      id: doc.id,
-      nombre: (data.nombre as string) ?? "",
-      especialidad: (data.especialidad as string) ?? "",
-      duracionSlotMinutos: (data.duracionSlotMinutos as number) ?? 30,
-      activo: data.activo !== false,
-      escalaDirectaParaReagendar: data.escalaDirectaParaReagendar === true,
-      motivoEscalaDirecta: (data.motivoEscalaDirecta as string) ?? undefined,
-      horarios: (data.horarios as Array<{dia: number; inicio: string; fin: string}>) ?? [],
-    };
+    return docToSchedule(doc);
   } catch (e) {
     functions.logger.warn("loadSchedule falló", {profesionalId, error: String(e)});
     return null;
   }
 }
 
+function docToSchedule(doc: FirebaseFirestore.QueryDocumentSnapshot | FirebaseFirestore.DocumentSnapshot): ProfessionalSchedule {
+  const data = doc.data() ?? {};
+  return {
+    id: doc.id,
+    nombre: (data.nombre as string) ?? "",
+    especialidad: (data.especialidad as string) ?? "",
+    duracionSlotMinutos: (data.duracionSlotMinutos as number) ?? 30,
+    activo: data.activo !== false,
+    escalaDirectaParaReagendar: data.escalaDirectaParaReagendar === true,
+    motivoEscalaDirecta: (data.motivoEscalaDirecta as string) ?? undefined,
+    horarios: (data.horarios as Array<{dia: number; inicio: string; fin: string}>) ?? [],
+    nombresClinni: (data.nombresClinni as string[]) ?? undefined,
+  };
+}
+
 /**
- * Localiza el doc de schedule por nombre legible (cita.profesional == "Álvaro").
- * Búsqueda case-insensitive contra el campo `nombre`. Devuelve null si no encuentra.
+ * Localiza el doc de schedule por el nombre que aparece en
+ * clinni_appointments.profesional. Hace 3 niveles de matching:
+ *   1) Exacto contra el campo `nombre`.
+ *   2) Exacto contra alguno de los aliases `nombresClinni[]`.
+ *   3) Heurístico tras normalizar (quita Dr./Dra./acentos/lowercase) — match
+ *      por tokens completos. P.ej. "Dra. María Vallés" matchea "María".
+ * Devuelve null si no encuentra. Los nombres del equipo no se repiten, así
+ * que no hay riesgo de falsos positivos en escenarios reales.
  */
-export async function loadScheduleByName(nombre: string): Promise<ProfessionalSchedule | null> {
-  if (!nombre) return null;
+export async function loadScheduleByName(nombreClinni: string): Promise<ProfessionalSchedule | null> {
+  if (!nombreClinni) return null;
   try {
-    const snap = await db.collection("professional_schedules")
-        .where("nombre", "==", nombre)
+    // 1) Match exacto sobre `nombre`.
+    const exact = await db.collection("professional_schedules")
+        .where("nombre", "==", nombreClinni)
         .limit(1)
         .get();
-    if (snap.empty) {
-      // Fallback case-insensitive: leer todos y comparar.
-      const all = await db.collection("professional_schedules").get();
-      const found = all.docs.find((d) =>
-        ((d.data().nombre as string) ?? "").toLowerCase() === nombre.toLowerCase(),
-      );
-      if (!found) return null;
-      const data = found.data();
-      return {
-        id: found.id,
-        nombre: (data.nombre as string) ?? "",
-        especialidad: (data.especialidad as string) ?? "",
-        duracionSlotMinutos: (data.duracionSlotMinutos as number) ?? 30,
-        activo: data.activo !== false,
-        escalaDirectaParaReagendar: data.escalaDirectaParaReagendar === true,
-        motivoEscalaDirecta: (data.motivoEscalaDirecta as string) ?? undefined,
-        horarios: (data.horarios as Array<{dia: number; inicio: string; fin: string}>) ?? [],
-      };
+    if (!exact.empty) return docToSchedule(exact.docs[0]);
+
+    // 2 y 3) Cargamos todos y aplicamos matching heurístico/aliases.
+    const all = await db.collection("professional_schedules").get();
+    const candidates = all.docs.map(docToSchedule);
+    const found = candidates.find((c) => nombreEncaja(c, nombreClinni));
+    if (found) {
+      functions.logger.info("loadScheduleByName: match heurístico", {
+        nombreClinni, scheduleId: found.id, nombre: found.nombre,
+      });
+      return found;
     }
-    const data = snap.docs[0].data();
-    return {
-      id: snap.docs[0].id,
-      nombre: (data.nombre as string) ?? "",
-      especialidad: (data.especialidad as string) ?? "",
-      duracionSlotMinutos: (data.duracionSlotMinutos as number) ?? 30,
-      activo: data.activo !== false,
-      escalaDirectaParaReagendar: data.escalaDirectaParaReagendar === true,
-      motivoEscalaDirecta: (data.motivoEscalaDirecta as string) ?? undefined,
-      horarios: (data.horarios as Array<{dia: number; inicio: string; fin: string}>) ?? [],
-    };
+    functions.logger.info("loadScheduleByName: sin match", {nombreClinni});
+    return null;
   } catch (e) {
-    functions.logger.warn("loadScheduleByName falló", {nombre, error: String(e)});
+    functions.logger.warn("loadScheduleByName falló", {nombreClinni, error: String(e)});
     return null;
   }
 }
