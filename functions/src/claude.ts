@@ -30,6 +30,13 @@ export interface ClassificationContext {
   // Historial reciente de la conversación (últimos N mensajes, sin incluir el
   // mensaje actual). Se pasa como contexto a Claude para que entienda el hilo.
   historialMensajes?: Array<{rol: "paciente" | "bot"; texto: string}>;
+  // Bloque de info del centro (renderizado por renderClinicInfoForPrompt).
+  // Vacío si no hay info aún configurada.
+  clinicInfoBlock?: string;
+  // Últimas N citas del paciente (Fase D — memoria). Cada elemento es
+  // un texto plano corto; Claude las usa para detectar profesional
+  // habitual y servicios recurrentes.
+  citasRecientes?: string[];
 }
 
 export interface ClassificationResult {
@@ -115,6 +122,31 @@ CONTEXTO DE LA CITA DEL PACIENTE:
 - Servicio: {servicio}
 - Mensaje recibido en horario laboral: {isWithinBusinessHours}
 
+{clinicInfoBlock}
+
+{citasRecientesBlock}
+
+REGLA EXTRA SOBRE INFORMACIÓN DEL CENTRO:
+- Si el paciente pregunta horarios, dirección, parking, cómo llegar, precios,
+  servicios o festivos, responde con los datos EXACTOS del bloque "INFORMACIÓN
+  DEL CENTRO" arriba. Nunca inventes datos. Si el dato concreto NO aparece
+  ahí (por ejemplo te preguntan un precio que no figura), di que recepción
+  te lo confirma y devuelve intencion="consulta".
+- Si el bloque está vacío o no hay datos para esa pregunta concreta,
+  intencion="escalate" para que recepción lo gestione.
+- Si te preguntan "¿estáis abiertos ahora?" usa el día de la semana actual
+  y el campo isWithinBusinessHours combinado con los horarios del bloque.
+
+DETECCIÓN DE URGENCIA MÉDICA (CRÍTICO):
+- Si el paciente describe síntomas de urgencia real (dolor torácico, dificultad
+  respiratoria, pérdida de conocimiento, sangrado abundante, síntomas de ictus,
+  fractura visible, dolor 10/10), intencion="escalate" SIEMPRE y la respuesta
+  debe pedirle que llame al 112 INMEDIATAMENTE o vaya a urgencias hospitalarias.
+  NO le digas que recepción le contactará — el bot no sustituye a urgencias.
+- Si describe síntomas que podrían ser preocupantes pero no urgencia clara
+  (dolor moderado, mareos, etc.), intencion="escalate" + recomienda que llame
+  a recepción YA (no esperar a horario laboral si parece serio).
+
 RESPONDE SOLO en formato JSON válido, sin texto adicional, sin markdown, sin \`\`\`. La respuesta
 COMPLETA debe empezar con { y terminar con }:
 {
@@ -142,6 +174,10 @@ export async function classifyIntent(
       context.horasHastaCita < 0 ?
         `(la cita ya pasó hace ${Math.abs(Math.round(context.horasHastaCita))}h)` :
         `${Math.round(context.horasHastaCita)}h`;
+    const citasRecientesBlock = (context.citasRecientes ?? []).length > 0 ?
+      "CITAS RECIENTES DEL PACIENTE (memoria):\n" +
+        (context.citasRecientes ?? []).map((c) => `  - ${c}`).join("\n") :
+      "";
     const filledPrompt = SYSTEM_PROMPT
         .replace("{pacienteNombre}", context.pacienteNombre || "(desconocido)")
         .replace("{fechaCita}", context.fechaCita || "(sin cita asociada)")
@@ -151,7 +187,9 @@ export async function classifyIntent(
         .replace(
             "{isWithinBusinessHours}",
             context.isWithinBusinessHours ? "sí" : "no",
-        );
+        )
+        .replace("{clinicInfoBlock}", context.clinicInfoBlock ?? "")
+        .replace("{citasRecientesBlock}", citasRecientesBlock);
     // Construimos el array de messages con el historial previo (multi-turno).
     // El historial es opcional; si llega, traducimos rol "paciente"→"user" y
     // "bot"→"assistant" como exige la API de Anthropic.

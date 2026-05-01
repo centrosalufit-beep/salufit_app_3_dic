@@ -1,19 +1,19 @@
 /**
  * Festivos para Calpe (Alicante, Comunidad Valenciana).
  *
- * Combina:
- *   - Festivos nacionales españoles 2026 (BOE-A-2025-21667).
- *   - Festivos autonómicos Comunidad Valenciana 2026.
- *   - Festivos locales Calpe 2026.
+ * Fuente prioritaria: colección `clinic_holidays` en Firestore (editable
+ * desde el panel admin). Fallback: lista hardcoded de festivos 2026 si
+ * Firestore no devuelve datos para esa fecha.
  *
- * Para 2027 hay que actualizar este archivo cuando salga el BOE
- * (octubre 2026 aprox). Mientras, las funciones devuelven false para
- * fechas de 2027+ — el bot las trata como laborables. Si una de esas
- * fechas resulta ser festivo real, recepción lo gestionará manualmente
- * mediante la colección clinic_holidays (ver módulo de ausencias).
+ * Para integración con `slots.ts`, exponemos `isHolidayAsync(date)` que
+ * combina ambas fuentes. La función legacy `isHoliday(date)` (síncrona)
+ * sigue disponible para callers que no puedan ser async, pero solo mira
+ * el set hardcoded.
  *
  * Las fechas se almacenan en formato "YYYY-MM-DD" (TZ Europe/Madrid).
  */
+
+import {loadUpcomingHolidays} from "./clinicInfo";
 
 const HOLIDAYS_2026: ReadonlyArray<string> = [
   "2026-01-01", // Año Nuevo
@@ -34,26 +34,36 @@ const HOLIDAYS_2026: ReadonlyArray<string> = [
 
 const HOLIDAY_SET = new Set<string>(HOLIDAYS_2026);
 
-/**
- * Devuelve la fecha como "YYYY-MM-DD" en zona horaria Europe/Madrid.
- */
 function toLocalDateString(d: Date): string {
-  // toLocaleString con "sv-SE" da "YYYY-MM-DD HH:MM:SS"; cogemos la fecha.
   return d.toLocaleString("sv-SE", {timeZone: "Europe/Madrid"}).slice(0, 10);
 }
 
 /**
- * Devuelve true si la fecha es festivo (nacional/autonómico/local) en Calpe.
- * Para fechas de años no soportados (2027+), devuelve false; recepción
- * gestionará vía clinic_holidays.
+ * Versión síncrona — solo mira el set hardcoded. Usada por callers
+ * legacy que no pueden ser async.
  */
 export function isHoliday(date: Date): boolean {
   return HOLIDAY_SET.has(toLocalDateString(date));
 }
 
 /**
- * Lista pública por si el panel admin la quiere mostrar.
+ * Versión recomendada: combina Firestore (clinic_holidays editable) con
+ * el hardcoded fallback. Si Firestore tiene un festivo o cierre
+ * excepcional para esa fecha, devuelve true. Si no, cae al hardcoded.
+ *
+ * NOTA: tipo "horario_reducido" NO cuenta como cerrado — el centro abre,
+ * solo con horario distinto. Eso lo gestiona el resto del flujo.
  */
+export async function isHolidayAsync(date: Date): Promise<boolean> {
+  const iso = toLocalDateString(date);
+  if (HOLIDAY_SET.has(iso)) return true;
+  const dynamic = await loadUpcomingHolidays();
+  return dynamic.some((h) =>
+    h.fecha === iso &&
+    (h.tipo === "festivo" || h.tipo === "cerrado_excepcional"),
+  );
+}
+
 export function getHolidays(year: 2026): ReadonlyArray<string> {
   if (year === 2026) return HOLIDAYS_2026;
   return [];

@@ -21,6 +21,7 @@ import * as functions from "firebase-functions";
 import * as admin from "firebase-admin";
 import {sendTextMessage, sendButtonMessage, validateMetaSignature} from "./whatsapp";
 import {classifyIntent, BotIntent} from "./claude";
+import {loadClinicInfo, loadUpcomingHolidays, renderClinicInfoForPrompt} from "./clinicInfo";
 import {fetchMediaAndStore} from "./whatsappMedia";
 import {findNextAvailableSlots, shortLabelForSlot, longLabelForSlot, Slot} from "./slots";
 
@@ -148,6 +149,44 @@ async function findPatient(telefono: string): Promise<Patient | null> {
     );
     return null;
   }
+}
+
+/**
+ * Devuelve las últimas N citas (pasadas o futuras, ordenadas desc) para
+ * un paciente. Fase D — memoria del bot. Útil para que Claude detecte
+ * profesional habitual o servicios recurrentes.
+ */
+async function loadRecentAppointments(
+    telefono: string,
+    limit = 5,
+): Promise<FirebaseFirestore.DocumentData[]> {
+  try {
+    const snap = await db
+        .collection("clinni_appointments")
+        .where("pacienteTelefono", "==", telefono)
+        .orderBy("fechaCita", "desc")
+        .limit(limit)
+        .get();
+    return snap.docs.map((d) => d.data());
+  } catch (e) {
+    functions.logger.warn("loadRecentAppointments falló", {error: String(e)});
+    return [];
+  }
+}
+
+/**
+ * Renderiza una cita para meterla en la memoria del prompt de Claude.
+ * Formato compacto: "12/4/2026 con Ibtissam (Fisioterapia) — atendida".
+ */
+function formatCitaForMemory(c: FirebaseFirestore.DocumentData): string {
+  const fecha = c.fechaCita?.toDate?.();
+  const fechaStr = fecha ?
+    fecha.toLocaleDateString("es-ES", {timeZone: "Europe/Madrid"}) :
+    "(?)";
+  const prof = c.profesional || "(?)";
+  const servicio = c.servicio || "(?)";
+  const estado = c.estado || "(?)";
+  return `${fechaStr} con ${prof} (${servicio}) — ${estado}`;
 }
 
 async function findUpcomingAppointment(
@@ -682,9 +721,21 @@ async function processIncomingText(
       .slice(-7, -1) // los 6 anteriores al actual
       .map((m) => ({rol: m.rol, texto: m.texto}));
 
+  // Cargar info del centro y festivos próximos en paralelo para inyectar
+  // al prompt de Claude (Fase A — centro de información dinámico) y las
+  // últimas citas del paciente (Fase D — memoria) si está registrado.
+  const [clinicInfo, holidays, citasRecientesArr] = await Promise.all([
+    loadClinicInfo(),
+    loadUpcomingHolidays(),
+    patient ? loadRecentAppointments(telefono, 5) : Promise.resolve([]),
+  ]);
+  const clinicInfoBlock = renderClinicInfoForPrompt(clinicInfo, holidays);
+  const citasRecientes = citasRecientesArr.map(formatCitaForMemory);
+
   functions.logger.info("Llamando a Claude para clasificar...", {
     textoPreview: texto.slice(0, 60),
     historialCount: historialMensajes.length,
+    citasRecientesCount: citasRecientes.length,
   });
   const classification = await classifyIntent(anthropicKey, texto, {
     // Preferimos el nombre de la cita (más reciente) sobre el del listado de
@@ -699,6 +750,8 @@ async function processIncomingText(
     isWithinBusinessHours: inHours,
     horasHastaCita,
     historialMensajes,
+    clinicInfoBlock,
+    citasRecientes,
   });
   functions.logger.info("Claude resultado", {
     classification: classification ? {

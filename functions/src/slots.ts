@@ -22,6 +22,7 @@
 import * as admin from "firebase-admin";
 import * as functions from "firebase-functions";
 import {isHoliday} from "./holidays";
+import {loadUpcomingHolidays, loadActiveAbsences} from "./clinicInfo";
 
 if (admin.apps.length === 0) {
   admin.initializeApp();
@@ -377,8 +378,37 @@ export async function findNextAvailableSlots(
   }
 
   const candidates = generateCandidateSlots(schedule, desde, hasta);
+
+  // Filtros dinámicos extra (Fase A/C — Firestore):
+  //   1) Festivos dinámicos editables desde el panel (clinic_holidays).
+  //   2) Ausencias del profesional (vacaciones/baja en
+  //      professional_absences). Solo aplican al matchear profesionalId.
+  const [dynamicHolidays, allAbsences] = await Promise.all([
+    loadUpcomingHolidays(),
+    loadActiveAbsences(),
+  ]);
+  const closedDates = new Set<string>(
+      dynamicHolidays
+          .filter((h) => h.tipo === "festivo" || h.tipo === "cerrado_excepcional")
+          .map((h) => h.fecha),
+  );
+  const ownAbsences = allAbsences.filter((a) => a.profesionalId === schedule.id);
+  const candidatesAfterFiltros = candidates.filter((c) => {
+    const isoLocal = c.inicio.toLocaleString("sv-SE", {
+      timeZone: "Europe/Madrid",
+    }).slice(0, 10);
+    if (closedDates.has(isoLocal)) return false;
+    const t = c.inicio.getTime();
+    if (ownAbsences.some((a) =>
+      a.desde.toDate().getTime() <= t && a.hasta.toDate().getTime() >= t,
+    )) return false;
+    return true;
+  });
+
   const occupied = await getOccupiedSlots(schedule.nombre, desde, hasta);
-  const free = candidates.filter((c) => !occupied.some((o) => slotsOverlap(c, o)));
+  const free = candidatesAfterFiltros.filter(
+      (c) => !occupied.some((o) => slotsOverlap(c, o)),
+  );
 
   return {schedule, slots: free.slice(0, opts.count)};
 }
