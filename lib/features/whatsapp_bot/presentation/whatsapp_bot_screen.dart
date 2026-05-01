@@ -7,6 +7,7 @@ import 'package:salufit_app/features/whatsapp_bot/presentation/widgets/clinic_in
 import 'package:salufit_app/features/whatsapp_bot/presentation/widgets/conversation_table_widget.dart';
 import 'package:salufit_app/features/whatsapp_bot/presentation/widgets/import_excel_widget.dart';
 import 'package:salufit_app/features/whatsapp_bot/presentation/widgets/leads_pending_tab.dart';
+import 'package:salufit_app/features/whatsapp_bot/presentation/widgets/pending_appointments_tab.dart';
 import 'package:salufit_app/features/whatsapp_bot/presentation/widgets/professional_absences_tab.dart';
 
 class WhatsAppBotScreen extends ConsumerStatefulWidget {
@@ -23,7 +24,7 @@ class _WhatsAppBotScreenState extends ConsumerState<WhatsAppBotScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 5, vsync: this);
+    _tabController = TabController(length: 6, vsync: this);
   }
 
   @override
@@ -52,7 +53,8 @@ class _WhatsAppBotScreenState extends ConsumerState<WhatsAppBotScreen>
           unselectedLabelColor: Colors.white70,
           tabs: const [
             Tab(icon: Icon(Icons.chat), text: 'Conversaciones'),
-            Tab(icon: Icon(Icons.person_add), text: 'Leads pendientes'),
+            Tab(icon: Icon(Icons.person_add), text: 'Leads'),
+            Tab(icon: Icon(Icons.event_note), text: 'Citas pendientes'),
             Tab(icon: Icon(Icons.business), text: 'Centro'),
             Tab(icon: Icon(Icons.celebration), text: 'Festivos'),
             Tab(icon: Icon(Icons.event_available), text: 'Ausencias'),
@@ -126,6 +128,7 @@ class _WhatsAppBotScreenState extends ConsumerState<WhatsAppBotScreen>
                   data: (list) => ConversationTableWidget(conversations: list),
                 ),
                 const LeadsPendingTab(),
+                const PendingAppointmentsTab(),
                 const ClinicInfoTab(),
                 const ClinicHolidaysTab(),
                 const ProfessionalAbsencesTab(),

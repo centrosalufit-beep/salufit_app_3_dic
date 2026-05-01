@@ -22,6 +22,13 @@ import * as admin from "firebase-admin";
 import {sendTextMessage, sendButtonMessage, validateMetaSignature} from "./whatsapp";
 import {classifyIntent, BotIntent} from "./claude";
 import {loadClinicInfo, loadUpcomingHolidays, renderClinicInfoForPrompt} from "./clinicInfo";
+import {
+  looksLikeAppointmentRequest,
+  nextOnboardingStep,
+  persistPendingPatient,
+  OnboardingStage,
+} from "./leadOnboarding";
+import {mapServicioToProfesional, persistPendingAppointment} from "./autoBooking";
 import {fetchMediaAndStore} from "./whatsappMedia";
 import {findNextAvailableSlots, shortLabelForSlot, longLabelForSlot, Slot} from "./slots";
 
@@ -280,7 +287,7 @@ async function createConversation(params: {
   pacienteNombre: string;
   pacienteTelefono: string;
   appointmentId: string | null;
-  tipo: "recordatorio" | "paciente_iniciado";
+  tipo: "recordatorio" | "paciente_iniciado" | "lead_nuevo";
   profesional: string;
   fechaCita: Date | null;
   textoInicial: string;
@@ -582,10 +589,51 @@ async function processIncomingText(
   // nueva (sin historial activo): si ya hay conversación activa, dejamos pasar
   // para no cortar un hilo en curso.
   if (!patient && !cita && !convInicial) {
+    // Fase B — onboarding lead nuevo. Si el primer mensaje muestra interés
+    // en cita/info, arrancamos el flujo guiado en lugar del corte fijo.
+    const interesado = looksLikeAppointmentRequest(texto);
     functions.logger.info(
-        "📛 Filtro Fase 3 — paciente no registrado, no se invoca Claude",
-        {telefono},
+        interesado ?
+          "🆕 Lead nuevo — iniciando onboarding" :
+          "📛 Filtro Fase 3 — paciente no registrado sin interés claro",
+        {telefono, interesado},
     );
+
+    if (interesado) {
+      const clinicInfo = await loadClinicInfo();
+      const {reply, nextState} = nextOnboardingStep(
+          texto,
+          undefined,
+          clinicInfo.bienvenidaNuevoPaciente,
+      );
+      await sendTextMessage(
+          {phoneId: config.whatsappPhoneId, token: waToken, to: telefono},
+          reply,
+      );
+      const convId = await createConversation({
+        pacienteNombre: "(lead pendiente)",
+        pacienteTelefono: telefono,
+        appointmentId: null,
+        tipo: "lead_nuevo",
+        profesional: "",
+        fechaCita: null,
+        textoInicial: texto,
+        rolInicial: "paciente",
+      });
+      await db.collection("whatsapp_conversations").doc(convId).update({
+        estado: "onboarding",
+        etapaOnboarding: nextState.stage,
+        intencionDetectada: "pedir_cita",
+        mensajes: admin.firestore.FieldValue.arrayUnion({
+          rol: "bot",
+          texto: reply,
+          timestamp: admin.firestore.Timestamp.now(),
+        }),
+      });
+      return;
+    }
+
+    // Fallback legacy — sin interés detectado, corte cortés.
     const fechaPos = (await db.collection("config").doc("whatsapp_bot").get())
         .data();
     const telRecepcion = (fechaPos?.telefonoRecepcion as string) ||
@@ -599,8 +647,6 @@ async function processIncomingText(
         {phoneId: config.whatsappPhoneId, token: waToken, to: telefono},
         respuestaFija,
     );
-    // Registramos la conversación para auditoría/futuro filtrado, marcada
-    // explícitamente como no_registrado para que el panel admin la vea aparte.
     await createConversation({
       pacienteNombre: "(no registrado)",
       pacienteTelefono: telefono,
@@ -622,7 +668,6 @@ async function processIncomingText(
         }),
       }),
     );
-    // Notificación opcional a recepción para que sepa que un desconocido escribió.
     await notifyRecepcion(config, waToken, buildRecepcionMsg({
       icono: "🔕",
       titulo: "NÚMERO NO REGISTRADO (filtrado)",
@@ -630,6 +675,140 @@ async function processIncomingText(
       mensajeOriginal: texto.slice(0, 200),
       cta: "Bot redirigió al teléfono de recepción. Valorar si es un lead nuevo y crear ficha en CRM.",
     }));
+    return;
+  }
+
+  // Si la conversación ya está en estado "onboarding", continuamos el flujo
+  // sin llamar a Claude (mucho más eficiente para preguntas/respuestas
+  // estructuradas). Solo se sale cuando stage === "completado".
+  if (convInicial?.data?.estado === "onboarding") {
+    const currentStage = (convInicial.data.etapaOnboarding as
+      OnboardingStage | undefined) ?? "preguntando_nombre";
+    const onboardingState = {
+      stage: currentStage,
+      nombre: convInicial.data.onboardingNombre as string | undefined,
+      servicio: convInicial.data.onboardingServicio as string | undefined,
+      preferencia: convInicial.data.onboardingPreferencia as string | undefined,
+    };
+    const clinicInfo = await loadClinicInfo();
+    const {reply, nextState} = nextOnboardingStep(
+        texto,
+        onboardingState,
+        clinicInfo.bienvenidaNuevoPaciente,
+    );
+    await sendTextMessage(
+        {phoneId: config.whatsappPhoneId, token: waToken, to: telefono},
+        reply,
+    );
+
+    const convRef = db.collection("whatsapp_conversations").doc(convInicial.id);
+    if (nextState.stage === "completado") {
+      // Persistir lead pre-fichado y notificar a recepción.
+      await persistPendingPatient({
+        telefono,
+        nombre: nextState.nombre ?? "",
+        servicioInteres: nextState.servicio ?? "",
+        preferencia: nextState.preferencia ?? "",
+        conversationId: convInicial.id,
+      });
+      await convRef.update({
+        estado: "lead_completado",
+        etapaOnboarding: "completado",
+        resultado: "lead_pre_fichado",
+        pacienteNombre: nextState.nombre ?? "(lead)",
+        onboardingNombre: nextState.nombre,
+        onboardingServicio: nextState.servicio,
+        onboardingPreferencia: nextState.preferencia,
+        fechaUltimaInteraccion: admin.firestore.Timestamp.now(),
+        mensajes: admin.firestore.FieldValue.arrayUnion(
+            {rol: "paciente", texto, timestamp: admin.firestore.Timestamp.now()},
+            {rol: "bot", texto: reply, timestamp: admin.firestore.Timestamp.now()},
+        ),
+      });
+      await notifyRecepcion(config, waToken, buildRecepcionMsg({
+        icono: "🆕",
+        titulo: "LEAD NUEVO COMPLETADO",
+        nombre: nextState.nombre,
+        telefono,
+        extra: [
+          `💼 Servicio: ${nextState.servicio ?? "(?)"}`,
+          `🗓️ Preferencia: ${nextState.preferencia ?? "(?)"}`,
+        ],
+        cta: "Revisa la bandeja de Leads en el panel y crea ficha en Clinni.",
+      }));
+
+      // Fase E — auto-cita: si el servicio mapea a un profesional con
+      // schedule, ofrecemos 2 slots inmediatamente con botones quick reply.
+      const profesionalAuto = mapServicioToProfesional(
+          nextState.servicio ?? "",
+      );
+      if (profesionalAuto) {
+        try {
+          // skipSameDay:true → mínimo día siguiente. Decisión de negocio:
+          // Salufit no ofrece citas a leads para el mismo día (riesgo de
+          // que recepción no tenga tiempo de validar antes del slot).
+          const {slots} = await findNextAvailableSlots(profesionalAuto, {
+            count: 2,
+            bufferMinutosDesdeAhora: 60,
+            diasVista: 14,
+            skipSameDay: true,
+          });
+          if (slots.length > 0) {
+            const lines = slots.map((s, i) => {
+              const fechaTxt = s.inicio.toLocaleString("es-ES", {
+                timeZone: "Europe/Madrid",
+                weekday: "long",
+                day: "numeric",
+                month: "long",
+                hour: "2-digit",
+                minute: "2-digit",
+              });
+              return `  ${i + 1}. ${fechaTxt}`;
+            }).join("\n");
+            const body =
+              "Te paso 2 huecos disponibles 👇\n" +
+              "Pulsa el que prefieras y queda anotado para recepción:\n\n" +
+              lines;
+            const buttons = slots.map((s, i) => ({
+              id: `lead_slot_${convInicial.id}_${i}`,
+              title: shortLabelForSlot(s),
+            }));
+            await sendButtonMessage(
+                {phoneId: config.whatsappPhoneId, token: waToken, to: telefono},
+                body,
+                buttons,
+            );
+            const slotsParaGuardar = slots.map((s) => ({
+              inicio: admin.firestore.Timestamp.fromDate(s.inicio),
+              fin: admin.firestore.Timestamp.fromDate(s.fin),
+              profesionalId: s.profesionalId,
+              profesionalNombre: s.profesionalNombre,
+            }));
+            await convRef.update({
+              estado: "lead_esperando_slot",
+              slotsOfrecidos: slotsParaGuardar,
+              servicio: nextState.servicio ?? "",
+            });
+          }
+        } catch (e) {
+          functions.logger.warn("Auto-cita lead: error generando slots", {
+            error: String(e),
+          });
+        }
+      }
+    } else {
+      await convRef.update({
+        etapaOnboarding: nextState.stage,
+        onboardingNombre: nextState.nombre,
+        onboardingServicio: nextState.servicio,
+        onboardingPreferencia: nextState.preferencia,
+        fechaUltimaInteraccion: admin.firestore.Timestamp.now(),
+        mensajes: admin.firestore.FieldValue.arrayUnion(
+            {rol: "paciente", texto, timestamp: admin.firestore.Timestamp.now()},
+            {rol: "bot", texto: reply, timestamp: admin.firestore.Timestamp.now()},
+        ),
+      });
+    }
     return;
   }
 
@@ -1358,6 +1537,84 @@ async function processInteractiveReply(
 ): Promise<void> {
   const conv = await findActiveConversation(telefono);
   const cita = await findUpcomingAppointment(telefono);
+
+  // FASE E: lead nuevo selecciona slot ofrecido por el bot.
+  // ID con forma "lead_slot_<convId>_<idx>". Va al pending appointments.
+  if (buttonId.startsWith("lead_slot_")) {
+    const parts = buttonId.split("_");
+    if (parts.length < 4 || !conv) {
+      functions.logger.warn("lead_slot_ malformed o sin conv", {buttonId});
+      return;
+    }
+    const idx = Number(parts[parts.length - 1]);
+    const slotsOfrecidos = (conv.data?.slotsOfrecidos as Array<{
+      inicio: admin.firestore.Timestamp;
+      fin: admin.firestore.Timestamp;
+      profesionalId: string;
+      profesionalNombre: string;
+    }> | undefined) ?? [];
+    if (!Number.isInteger(idx) || idx < 0 || idx >= slotsOfrecidos.length) {
+      functions.logger.warn("lead_slot idx fuera de rango", {idx, len: slotsOfrecidos.length});
+      return;
+    }
+    const slot = slotsOfrecidos[idx];
+    const fechaInicio = slot.inicio.toDate();
+    const fechaTexto = fechaInicio.toLocaleString("es-ES", {
+      timeZone: "Europe/Madrid",
+      weekday: "long",
+      day: "numeric",
+      month: "long",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+    await sendTextMessage(
+        {phoneId: config.whatsappPhoneId, token: waToken, to: telefono},
+        `¡Anotado! Te apuntamos para el ${fechaTexto} con ${slot.profesionalNombre} 🙂\n` +
+        "Recepción te confirmará por aquí o por teléfono en breve.",
+    );
+    const pacienteNombre = (conv.data?.pacienteNombre as string) ||
+      (conv.data?.onboardingNombre as string) || "(lead)";
+    const servicio = (conv.data?.servicio as string) ||
+      (conv.data?.onboardingServicio as string) || "";
+    await persistPendingAppointment({
+      pacienteNombre,
+      pacienteTelefono: telefono,
+      fechaCita: fechaInicio,
+      profesional: slot.profesionalNombre,
+      servicio,
+      conversationId: conv.id,
+      origen: "lead_nuevo",
+    });
+    await db.collection("whatsapp_conversations").doc(conv.id).update({
+      estado: "lead_slot_seleccionado",
+      resultado: "auto_cita_pendiente_validacion",
+      slotSeleccionado: {
+        inicio: slot.inicio,
+        fin: slot.fin,
+        profesionalId: slot.profesionalId,
+        profesionalNombre: slot.profesionalNombre,
+      },
+      fechaUltimaInteraccion: admin.firestore.Timestamp.now(),
+      mensajes: admin.firestore.FieldValue.arrayUnion({
+        rol: "paciente",
+        texto: `(botón slot: ${fechaTexto} con ${slot.profesionalNombre})`,
+        timestamp: admin.firestore.Timestamp.now(),
+      }),
+    });
+    await notifyRecepcion(config, waToken, buildRecepcionMsg({
+      icono: "🆕",
+      titulo: "LEAD ELIGIÓ HUECO — VALIDAR",
+      nombre: pacienteNombre,
+      telefono,
+      extra: [
+        `📅 Hueco elegido: ${fechaTexto}`,
+        `👤 Profesional asignado: ${slot.profesionalNombre}`,
+        `💼 Servicio: ${servicio || "(sin servicio)"}`,
+      ],
+      cta: "Bandeja Leads + Citas pendientes en el panel. Validar y crear en Clinni.",
+    }));
+    return;
+  }
 
   // FASE 2: botones de selección de slot. ID con forma "slot_<convId>_<idx>"
   // o el comodín "slot_other". El convId del id debe coincidir con la conv
