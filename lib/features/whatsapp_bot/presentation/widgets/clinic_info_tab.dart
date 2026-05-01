@@ -303,10 +303,10 @@ class _DayHoursRow extends StatelessWidget {
 
 class _ServicioRow extends StatefulWidget {
   const _ServicioRow({
-    super.key,
     required this.servicio,
     required this.onChanged,
     required this.onDelete,
+    super.key,
   });
 
   final ServicioInfo servicio;

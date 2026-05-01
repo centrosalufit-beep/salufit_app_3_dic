@@ -76,7 +76,7 @@ class LeadsPendingTab extends ConsumerWidget {
                   children: [
                     CircleAvatar(
                       backgroundColor: AppColors.primary.withValues(alpha: 0.15),
-                      child: Icon(Icons.person, color: AppColors.primary),
+                      child: const Icon(Icons.person, color: AppColors.primary),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
@@ -105,17 +105,17 @@ class LeadsPendingTab extends ConsumerWidget {
                             children: [
                               _Pill(
                                 icon: Icons.medical_services,
-                                text: (data['servicioInteres'] as String?)
-                                        ?.isNotEmpty ==
-                                    true
+                                text: ((data['servicioInteres'] as String?)
+                                            ?.isNotEmpty ??
+                                        false)
                                     ? data['servicioInteres'] as String
                                     : '(sin servicio)',
                               ),
                               _Pill(
                                 icon: Icons.access_time,
-                                text: (data['preferenciaHoraria'] as String?)
-                                        ?.isNotEmpty ==
-                                    true
+                                text: ((data['preferenciaHoraria'] as String?)
+                                            ?.isNotEmpty ??
+                                        false)
                                     ? data['preferenciaHoraria'] as String
                                     : '(sin preferencia)',
                               ),

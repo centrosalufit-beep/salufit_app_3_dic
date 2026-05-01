@@ -11,6 +11,12 @@ analyzer:
     use_setters_to_change_properties: ignore
     sort_pub_dependencies: ignore
     unawaited_futures: ignore
+  exclude:
+    # Archivos autogenerados — los linter warnings que reportan son del
+    # generator (freezed / json_serializable / riverpod_generator), no
+    # nuestros, y se regenerarían si los editáramos.
+    - "**/*.g.dart"
+    - "**/*.freezed.dart"
 linter:
   rules:
     public_member_api_docs: false

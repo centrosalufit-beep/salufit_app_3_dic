@@ -113,7 +113,7 @@ class _AbsencesList extends ConsumerWidget {
         ],
       ),
     );
-    if (ok == true) {
+    if (ok ?? false) {
       await ref.read(clinicInfoActionsProvider).deleteAbsence(a.id);
     }
   }
@@ -131,8 +131,8 @@ class _AbsencesList extends ConsumerWidget {
       }
       return;
     }
-    String? proId = pros.first['id'] as String;
-    String proNombre = pros.first['nombre'] as String;
+    var proId = pros.first['id'] as String?;
+    var proNombre = pros.first['nombre'] as String;
     DateTime? desde;
     DateTime? hasta;
     final motivoCtl = TextEditingController();
@@ -246,7 +246,7 @@ class _AbsencesList extends ConsumerWidget {
                           profesionalId: proId!,
                           profesionalNombre: proNombre,
                           desde: DateTime(desde!.year, desde!.month,
-                              desde!.day, 0, 0),
+                              desde!.day),
                           hasta: DateTime(hasta!.year, hasta!.month,
                               hasta!.day, 23, 59),
                           motivo: motivoCtl.text.trim(),
@@ -262,7 +262,7 @@ class _AbsencesList extends ConsumerWidget {
         },
       ),
     );
-    if (saved == true && context.mounted) {
+    if ((saved ?? false) && context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Ausencia añadida')),
       );

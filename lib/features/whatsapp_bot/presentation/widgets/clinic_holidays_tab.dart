@@ -131,7 +131,7 @@ class _HolidaysList extends ConsumerWidget {
         ],
       ),
     );
-    if (ok == true) {
+    if (ok ?? false) {
       await ref.read(clinicInfoActionsProvider).deleteHoliday(h.fecha);
     }
   }
@@ -142,10 +142,10 @@ class _HolidaysList extends ConsumerWidget {
     ClinicHoliday? existing,
   ) async {
     final actions = ref.read(clinicInfoActionsProvider);
-    DateTime? fecha = existing != null ? DateTime.tryParse(existing.fecha) : null;
+    var fecha = existing != null ? DateTime.tryParse(existing.fecha) : null;
     final motivoCtl =
         TextEditingController(text: existing?.motivo ?? '');
-    String tipo = existing?.tipo ?? 'festivo';
+    var tipo = existing?.tipo ?? 'festivo';
 
     final saved = await showDialog<bool>(
       context: context,
@@ -234,7 +234,7 @@ class _HolidaysList extends ConsumerWidget {
         },
       ),
     );
-    if (saved == true && context.mounted) {
+    if ((saved ?? false) && context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Festivo guardado')),
       );

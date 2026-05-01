@@ -74,7 +74,7 @@ class PendingAppointmentsTab extends ConsumerWidget {
                     CircleAvatar(
                       backgroundColor:
                           AppColors.primary.withValues(alpha: 0.15),
-                      child: Icon(Icons.event,
+                      child: const Icon(Icons.event,
                           color: AppColors.primary),
                     ),
                     const SizedBox(width: 12),
