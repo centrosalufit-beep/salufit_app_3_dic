@@ -22,6 +22,7 @@ export { sendAppointmentReminders, triggerRemindersNow, expirePastAppointments }
 export { archiveOldAppointments } from "./archiveAppointments";
 export { checkConversationTimeouts } from "./conversationTimeouts";
 export { sendReagendarConfirmation } from "./confirmReagendar";
+export { replicateClassesMonth } from "./replicateClasses";
 
 // Dominios autorizados a llamar nuestras funciones HTTP
 const ALLOWED_ORIGINS = [

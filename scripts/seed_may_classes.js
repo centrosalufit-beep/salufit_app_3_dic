@@ -76,6 +76,9 @@ const PATTERN = {
     {hora: "19:30", titulo: "Entrenamiento Grupal", monitor: "Silvio"},
     {hora: "20:30", titulo: "Entrenamiento Grupal", monitor: "Silvio"},
   ],
+  5: [ // Viernes
+    {hora: "19:00", titulo: "Entrenamiento Grupal", monitor: "Silvio"},
+  ],
   6: [ // Sábado
     {hora: "09:00", titulo: "Entrenamiento Grupal", monitor: "Silvio"},
   ],
