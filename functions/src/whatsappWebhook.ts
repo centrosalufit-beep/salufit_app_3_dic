@@ -503,9 +503,9 @@ async function processIncomingText(
     const config = await loadConfig();
     await sendTextMessage(
         {phoneId: config.whatsappPhoneId, token: waToken, to: telefono},
-        "Hemos registrado tu solicitud de baja. No te volveremos a contactar " +
-        "automáticamente desde este número. Si quieres reactivar las " +
-        "comunicaciones, contacta con recepción. Gracias.\n\n— SALUFIT",
+        "Hecho, has sido dado de baja de los avisos automáticos. " +
+        "No volverás a recibir mensajes desde este número. " +
+        "Si más adelante quieres volver a recibirlos, escríbenos o llama a recepción 🌿",
     );
     return;
   }
@@ -552,11 +552,10 @@ async function processIncomingText(
     const telRecepcion = (fechaPos?.telefonoRecepcion as string) ||
                          TELEFONO_RECEPCION_FALLBACK;
     const respuestaFija =
-      "Hola, este es el WhatsApp del Centro Salufit. " +
-      "No te encontramos como paciente registrado en nuestra base de datos. " +
-      "Si quieres pedir información, concertar una cita o resolver una duda, " +
-      `contacta con recepción al ${telRecepcion} y te atenderemos personalmente. ` +
-      "Gracias.\n\n— SALUFIT";
+      "¡Hola! 👋 Te escribe el bot del Centro Salufit. " +
+      "No te encuentro como paciente en nuestra base de datos. " +
+      "Para pedir información, una cita o resolver cualquier duda, " +
+      `puedes llamarnos al ${telRecepcion} y te atendemos al momento.`;
     await sendTextMessage(
         {phoneId: config.whatsappPhoneId, token: waToken, to: telefono},
         respuestaFija,
@@ -628,9 +627,9 @@ async function processIncomingText(
     const yaAvisado = conv.data?.outOfHoursAvisado === true;
     if (!yaAvisado) {
       const aviso =
-        "Hola 👋 Hemos recibido tu mensaje fuera de nuestro horario de " +
-        "atención (L–V 9:00–20:00). Te leemos y recepción te contactará " +
-        "en cuanto abramos. Gracias por escribir a SALUFIT.";
+        "¡Hola! 👋 Hemos recibido tu mensaje fuera de horario " +
+        "(atendemos de lunes a viernes, 9:00–20:00). Tranquilo, lo dejamos " +
+        "anotado y recepción te contesta en cuanto abramos.";
       functions.logger.info(
           "Fuera de horario — enviando aviso único",
           {telefono, convId: conv.id},
@@ -869,18 +868,17 @@ async function executeAction(
           // dentro 48h.
           const msgPol = fuerzaMayor ?
             `Hola${saludoNombreCancel ? " " + saludoNombreCancel : ""} 🙏 ` +
-            "Entendemos que estás en una situación difícil. Recepción te " +
-            "contactará en breve para valorar tu caso con prioridad y " +
-            "encontrar la mejor solución.\n\n— SALUFIT" :
+            "Sentimos lo que está pasando. Recepción te llamará enseguida " +
+            "para ayudarte y darle prioridad a tu caso." :
             `Hola${saludoNombreCancel ? " " + saludoNombreCancel : ""} 👋 ` +
-            "Gracias por avisar a tiempo.\n\n" +
-            "Tu hueco con nosotros es en menos de 48h y ya está reservado " +
-            "para ti. Para no dejarlo sin uso, podemos hacer dos cosas:\n\n" +
-            "✅ Reagendarlo gratis dentro de las próximas 48h\n" +
-            "   (te mostramos huecos disponibles a continuación 👇)\n\n" +
-            "💳 O, si no puedes en ese plazo, cerrar la cita con\n" +
-            "   una aportación de 55€ por Bizum al +34 629 01 10 55.\n\n" +
-            "Lo más fácil es lo primero. Mira los huecos a continuación.\n\n— SALUFIT";
+            "Gracias por avisarnos a tiempo.\n\n" +
+            "Tu hueco está reservado para ti y queda menos de 48h. " +
+            "Para que no se pierda podemos hacer dos cosas:\n\n" +
+            "✅ Cambiarlo gratis dentro de las próximas 48h\n" +
+            "   (justo debajo te paso los huecos libres 👇)\n\n" +
+            "💳 O, si no te encaja ninguno, cerrar la cita con una\n" +
+            "   aportación de 55 € por Bizum al +34 629 01 10 55.\n\n" +
+            "Lo más cómodo suele ser lo primero, échales un ojo 🙂";
           await sendTextMessage(
               {phoneId: config.whatsappPhoneId, token: waToken, to: telefono},
               msgPol,
@@ -1078,9 +1076,9 @@ async function executeAction(
       const saludoNombre = pacienteNombre.split(" ")[0] || "";
       if (!cita) {
         const msgPaciente =
-          `Hola${saludoNombre ? " " + saludoNombre : ""}, hemos recibido tu solicitud. ` +
-          "Recepción te contactará en breve para gestionar el cambio de cita. " +
-          "Gracias.\n\n— SALUFIT";
+          `Hola${saludoNombre ? " " + saludoNombre : ""} 👋 ` +
+          "Mensaje recibido. Recepción te llamará enseguida para mirar " +
+          "el cambio contigo 🙂";
         await sendTextMessage(
             {phoneId: config.whatsappPhoneId, token: waToken, to: telefono},
             msgPaciente,
@@ -1153,9 +1151,9 @@ async function executeAction(
           !schedule.activo ? "inactivo" :
             schedule.motivoEscalaDirecta ?? "escalada directa configurada";
         const msgPaciente =
-          `Hola${saludoNombre ? " " + saludoNombre : ""}, hemos recibido tu solicitud. ` +
-          "Recepción te contactará en breve para gestionar el cambio de cita. " +
-          "Gracias.\n\n— SALUFIT";
+          `Hola${saludoNombre ? " " + saludoNombre : ""} 👋 ` +
+          "Mensaje recibido. Recepción te contacta enseguida para " +
+          "ver el cambio contigo 🙂";
         await sendTextMessage(
             {phoneId: config.whatsappPhoneId, token: waToken, to: telefono},
             msgPaciente,
@@ -1180,11 +1178,11 @@ async function executeAction(
       // Sin huecos en la ventana → escalar.
       if (slots.length === 0) {
         const msgPaciente =
-          `Hola${saludoNombre ? " " + saludoNombre : ""}, hemos recibido tu solicitud. ` +
+          `Hola${saludoNombre ? " " + saludoNombre : ""} 👋 ` +
           (dentro48h ?
-            "Por la cercanía de tu cita, recepción te contactará en breve para encontrarte un hueco compatible. " :
-            "Recepción te contactará en breve para encontrarte un hueco. ") +
-          "Gracias.\n\n— SALUFIT";
+            "Como tu cita está muy cerca, prefiero que recepción te llame " +
+            "directamente para buscar un hueco que te encaje 🙂" :
+            "Recepción te llama enseguida para buscarte un hueco que te venga bien 🙂");
         await sendTextMessage(
             {phoneId: config.whatsappPhoneId, token: waToken, to: telefono},
             msgPaciente,
@@ -1325,7 +1323,7 @@ async function processInteractiveReply(
       }
       await sendTextMessage(
           {phoneId: config.whatsappPhoneId, token: waToken, to: telefono},
-          "Entendido. Recepción te contactará para buscarte otro horario que te encaje. Gracias.\n\n— SALUFIT",
+          "Entendido 🙂 Recepción te llama enseguida para buscarte un hueco que te venga mejor.",
       );
       await notifyRecepcion(config, waToken, buildRecepcionMsg({
         icono: "🔄",
@@ -1399,8 +1397,8 @@ async function processInteractiveReply(
     // tenga libertad de reasignar si el slot acaba siendo con otro.
     await sendTextMessage(
         {phoneId: config.whatsappPhoneId, token: waToken, to: telefono},
-        `Anotado: te reagendamos para el ${fechaTexto}. ` +
-        "Recepción confirmará el cambio en breve. Gracias.\n\n— SALUFIT",
+        `¡Listo! Te apuntamos para el ${fechaTexto} 🙂 ` +
+        "Recepción te confirma el cambio en breve.",
     );
     await db.collection("whatsapp_conversations").doc(conv.id).update({
       estado: "reagendar_confirmacion_pendiente",
@@ -1462,9 +1460,8 @@ async function processInteractiveReply(
         });
         await sendTextMessage(
             {phoneId: config.whatsappPhoneId, token: waToken, to: telefono},
-            "Hemos recibido anteriormente tu respuesta sobre esta cita. " +
-            "Si necesitas algo más, escríbenos un mensaje y te atenderemos. " +
-            "Gracias.\n\n— SALUFIT",
+            "Ya tenemos anotada tu respuesta a esta cita 🙂 " +
+            "Si necesitas algo más, escríbenos por aquí y te atendemos.",
         );
         return;
       }
@@ -1520,6 +1517,11 @@ export const whatsappWebhook = onRequest(
       ],
       memory: "512MiB",
       timeoutSeconds: 60,
+      // minInstances:1 mantiene un contenedor caliente 24/7 para evitar
+      // cold starts (~22s observados con todas las lecturas Firestore en
+      // frío). Coste estimado: ~5-7 USD/mes. Compensado por UX: el bot
+      // responde en <2s en lugar de 20-25s en mensajes "fríos".
+      minInstances: 1,
       cors: false, // Webhook público, validamos firma manualmente
     },
     async (req, res) => {
@@ -1673,8 +1675,7 @@ export const whatsappWebhook = onRequest(
 
           await sendTextMessage(
               {phoneId: config.whatsappPhoneId, token: waToken, to: from},
-              "Hemos recibido tu archivo. Recepción lo revisará y te contactará en breve. " +
-              "Gracias.\n\n— SALUFIT",
+              "Recibido el archivo 👍 Recepción lo revisa y te dice algo enseguida.",
           );
 
           // Notificar a recepción con link al archivo si lo hemos almacenado.
@@ -1698,7 +1699,7 @@ export const whatsappWebhook = onRequest(
           // Tipos sin media_id (location, contacts, reaction, etc.)
           await sendTextMessage(
               {phoneId: config.whatsappPhoneId, token: waToken, to: from},
-              "Por ahora no puedo procesar ese tipo de mensaje. Te contactaremos desde recepción.",
+              "Por aquí no puedo abrir ese tipo de mensaje, pero recepción te contacta enseguida 🙂",
           );
           await notifyRecepcion(config, waToken, buildRecepcionMsg({
             icono: "📎",
@@ -1721,8 +1722,7 @@ export const whatsappWebhook = onRequest(
                   token: WHATSAPP_TOKEN.value(),
                   to: fromForFallback,
                 },
-                "Gracias por contactar con SALUFIT. Hemos recibido tu mensaje y " +
-                "una persona de recepción te atenderá en breve.",
+                "¡Hola! 👋 Recibido tu mensaje. Recepción te atiende enseguida.",
             );
           } catch (fallbackErr) {
             functions.logger.error("Webhook fallback send también falló", fallbackErr);

@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:salufit_app/core/theme/app_colors.dart';
+import 'package:salufit_app/features/whatsapp_bot/application/whatsapp_bot_providers.dart'
+    as wa_providers;
 import 'package:salufit_app/features/whatsapp_bot/domain/whatsapp_conversation_model.dart';
 
 /// Estados que ya están cerrados; en estos no mostramos el botón
@@ -12,7 +14,6 @@ const _closedStates = {
   'resuelta',
   'cerrada',
   'no_registrado',
-  'reagendar_confirmacion_pendiente',
 };
 
 class ConversationDetailDialog extends ConsumerStatefulWidget {
@@ -28,6 +29,7 @@ class ConversationDetailDialog extends ConsumerStatefulWidget {
 class _ConversationDetailDialogState
     extends ConsumerState<ConversationDetailDialog> {
   bool _closing = false;
+  bool _confirming = false;
 
   Future<void> _markResolved() async {
     final user = FirebaseAuth.instance.currentUser;
@@ -58,11 +60,38 @@ class _ConversationDetailDialogState
     }
   }
 
+  Future<void> _confirmReagendarYAvisar() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    setState(() => _confirming = true);
+    try {
+      await wa_providers
+          .sendReagendarConfirmation(widget.conversation.id);
+      if (!mounted) return;
+      Navigator.of(context).pop();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Paciente avisado. Conversación cerrada.',
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _confirming = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error al avisar al paciente: $e')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final dateFmt = DateFormat('dd/MM/yyyy HH:mm');
     final c = widget.conversation;
     final canClose = !_closedStates.contains(c.estado);
+    final canConfirmReagendar =
+        c.estado == 'reagendar_confirmacion_pendiente';
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: ConstrainedBox(
@@ -228,9 +257,31 @@ class _ConversationDetailDialogState
                       ),
                     ),
                   ),
+                  if (canConfirmReagendar) ...[
+                    ElevatedButton.icon(
+                      onPressed: (_confirming || _closing)
+                          ? null
+                          : _confirmReagendarYAvisar,
+                      icon: _confirming
+                          ? const SizedBox(
+                              width: 14,
+                              height: 14,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.send_outlined, size: 18),
+                      label: const Text('Confirmar y avisar al paciente'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        foregroundColor: Colors.white,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                  ],
                   if (canClose)
                     ElevatedButton.icon(
-                      onPressed: _closing ? null : _markResolved,
+                      onPressed: (_closing || _confirming)
+                          ? null
+                          : _markResolved,
                       icon: _closing
                           ? const SizedBox(
                               width: 14,

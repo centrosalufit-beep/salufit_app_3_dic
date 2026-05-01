@@ -172,3 +172,12 @@ Future<ImportPatientsResult> importClinniPatientsExcel(
   });
   return ImportPatientsResult.fromMap(data);
 }
+
+/// Llama a `sendReagendarConfirmation`: avisa al paciente vía template Meta
+/// `confirmacion_reagendado` que recepción ya cerró su cambio de cita,
+/// y marca la conversación como resuelta.
+Future<void> sendReagendarConfirmation(String conversationId) async {
+  await _postCloudFunction('sendReagendarConfirmation', {
+    'conversationId': conversationId,
+  });
+}

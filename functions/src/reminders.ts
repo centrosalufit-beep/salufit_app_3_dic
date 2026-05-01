@@ -152,10 +152,10 @@ async function runReminders(opts?: {
     // tener expectativa fijada con un nombre. Mostramos solo el servicio.
     void profesional;
     const body =
-      `Hola ${nombre}, te recordamos tu cita en Centro Salufit:\n\n` +
+      `¡Hola ${nombre}! 👋 Te recordamos tu cita:\n\n` +
       `📅 ${fechaFmt}\n` +
       `💼 ${servicio || "Cita"}\n\n` +
-      "Por favor, confirma tu asistencia:";
+      "¿Nos confirmas que puedes venir?";
 
     // ENVÍO PRINCIPAL: template aprobado por Meta. Pasa la regla de la
     // ventana 24h (puede iniciarse conversación sin que el paciente haya

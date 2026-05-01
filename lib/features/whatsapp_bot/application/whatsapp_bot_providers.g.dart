@@ -154,14 +154,18 @@ final class BotConfigProvider
 
 String _$botConfigHash() => r'52ef664b9d846cf9a425c03f3daf60fbb15f1a3a';
 
-/// Llama a la Cloud Function `importClinniAppointments` con el contenido
-/// del Excel codificado en base64.
+/// Llama a la Cloud Function `importClinniAppointments` (onRequest) con el
+/// contenido del Excel codificado en base64. Usa http POST con Firebase Auth
+/// ID token en header Authorization Bearer (cloud_functions plugin no
+/// soporta Windows desktop).
 
 @ProviderFor(importClinniExcel)
 const importClinniExcelProvider = ImportClinniExcelFamily._();
 
-/// Llama a la Cloud Function `importClinniAppointments` con el contenido
-/// del Excel codificado en base64.
+/// Llama a la Cloud Function `importClinniAppointments` (onRequest) con el
+/// contenido del Excel codificado en base64. Usa http POST con Firebase Auth
+/// ID token en header Authorization Bearer (cloud_functions plugin no
+/// soporta Windows desktop).
 
 final class ImportClinniExcelProvider
     extends
@@ -171,8 +175,10 @@ final class ImportClinniExcelProvider
           FutureOr<ImportResult>
         >
     with $FutureModifier<ImportResult>, $FutureProvider<ImportResult> {
-  /// Llama a la Cloud Function `importClinniAppointments` con el contenido
-  /// del Excel codificado en base64.
+  /// Llama a la Cloud Function `importClinniAppointments` (onRequest) con el
+  /// contenido del Excel codificado en base64. Usa http POST con Firebase Auth
+  /// ID token en header Authorization Bearer (cloud_functions plugin no
+  /// soporta Windows desktop).
   const ImportClinniExcelProvider._({
     required ImportClinniExcelFamily super.from,
     required ({String fileBase64, String fileName}) super.argument,
@@ -221,10 +227,12 @@ final class ImportClinniExcelProvider
   }
 }
 
-String _$importClinniExcelHash() => r'30ea351ea19f181f4a73301eae77c243a5a97280';
+String _$importClinniExcelHash() => r'3c6726f42822baed611e66d7f203339018cc4790';
 
-/// Llama a la Cloud Function `importClinniAppointments` con el contenido
-/// del Excel codificado en base64.
+/// Llama a la Cloud Function `importClinniAppointments` (onRequest) con el
+/// contenido del Excel codificado en base64. Usa http POST con Firebase Auth
+/// ID token en header Authorization Bearer (cloud_functions plugin no
+/// soporta Windows desktop).
 
 final class ImportClinniExcelFamily extends $Family
     with
@@ -241,8 +249,10 @@ final class ImportClinniExcelFamily extends $Family
         isAutoDispose: true,
       );
 
-  /// Llama a la Cloud Function `importClinniAppointments` con el contenido
-  /// del Excel codificado en base64.
+  /// Llama a la Cloud Function `importClinniAppointments` (onRequest) con el
+  /// contenido del Excel codificado en base64. Usa http POST con Firebase Auth
+  /// ID token en header Authorization Bearer (cloud_functions plugin no
+  /// soporta Windows desktop).
 
   ImportClinniExcelProvider call({
     required String fileBase64,
@@ -256,14 +266,14 @@ final class ImportClinniExcelFamily extends $Family
   String toString() => r'importClinniExcelProvider';
 }
 
-/// Llama a la Cloud Function `importClinniPatients` con el contenido
-/// del Excel `listado_v26.xlsx` (o equivalente) codificado en base64.
+/// Llama a la Cloud Function `importClinniPatients` (onRequest) con el
+/// contenido del Excel `listado_v26.xlsx` codificado en base64.
 
 @ProviderFor(importClinniPatientsExcel)
 const importClinniPatientsExcelProvider = ImportClinniPatientsExcelFamily._();
 
-/// Llama a la Cloud Function `importClinniPatients` con el contenido
-/// del Excel `listado_v26.xlsx` (o equivalente) codificado en base64.
+/// Llama a la Cloud Function `importClinniPatients` (onRequest) con el
+/// contenido del Excel `listado_v26.xlsx` codificado en base64.
 
 final class ImportClinniPatientsExcelProvider
     extends
@@ -275,8 +285,8 @@ final class ImportClinniPatientsExcelProvider
     with
         $FutureModifier<ImportPatientsResult>,
         $FutureProvider<ImportPatientsResult> {
-  /// Llama a la Cloud Function `importClinniPatients` con el contenido
-  /// del Excel `listado_v26.xlsx` (o equivalente) codificado en base64.
+  /// Llama a la Cloud Function `importClinniPatients` (onRequest) con el
+  /// contenido del Excel `listado_v26.xlsx` codificado en base64.
   const ImportClinniPatientsExcelProvider._({
     required ImportClinniPatientsExcelFamily super.from,
     required ({String fileBase64, String fileName}) super.argument,
@@ -327,10 +337,10 @@ final class ImportClinniPatientsExcelProvider
 }
 
 String _$importClinniPatientsExcelHash() =>
-    r'8290a14f64bb98f6549c88624b7d1297851d3c9f';
+    r'725e2e94054fbb97e67411042eab91f7bf2919d4';
 
-/// Llama a la Cloud Function `importClinniPatients` con el contenido
-/// del Excel `listado_v26.xlsx` (o equivalente) codificado en base64.
+/// Llama a la Cloud Function `importClinniPatients` (onRequest) con el
+/// contenido del Excel `listado_v26.xlsx` codificado en base64.
 
 final class ImportClinniPatientsExcelFamily extends $Family
     with
@@ -347,8 +357,8 @@ final class ImportClinniPatientsExcelFamily extends $Family
         isAutoDispose: true,
       );
 
-  /// Llama a la Cloud Function `importClinniPatients` con el contenido
-  /// del Excel `listado_v26.xlsx` (o equivalente) codificado en base64.
+  /// Llama a la Cloud Function `importClinniPatients` (onRequest) con el
+  /// contenido del Excel `listado_v26.xlsx` codificado en base64.
 
   ImportClinniPatientsExcelProvider call({
     required String fileBase64,

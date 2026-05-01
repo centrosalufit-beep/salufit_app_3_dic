@@ -21,6 +21,7 @@ export { whatsappWebhook } from "./whatsappWebhook";
 export { sendAppointmentReminders, triggerRemindersNow, expirePastAppointments } from "./reminders";
 export { archiveOldAppointments } from "./archiveAppointments";
 export { checkConversationTimeouts } from "./conversationTimeouts";
+export { sendReagendarConfirmation } from "./confirmReagendar";
 
 // Dominios autorizados a llamar nuestras funciones HTTP
 const ALLOWED_ORIGINS = [
