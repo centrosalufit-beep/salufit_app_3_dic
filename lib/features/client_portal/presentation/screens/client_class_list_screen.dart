@@ -170,7 +170,7 @@ class _ClientClassListScreenState extends ConsumerState<ClientClassListScreen> {
   Map<String, dynamic> _getClassVisuals(String nombreLower) {
     final n = nombreLower;
     if (n.contains('meditación') || n.contains('meditacion') || n.contains('meditation')) {
-      return {'colors': [const Color(0xFF4A148C), const Color(0xFFAB47BC)], 'bgIcon': Icons.self_improvement};
+      return {'colors': [const Color(0xFF4A148C), const Color(0xFFAB47BC)], 'bgIcon': Icons.spa};
     }
     if (n.contains('tribu') || n.contains('activa') || n.contains('walk')) {
       return {'colors': [const Color(0xFFE65100), const Color(0xFFFFB74D)], 'bgIcon': Icons.directions_walk};
