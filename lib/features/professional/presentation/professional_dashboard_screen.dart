@@ -5,8 +5,11 @@ import 'package:salufit_app/core/providers/firebase_providers.dart';
 import 'package:salufit_app/core/theme/app_colors.dart';
 import 'package:salufit_app/core/utils/safe_parsing_extensions.dart';
 import 'package:salufit_app/features/admin_dashboard/presentation/admin_crm_screen.dart';
+import 'package:salufit_app/features/admin_dashboard/presentation/admin_exercise_feedback_screen.dart';
+import 'package:salufit_app/features/admin_dashboard/presentation/qr_scan_handler.dart';
 import 'package:salufit_app/features/communication/presentation/widgets/chat_list_widget.dart';
-import 'package:salufit_app/features/professional/presentation/professional_assign_screen.dart';
+import 'package:salufit_app/features/patient_record/presentation/admin_patient_detail_screen.dart';
+import 'package:salufit_app/features/patient_record/presentation/admin_patient_list_screen.dart';
 import 'package:salufit_app/features/professional/presentation/professional_class_screen.dart';
 import 'package:salufit_app/features/professional/presentation/professional_tasks_screen.dart';
 import 'package:salufit_app/shared/widgets/salufit_header.dart';
@@ -463,14 +466,24 @@ class _JornadaCard extends ConsumerWidget {
 // GRID DE ACCESOS RÁPIDOS
 // ═══════════════════════════════════════════════════════════════
 
-class _QuickAccessGrid extends StatelessWidget {
+class _QuickAccessGrid extends ConsumerWidget {
   const _QuickAccessGrid({required this.userId, required this.userRole});
   final String userId;
   final String userRole;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    // Las 6 features que un profesional puede ver, alineadas con la
+    // versión Windows: Clases, Recursos, Equipo, CRM, Tareas, Feedback.
+    // Más el tile destacado "Escanear QR" para registrar walk-in con
+    // consumo de token (anti-doble-consumo de 5 min en backend).
     final items = [
+      _QuickItem(
+        icon: Icons.qr_code_scanner,
+        label: 'Escanear QR',
+        color: const Color(0xFF009688),
+        onTap: () => showQrScanFlow(context, ref),
+      ),
       _QuickItem(
         icon: Icons.calendar_month,
         label: 'Clases',
@@ -483,25 +496,31 @@ class _QuickAccessGrid extends StatelessWidget {
         ),
       ),
       _QuickItem(
-        icon: Icons.fitness_center,
-        label: 'Asignar',
-        color: const Color(0xFFE64A19),
-        onTap: () => Navigator.push(
-          context,
-          MaterialPageRoute<void>(
-            builder: (_) => const ProfessionalAssignScreen(),
-          ),
-        ),
-      ),
-      _QuickItem(
-        icon: Icons.leaderboard,
-        label: 'CRM',
-        color: const Color(0xFF7B1FA2),
+        icon: Icons.assignment,
+        label: 'Recursos',
+        color: const Color(0xFF7E57C2),
         onTap: () => Navigator.push(
           context,
           MaterialPageRoute<void>(
             builder: (_) => Scaffold(
-              body: AdminCrmScreen(userId: userId, userRole: userRole),
+              appBar: AppBar(
+                title: const Text('Recursos'),
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+              ),
+              body: AdminPatientListScreen(
+                viewerRole: 'profesional',
+                onUserSelected: (uid, name) => Navigator.push(
+                  context,
+                  MaterialPageRoute<void>(
+                    builder: (_) => AdminPatientDetailScreen(
+                      userId: uid,
+                      userName: name,
+                      viewerRole: userRole,
+                    ),
+                  ),
+                ),
+              ),
             ),
           ),
         ),
@@ -509,7 +528,7 @@ class _QuickAccessGrid extends StatelessWidget {
       _QuickItem(
         icon: Icons.forum,
         label: 'Equipo',
-        color: const Color(0xFF00796B),
+        color: const Color(0xFF43A047),
         onTap: () => Navigator.push(
           context,
           MaterialPageRoute<void>(
@@ -524,6 +543,41 @@ class _QuickAccessGrid extends StatelessWidget {
                 isStaffOnly: true,
               ),
             ),
+          ),
+        ),
+      ),
+      _QuickItem(
+        icon: Icons.leaderboard,
+        label: 'CRM',
+        color: const Color(0xFF3949AB),
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute<void>(
+            builder: (_) => Scaffold(
+              body: AdminCrmScreen(userId: userId, userRole: userRole),
+            ),
+          ),
+        ),
+      ),
+      _QuickItem(
+        icon: Icons.task_alt,
+        label: 'Tareas',
+        color: const Color(0xFFE53935),
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute<void>(
+            builder: (_) => ProfessionalTasksScreen(userId: userId),
+          ),
+        ),
+      ),
+      _QuickItem(
+        icon: Icons.thumbs_up_down_outlined,
+        label: 'Feedback',
+        color: const Color(0xFF00BCD4),
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute<void>(
+            builder: (_) => const AdminExerciseFeedbackScreen(),
           ),
         ),
       ),

@@ -223,12 +223,24 @@ export const checkAccountStatus = functions.https.onCall(async (data, context) =
             uid = newUser.uid;
         }
 
+        // Resolver rol según whitelist de admins / overrides en bbdd.
+        // - Si bbdd doc tiene `rolDefault` lo usamos.
+        // - Si el email está en la lista hardcodeada de admins → "admin".
+        // - Si no, "cliente" (default histórico).
+        const ADMIN_EMAILS = new Set<string>([
+            "inesmariaoc07@gmail.com",
+        ]);
+        let resolvedRole: string = (matchData.rolDefault as string | undefined) || "";
+        if (!resolvedRole) {
+            resolvedRole = ADMIN_EMAILS.has(emailRaw) ? "admin" : "cliente";
+        }
+
         await db.collection("users_app").doc(uid).set({
             email: emailRaw,
             nombre: matchData.nombre || "",
             nombreCompleto: matchData.nombreCompleto || matchData.nombre || "",
             numHistoria: matchData.numHistoria || matchData.historyId || matchData.idH || historyIdRaw,
-            rol: "cliente",
+            rol: resolvedRole,
             activo: true,
             // Marcadores de migración pendiente (el cliente completará via MigrationGate)
             passwordUpdated: false,
@@ -298,6 +310,31 @@ export const consumirTokenPorQR = functions.https.onCall(async (data, context) =
     }
     const scannedData = scannedDoc.data()!;
     const clientName = scannedData.nombreCompleto || scannedData.nombre || scannedData.email || "Cliente";
+
+    // Anti-doble-consumo: bloquear si el mismo cliente fue escaneado
+    // hace menos de 5 minutos. Evita que un profesional consuma 2 tokens
+    // por error al escanear dos veces seguidas.
+    const fiveMinAgoTs = admin.firestore.Timestamp.fromMillis(
+        Date.now() - 5 * 60 * 1000,
+    );
+    const recentScans = await db.collection("walk_in_attendance")
+        .where("clientId", "==", scannedUid)
+        .where("timestamp", ">", fiveMinAgoTs)
+        .orderBy("timestamp", "desc")
+        .limit(1)
+        .get();
+    if (!recentScans.empty) {
+        const lastTs = recentScans.docs[0].data().timestamp as admin.firestore.Timestamp;
+        const secondsAgo = Math.floor((Date.now() - lastTs.toMillis()) / 1000);
+        await writeAudit({
+            tipo: "QR_SCAN_DUPLICATE",
+            userId: scannerUid,
+            targetUserId: scannedUid,
+            metadata: { secondsAgo },
+            status: "DENIED",
+        });
+        return { status: "RECENTLY_SCANNED", clientName, secondsAgo };
+    }
 
     try {
         const result = await db.runTransaction(async (t) => {

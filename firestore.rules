@@ -324,6 +324,46 @@ service cloud.firestore {
     }
 
     // ═══════════════════════════════════════════════════════════════
+    // TAREAS DEL EQUIPO — staff se asigna trabajo entre sí
+    // (módulo Tareas en panel Windows). Distinta de `staff_tasks`,
+    // que es generada por Cloud Functions desde feedback de vídeos.
+    // ═══════════════════════════════════════════════════════════════
+    match /tasks/{id} {
+      allow read, create, update: if isStaff();
+      allow delete: if isAdmin();
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // WHATSAPP BOT — leads y citas pendientes de validación.
+    // Las gestiona Cloud Functions (admin SDK) cuando el bot recibe
+    // mensajes; el panel admin solo las VISUALIZA.
+    // ═══════════════════════════════════════════════════════════════
+    match /clinni_patients_pending/{id} {
+      allow read: if isStaff();
+      allow write: if false; // solo Cloud Functions
+    }
+
+    match /clinni_appointments_pending/{id} {
+      allow read: if isStaff();
+      allow write: if false; // solo Cloud Functions
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // CALENDARIO BOT — festivos del centro y ausencias de profesionales.
+    // El admin edita ambos desde el panel para que el bot sepa cuándo
+    // NO ofrecer citas. Lectura abierta a staff (también el bot las lee).
+    // ═══════════════════════════════════════════════════════════════
+    match /clinic_holidays/{id} {
+      allow read: if isStaff();
+      allow write: if isAdmin();
+    }
+
+    match /professional_absences/{id} {
+      allow read: if isStaff();
+      allow write: if isAdmin();
+    }
+
+    // ═══════════════════════════════════════════════════════════════
     // DENEGACIÓN POR DEFECTO — cualquier colección no listada queda bloqueada
     // ═══════════════════════════════════════════════════════════════
     match /{document=**} {

@@ -7,44 +7,62 @@ import 'package:salufit_app/features/bookings/presentation/widgets/create_class_
 import 'package:salufit_app/features/client_portal/presentation/screens/client_class_list_screen.dart';
 
 class AdminClassManagerScreen extends StatelessWidget {
-  const AdminClassManagerScreen({required this.currentUserId, super.key});
+  const AdminClassManagerScreen({
+    required this.currentUserId,
+    required this.userRole,
+    super.key,
+  });
   final String currentUserId;
+  final String userRole;
+
+  bool get _isAdmin =>
+      userRole == 'admin' || userRole == 'administrador';
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.transparent,
-      floatingActionButton: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          FloatingActionButton.extended(
-            heroTag: 'replicate',
-            onPressed: () => _showReplicateDialog(context),
-            backgroundColor: const Color(0xFF1E293B),
-            icon: const Icon(Icons.copy_all, color: Colors.white),
-            label: const Text(
-              'REPLICAR MES ANTERIOR',
-              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-            ),
-          ),
-          const SizedBox(height: 12),
-          FloatingActionButton.extended(
-            heroTag: 'generate',
-            onPressed: () => showDialog<void>(
-              context: context,
-              builder: (context) => const CreateClassBatchDialog(),
-            ),
-            backgroundColor: const Color(0xFF009688),
-            icon: const Icon(Icons.calendar_month, color: Colors.white),
-            label: const Text(
-              'GENERAR CUADRANTE',
-              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-            ),
-          ),
-        ],
-      ),
-      body: ClientClassListScreen(userId: currentUserId, userRole: 'admin'),
+      // Replicar mes / generar cuadrante son operaciones administrativas:
+      // solo admin las ve. Profesionales solo consultan.
+      floatingActionButton: _isAdmin
+          ? Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                FloatingActionButton.extended(
+                  heroTag: 'replicate',
+                  onPressed: () => _showReplicateDialog(context),
+                  backgroundColor: const Color(0xFF1E293B),
+                  icon: const Icon(Icons.copy_all, color: Colors.white),
+                  label: const Text(
+                    'REPLICAR MES ANTERIOR',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                FloatingActionButton.extended(
+                  heroTag: 'generate',
+                  onPressed: () => showDialog<void>(
+                    context: context,
+                    builder: (context) => const CreateClassBatchDialog(),
+                  ),
+                  backgroundColor: const Color(0xFF009688),
+                  icon: const Icon(Icons.calendar_month, color: Colors.white),
+                  label: const Text(
+                    'GENERAR CUADRANTE',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ],
+            )
+          : null,
+      body: ClientClassListScreen(userId: currentUserId, userRole: userRole),
     );
   }
 

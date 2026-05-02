@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -96,6 +97,7 @@ class _ClientClassListScreenState extends ConsumerState<ClientClassListScreen> {
                         localizedName: localizedName,
                         localizedMonitor:
                             data.localized('monitor', locale),
+                        userRole: widget.userRole,
                         isBooked: myBookings.containsKey(doc.id),
                         isProcessing: _processingClassIds.contains(doc.id),
                         onBook: () => _handleReserva(data, doc.id),
@@ -268,6 +270,7 @@ class _ClassCard extends ConsumerWidget {
     required this.visuals,
     required this.localizedName,
     required this.localizedMonitor,
+    required this.userRole,
     required this.isBooked,
     required this.isProcessing,
     required this.onBook,
@@ -278,9 +281,15 @@ class _ClassCard extends ConsumerWidget {
   final Map<String, dynamic> visuals;
   final String localizedName;
   final String localizedMonitor;
+  final String userRole;
   final bool isBooked;
   final bool isProcessing;
   final VoidCallback onBook;
+
+  bool get _isStaff =>
+      userRole == 'admin' ||
+      userRole == 'administrador' ||
+      userRole == 'profesional';
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -343,6 +352,34 @@ class _ClassCard extends ConsumerWidget {
     final monitorDisplay = localizedMonitor.trim().isNotEmpty
         ? localizedMonitor
         : t.classListStaffDefault;
+    final aforoChip = Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.3),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.people, color: Colors.white, size: 12),
+          const SizedBox(width: 4),
+          Text(
+            '${data.safeInt('aforoActual')}/${data.safeInt('aforoMaximo', defaultValue: 12)}',
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          // Solo staff ve este indicador "▸" que sugiere que el chip es
+          // tappable y abre la lista de apuntados.
+          if (_isStaff) ...const [
+            SizedBox(width: 4),
+            Icon(Icons.chevron_right, color: Colors.white, size: 14),
+          ],
+        ],
+      ),
+    );
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -359,22 +396,28 @@ class _ClassCard extends ConsumerWidget {
           style: const TextStyle(color: Colors.white70, fontSize: 9, fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 5),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.3), borderRadius: BorderRadius.circular(10)),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.people, color: Colors.white, size: 12),
-              const SizedBox(width: 4),
-              Text(
-                '${data.safeInt('aforoActual')}/${data.safeInt('aforoMaximo', defaultValue: 12)}',
-                style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
-              ),
-            ],
-          ),
-        ),
+        if (_isStaff)
+          GestureDetector(
+            onTap: () => _showAttendeesSheet(context),
+            behavior: HitTestBehavior.opaque,
+            child: aforoChip,
+          )
+        else
+          aforoChip,
       ],
+    );
+  }
+
+  void _showAttendeesSheet(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => _AttendeesSheet(
+        classId: classId,
+        className: localizedName,
+      ),
     );
   }
 
@@ -396,6 +439,164 @@ class _ClassCard extends ConsumerWidget {
       child: isProcessing
           ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
           : Text(label, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 10)),
+    );
+  }
+}
+
+// ════════════════════════════════════════════════════════════════
+// LISTA DE APUNTADOS — solo visible para staff (admin/profesional)
+// ════════════════════════════════════════════════════════════════
+
+/// BottomSheet con la lista de personas apuntadas a una clase.
+///
+/// Solo se invoca desde `_ClassCard` cuando `userRole != 'cliente'`.
+/// Caso de uso: el profesional consulta quién está apuntado para detectar
+/// asistentes que no han reservado y consumirles el token con el QR scanner.
+class _AttendeesSheet extends ConsumerWidget {
+  const _AttendeesSheet({required this.classId, required this.className});
+  final String classId;
+  final String className;
+
+  /// Convierte "David Baydal Munera" → "David Baydal".
+  /// "Laura Garcia" → "Laura Garcia". "Solo" → "Solo".
+  String _firstNameAndSurname(String fullName) {
+    final parts = fullName.trim().split(RegExp(r'\s+'));
+    if (parts.length >= 2) return '${parts[0]} ${parts[1]}';
+    return fullName.trim();
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final db = ref.watch(firebaseFirestoreProvider);
+    return SafeArea(
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.65,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 12),
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey.shade300,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Text(
+                className,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w900,
+                  fontSize: 16,
+                  color: Color(0xFF1E293B),
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+            const SizedBox(height: 4),
+            const Text(
+              'Personas apuntadas',
+              style: TextStyle(color: Colors.black54, fontSize: 12),
+            ),
+            const SizedBox(height: 12),
+            const Divider(height: 1),
+            Flexible(
+              child: StreamBuilder<QuerySnapshot>(
+                stream: db
+                    .collection('bookings')
+                    .where('classId', isEqualTo: classId)
+                    .snapshots(),
+                builder: (context, snap) {
+                  if (snap.connectionState == ConnectionState.waiting) {
+                    return const Padding(
+                      padding: EdgeInsets.all(32),
+                      child: Center(child: CircularProgressIndicator()),
+                    );
+                  }
+                  if (snap.hasError) {
+                    return Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Center(
+                        child: Text(
+                          'Error: ${snap.error}',
+                          style: const TextStyle(color: Colors.red),
+                        ),
+                      ),
+                    );
+                  }
+                  final docs = snap.data?.docs ?? [];
+                  if (docs.isEmpty) {
+                    return const Padding(
+                      padding: EdgeInsets.all(32),
+                      child: Center(
+                        child: Text(
+                          'Aún no hay apuntados',
+                          style: TextStyle(
+                            color: Colors.black54,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ),
+                    );
+                  }
+                  // Ordenar alfabéticamente por nombre.
+                  final names = docs
+                      .map((d) {
+                        final m = d.data()! as Map<String, dynamic>;
+                        final raw = (m['userName'] as String?) ??
+                            (m['userEmail'] as String?) ??
+                            'Sin nombre';
+                        return _firstNameAndSurname(raw);
+                      })
+                      .toList()
+                    ..sort(
+                      (a, b) =>
+                          a.toLowerCase().compareTo(b.toLowerCase()),
+                    );
+                  return ListView.separated(
+                    padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+                    itemCount: names.length,
+                    separatorBuilder: (_, __) => const Divider(height: 1),
+                    itemBuilder: (_, i) {
+                      final name = names[i];
+                      return ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        dense: true,
+                        leading: CircleAvatar(
+                          radius: 16,
+                          backgroundColor: const Color(0xFF009688)
+                              .withValues(alpha: 0.15),
+                          child: Text(
+                            name.isNotEmpty ? name[0].toUpperCase() : '?',
+                            style: const TextStyle(
+                              color: Color(0xFF009688),
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ),
+                        title: Text(
+                          '— $name',
+                          style: const TextStyle(
+                            color: Color(0xFF1E293B),
+                            fontSize: 14,
+                          ),
+                        ),
+                      );
+                    },
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
+        ),
+      ),
     );
   }
 }
