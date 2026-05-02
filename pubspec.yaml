@@ -1,7 +1,7 @@
 name: salufit_app
 description: Aplicación de gestión para Centro Salufit.
 publish_to: 'none'
-version: 2.0.8+138
+version: 2.0.9+140
 
 environment:
   sdk: '>=3.8.0 <4.0.0'
