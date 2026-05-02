@@ -139,6 +139,7 @@ class _ConversationTableWidgetState extends State<ConversationTableWidget> {
       child: DropdownButtonFormField<String?>(
         key: ValueKey('dropdown_${label}_${value ?? 'null'}'),
         initialValue: value,
+        isExpanded: true,
         decoration: InputDecoration(
           isDense: true,
           labelText: label,
