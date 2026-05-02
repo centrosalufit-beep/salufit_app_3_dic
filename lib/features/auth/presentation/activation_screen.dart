@@ -1,6 +1,9 @@
+import 'dart:convert';
 import 'dart:developer' as dev;
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:http/http.dart' as http;
 import 'package:salufit_app/core/providers/firebase_providers.dart';
 import 'package:salufit_app/core/theme/app_colors.dart';
 import 'package:salufit_app/features/auth/presentation/activation_screen_helper.dart';
@@ -32,15 +35,43 @@ class _ActivationScreenState extends ConsumerState<ActivationScreen> {
     try {
       dev.log('>>> [ACTIVACION] Verificando estado via Cloud Function');
 
-      final result = await ref
-          .read(firebaseFunctionsProvider)
-          .httpsCallable('checkAccountStatus')
-          .call<Map<String, dynamic>>({
-        'email': email,
-        'historyId': idH,
-      });
-
-      final status = result.data['status'] as String?;
+      // El plugin cloud_functions de Flutter NO funciona en Windows desktop
+      // (MethodChannel no implementado): falla con `firebase_functions/unknown`.
+      // Usamos la versión HTTP (`checkAccountStatusHttp`) en Windows y la
+      // versión `onCall` en mobile/web/macOS donde el plugin sí funciona.
+      final isWindows = !kIsWeb && defaultTargetPlatform == TargetPlatform.windows;
+      final String? status;
+      if (isWindows) {
+        final url = Uri.parse(
+          'https://us-central1-salufitnewapp.cloudfunctions.net/checkAccountStatusHttp',
+        );
+        final response = await http.post(
+          url,
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({'email': email, 'historyId': idH}),
+        );
+        if (response.statusCode == 429) {
+          throw Exception(t.activationServerError);
+        }
+        if (response.statusCode != 200) {
+          final data = response.body.isEmpty
+              ? <String, dynamic>{}
+              : jsonDecode(response.body) as Map<String, dynamic>;
+          final err = (data['error'] as String?) ?? t.activationServerError;
+          throw Exception(err);
+        }
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        status = data['status'] as String?;
+      } else {
+        final result = await ref
+            .read(firebaseFunctionsProvider)
+            .httpsCallable('checkAccountStatus')
+            .call<Map<String, dynamic>>({
+          'email': email,
+          'historyId': idH,
+        });
+        status = result.data['status'] as String?;
+      }
 
       if (status == 'ALREADY_REGISTERED') {
         dev.log('>>> [ACTIVACION] Usuario ya registrado. Disparando Smart-Popup.');

@@ -24,7 +24,10 @@ class _ConversationTableWidgetState extends State<ConversationTableWidget> {
   String? _filterEstado;
   String? _filterIntencion;
   String _searchQuery = '';
-  bool _onlyActive = false;
+  // Por defecto activado: oculta resueltas/cerradas/no_registrado para
+  // que el panel solo muestre conversaciones donde aún hay algo por
+  // hacer. Pulsando el chip se desactiva y se ven todas.
+  bool _onlyActive = true;
 
   List<WhatsAppConversation> get _filtered {
     final q = _searchQuery.trim().toLowerCase();

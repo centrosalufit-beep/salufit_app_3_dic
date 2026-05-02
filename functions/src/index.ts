@@ -139,11 +139,122 @@ async function writeAudit(entry: {
 // ═══════════════════════════════════════════════════════════════
 // ACTIVACIÓN — Prevención de enumeración + rate limit
 // ═══════════════════════════════════════════════════════════════
+/**
+ * Lógica core de la activación. Reusable desde onCall (mobile) y onRequest
+ * (Windows desktop, donde el plugin cloud_functions de Flutter no funciona).
+ *
+ * Devuelve `{status, ...}` o lanza HttpsError. Asume que rateLimit y
+ * validación de input ya pasaron.
+ */
+async function _doCheckAccountStatus(
+    emailRaw: string,
+    historyIdRaw: string,
+): Promise<{ status: string }> {
+    const idString = historyIdRaw.padStart(6, "0");
+    const idNumber = parseInt(historyIdRaw, 10);
+
+    // ¿Ya está activado?
+    const userSnapshot = await db.collection("users_app")
+        .where("email", "==", emailRaw)
+        .limit(1)
+        .get();
+
+    if (!userSnapshot.empty) {
+        await writeAudit({
+            tipo: "ACTIVATION_ALREADY_REGISTERED",
+            userId: null,
+            metadata: { emailHash: Buffer.from(emailRaw).toString("base64").slice(0, 16) },
+            status: "SUCCESS",
+        });
+        return { status: "ALREADY_REGISTERED" };
+    }
+
+    // Buscar en bbdd y legacy_import
+    const [bbddSnapshot, legacySnapshot] = await Promise.all([
+        db.collection("bbdd").where("email", "==", emailRaw).get(),
+        db.collection("legacy_import").where("email", "==", emailRaw).get(),
+    ]);
+
+    const allDocs = [...bbddSnapshot.docs, ...legacySnapshot.docs];
+
+    // Prevención de enumeración: siempre misma respuesta genérica si falla
+    if (allDocs.length === 0) {
+        await writeAudit({
+            tipo: "ACTIVATION_NOT_FOUND",
+            userId: null,
+            status: "FAILURE",
+        });
+        return { status: "NOT_FOUND" };
+    }
+
+    const match = allDocs.find((doc) => {
+        const d = doc.data();
+        const dbId = d.historyId || d.idH || d.numero || d.numHistoria;
+        return dbId == idString || dbId == idNumber || dbId == historyIdRaw;
+    });
+
+    if (!match) {
+        await writeAudit({
+            tipo: "ACTIVATION_INVALID_HISTORY",
+            userId: null,
+            status: "FAILURE",
+        });
+        return { status: "NOT_FOUND" };
+    }
+
+    const matchData = match.data();
+
+    let uid: string;
+    try {
+        const existingUser = await admin.auth().getUserByEmail(emailRaw);
+        uid = existingUser.uid;
+    } catch {
+        const newUser = await admin.auth().createUser({
+            email: emailRaw,
+            displayName: matchData.nombreCompleto || matchData.nombre || emailRaw,
+        });
+        uid = newUser.uid;
+    }
+
+    // Resolver rol según whitelist de admins / overrides en bbdd.
+    const ADMIN_EMAILS = new Set<string>([
+        "inesmariaoc07@gmail.com",
+    ]);
+    let resolvedRole: string = (matchData.rolDefault as string | undefined) || "";
+    if (!resolvedRole) {
+        resolvedRole = ADMIN_EMAILS.has(emailRaw) ? "admin" : "cliente";
+    }
+
+    await db.collection("users_app").doc(uid).set({
+        email: emailRaw,
+        nombre: matchData.nombre || "",
+        nombreCompleto: matchData.nombreCompleto || matchData.nombre || "",
+        numHistoria: matchData.numHistoria || matchData.historyId || matchData.idH || historyIdRaw,
+        rol: resolvedRole,
+        activo: true,
+        passwordUpdated: false,
+        dateOfBirthSet: false,
+        consentVersion: null,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        activatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+
+    await writeAudit({
+        tipo: "ACTIVATION_SUCCESS",
+        userId: uid,
+        status: "SUCCESS",
+    });
+
+    return { status: "ACTIVATION_PENDING" };
+}
+
+/**
+ * Versión `onCall` para mobile (donde el plugin cloud_functions funciona).
+ */
 export const checkAccountStatus = functions.https.onCall(async (data, context) => {
     const emailRaw = (data?.email as string | undefined)?.trim().toLowerCase() || "";
     const historyIdRaw = (data?.historyId as string | undefined)?.toString().trim() || "";
 
-    // Validación de input
     if (!isValidEmail(emailRaw)) {
         throw new functions.https.HttpsError("invalid-argument", "Email inválido.");
     }
@@ -151,118 +262,74 @@ export const checkAccountStatus = functions.https.onCall(async (data, context) =
         throw new functions.https.HttpsError("invalid-argument", "Número de historia inválido.");
     }
 
-    // Rate limit — 5 intentos cada 15 minutos por email
     const rateLimitKey = `activate_${Buffer.from(emailRaw).toString("base64").slice(0, 32)}`;
     await checkRateLimit(rateLimitKey, 5, 900);
 
-    const idString = historyIdRaw.padStart(6, "0");
-    const idNumber = parseInt(historyIdRaw, 10);
-
     try {
-        // ¿Ya está activado?
-        const userSnapshot = await db.collection("users_app")
-            .where("email", "==", emailRaw)
-            .limit(1)
-            .get();
-
-        if (!userSnapshot.empty) {
-            await writeAudit({
-                tipo: "ACTIVATION_ALREADY_REGISTERED",
-                userId: null,
-                metadata: { emailHash: Buffer.from(emailRaw).toString("base64").slice(0, 16) },
-                status: "SUCCESS",
-            });
-            return { status: "ALREADY_REGISTERED" };
-        }
-
-        // Buscar en bbdd y legacy_import
-        const [bbddSnapshot, legacySnapshot] = await Promise.all([
-            db.collection("bbdd").where("email", "==", emailRaw).get(),
-            db.collection("legacy_import").where("email", "==", emailRaw).get(),
-        ]);
-
-        const allDocs = [...bbddSnapshot.docs, ...legacySnapshot.docs];
-
-        // Prevención de enumeración: siempre misma respuesta genérica si falla
-        if (allDocs.length === 0) {
-            await writeAudit({
-                tipo: "ACTIVATION_NOT_FOUND",
-                userId: null,
-                status: "FAILURE",
-            });
-            // Respuesta que no revela si el email existe o no
-            return { status: "NOT_FOUND" };
-        }
-
-        const match = allDocs.find((doc) => {
-            const d = doc.data();
-            const dbId = d.historyId || d.idH || d.numero || d.numHistoria;
-            return dbId == idString || dbId == idNumber || dbId == historyIdRaw;
-        });
-
-        if (!match) {
-            await writeAudit({
-                tipo: "ACTIVATION_INVALID_HISTORY",
-                userId: null,
-                status: "FAILURE",
-            });
-            return { status: "NOT_FOUND" };
-        }
-
-        const matchData = match.data();
-
-        let uid: string;
-        try {
-            const existingUser = await admin.auth().getUserByEmail(emailRaw);
-            uid = existingUser.uid;
-        } catch {
-            const newUser = await admin.auth().createUser({
-                email: emailRaw,
-                displayName: matchData.nombreCompleto || matchData.nombre || emailRaw,
-            });
-            uid = newUser.uid;
-        }
-
-        // Resolver rol según whitelist de admins / overrides en bbdd.
-        // - Si bbdd doc tiene `rolDefault` lo usamos.
-        // - Si el email está en la lista hardcodeada de admins → "admin".
-        // - Si no, "cliente" (default histórico).
-        const ADMIN_EMAILS = new Set<string>([
-            "inesmariaoc07@gmail.com",
-        ]);
-        let resolvedRole: string = (matchData.rolDefault as string | undefined) || "";
-        if (!resolvedRole) {
-            resolvedRole = ADMIN_EMAILS.has(emailRaw) ? "admin" : "cliente";
-        }
-
-        await db.collection("users_app").doc(uid).set({
-            email: emailRaw,
-            nombre: matchData.nombre || "",
-            nombreCompleto: matchData.nombreCompleto || matchData.nombre || "",
-            numHistoria: matchData.numHistoria || matchData.historyId || matchData.idH || historyIdRaw,
-            rol: resolvedRole,
-            activo: true,
-            // Marcadores de migración pendiente (el cliente completará via MigrationGate)
-            passwordUpdated: false,
-            dateOfBirthSet: false,
-            consentVersion: null,
-            createdAt: admin.firestore.FieldValue.serverTimestamp(),
-            activatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        }, { merge: true });
-
-        await writeAudit({
-            tipo: "ACTIVATION_SUCCESS",
-            userId: uid,
-            status: "SUCCESS",
-        });
-
-        return { status: "ACTIVATION_PENDING" };
+        return await _doCheckAccountStatus(emailRaw, historyIdRaw);
     } catch (error) {
         if (error instanceof functions.https.HttpsError) throw error;
         console.error("Error en checkAccountStatus");
         throw new functions.https.HttpsError("internal", "Error al procesar la solicitud.");
     }
 });
+
+/**
+ * Versión `onRequest` (HTTP) para Windows desktop, donde el plugin
+ * cloud_functions de Flutter no soporta MethodChannel y falla con
+ * `firebase_functions/unknown`.
+ *
+ * Acceso público (la activación es pre-auth: el usuario aún no tiene
+ * cuenta en Firebase Auth). Se protege con:
+ * - Rate limit por email (5 intentos / 15 min, mismo que onCall).
+ * - Validación estricta de input.
+ * - Misma respuesta genérica para prevenir enumeración.
+ *
+ * Body JSON: { email: string, historyId: string }
+ * Respuesta: { status: "ALREADY_REGISTERED" | "NOT_FOUND" | "ACTIVATION_PENDING" }
+ */
+export const checkAccountStatusHttp = onRequest(
+    { region: "us-central1", cors: true },
+    async (req, res) => {
+        if (req.method !== "POST") {
+            res.status(405).json({ error: "Method not allowed" });
+            return;
+        }
+
+        const body = (req.body || {}) as { email?: string; historyId?: string };
+        const emailRaw = (body.email || "").trim().toLowerCase();
+        const historyIdRaw = (body.historyId || "").toString().trim();
+
+        if (!isValidEmail(emailRaw)) {
+            res.status(400).json({ error: "Email inválido." });
+            return;
+        }
+        if (!isValidHistoryId(historyIdRaw)) {
+            res.status(400).json({ error: "Número de historia inválido." });
+            return;
+        }
+
+        const rateLimitKey = `activate_${Buffer.from(emailRaw).toString("base64").slice(0, 32)}`;
+        try {
+            await checkRateLimit(rateLimitKey, 5, 900);
+        } catch (e) {
+            if (e instanceof functions.https.HttpsError && e.code === "resource-exhausted") {
+                res.status(429).json({ error: e.message });
+                return;
+            }
+            res.status(500).json({ error: "Rate limit error" });
+            return;
+        }
+
+        try {
+            const result = await _doCheckAccountStatus(emailRaw, historyIdRaw);
+            res.status(200).json(result);
+        } catch (error) {
+            console.error("Error en checkAccountStatusHttp", error);
+            res.status(500).json({ error: "Error al procesar la solicitud." });
+        }
+    },
+);
 
 // ═══════════════════════════════════════════════════════════════
 // CONSUMO DE TOKEN POR QR (asistencia sin reserva / walk-in)
