@@ -22,6 +22,13 @@ void main() async {
     DeviceOrientation.portraitDown,
   ]);
 
+  // Crashlytics, Analytics y App Check solo tienen plugin nativo en
+  // Android, iOS y macOS. En Windows/Linux/Web fallan las plugin constants.
+  final supportsMobileFirebase = !kIsWeb &&
+      (defaultTargetPlatform == TargetPlatform.android ||
+          defaultTargetPlatform == TargetPlatform.iOS ||
+          defaultTargetPlatform == TargetPlatform.macOS);
+
   try {
     await initializeDateFormatting('es');
 
@@ -29,44 +36,48 @@ void main() async {
       options: DefaultFirebaseOptions.currentPlatform,
     );
 
-    // Crashlytics: reporta errores Flutter y asíncronos automáticamente.
-    // En debug no envía nada (para no polucionar el dashboard).
-    await FirebaseCrashlytics.instance
-        .setCrashlyticsCollectionEnabled(!kDebugMode);
+    if (supportsMobileFirebase) {
+      // Crashlytics: reporta errores Flutter y asíncronos automáticamente.
+      // En debug no envía nada (para no polucionar el dashboard).
+      await FirebaseCrashlytics.instance
+          .setCrashlyticsCollectionEnabled(!kDebugMode);
 
-    FlutterError.onError = (details) {
+      FlutterError.onError = (details) {
+        if (kDebugMode) {
+          FlutterError.presentError(details);
+        } else {
+          FirebaseCrashlytics.instance.recordFlutterFatalError(details);
+        }
+      };
+
+      PlatformDispatcher.instance.onError = (error, stack) {
+        if (!kDebugMode) {
+          FirebaseCrashlytics.instance.recordError(error, stack);
+        }
+        return true;
+      };
+
+      // Analytics: solo en producción, respetando consent futuro.
+      await FirebaseAnalytics.instance
+          .setAnalyticsCollectionEnabled(!kDebugMode);
+
       if (kDebugMode) {
-        FlutterError.presentError(details);
+        await FirebaseAppCheck.instance.activate(
+          androidProvider: AndroidProvider.debug,
+          appleProvider: AppleProvider.debug,
+        );
       } else {
-        FirebaseCrashlytics.instance.recordFlutterFatalError(details);
+        await FirebaseAppCheck.instance.activate();
       }
-    };
-
-    PlatformDispatcher.instance.onError = (error, stack) {
-      if (!kDebugMode) {
-        FirebaseCrashlytics.instance.recordError(error, stack);
-      }
-      return true;
-    };
-
-    // Analytics: solo en producción, respetando consent futuro.
-    await FirebaseAnalytics.instance
-        .setAnalyticsCollectionEnabled(!kDebugMode);
-
-    if (kDebugMode) {
-      await FirebaseAppCheck.instance.activate(
-        androidProvider: AndroidProvider.debug,
-        appleProvider: AppleProvider.debug,
-      );
-    } else {
-      await FirebaseAppCheck.instance.activate();
     }
   } catch (e, stack) {
     debugPrint('Error Crítico en main: $e');
     // Si Firebase ya se inicializó pero algo falló después, reporta.
-    try {
-      FirebaseCrashlytics.instance.recordError(e, stack);
-    } catch (_) {}
+    if (supportsMobileFirebase) {
+      try {
+        FirebaseCrashlytics.instance.recordError(e, stack);
+      } catch (_) {}
+    }
   }
 
   runApp(
