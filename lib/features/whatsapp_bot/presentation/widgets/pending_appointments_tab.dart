@@ -29,24 +29,38 @@ class PendingAppointmentsTab extends ConsumerWidget {
       data: (appts) {
         if (appts.isEmpty) {
           return Center(
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
+            child: Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 24,
+                vertical: 20,
+              ),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.85),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: const Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.event_available,
-                      size: 64, color: Colors.grey.shade300),
-                  const SizedBox(height: 12),
+                  Icon(
+                    Icons.event_available,
+                    size: 56,
+                    color: Color(0xFF1E293B),
+                  ),
+                  SizedBox(height: 12),
                   Text(
                     'Sin citas pendientes de validación',
-                    style: TextStyle(color: Colors.grey.shade600),
+                    style: TextStyle(
+                      color: Color(0xFF1E293B),
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
-                  const SizedBox(height: 4),
+                  SizedBox(height: 6),
                   Text(
                     'Las citas que un paciente nuevo haya elegido por '
                     'WhatsApp aparecerán aquí esperando aprobación.',
                     style: TextStyle(
-                      color: Colors.grey.shade400,
+                      color: Color(0xFF454545),
                       fontSize: 12,
                     ),
                     textAlign: TextAlign.center,

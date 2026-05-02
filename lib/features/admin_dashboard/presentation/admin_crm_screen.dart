@@ -594,10 +594,7 @@ class _AdminCrmScreenState extends State<AdminCrmScreen> {
           children: [
             const Icon(Icons.leaderboard, size: 22),
             const SizedBox(width: 10),
-            Text(
-              _isAdmin ? 'Rendimiento Equipo' : 'Mi Rendimiento',
-              style: const TextStyle(fontWeight: FontWeight.bold),
-            ),
+            Text(_isAdmin ? 'Rendimiento Equipo' : 'Mi Rendimiento'),
           ],
         ),
         actions: [

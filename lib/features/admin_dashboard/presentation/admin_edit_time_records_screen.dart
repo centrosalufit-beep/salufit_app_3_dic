@@ -291,11 +291,23 @@ class _AdminEditTimeRecordsScreenState
                       }
                       final docs = snapshot.data!.docs;
                       if (docs.isEmpty) {
-                        return const Center(
-                          child: Text(
-                            'No hay registros para este día.',
-                            style:
-                                TextStyle(color: Colors.white70, fontSize: 14),
+                        return Center(
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 10,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.85),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: const Text(
+                              'No hay registros para este día.',
+                              style: TextStyle(
+                                color: Color(0xFF1E293B),
+                                fontSize: 14,
+                              ),
+                            ),
                           ),
                         );
                       }

@@ -115,7 +115,14 @@ class AdminAnalysisScreen extends ConsumerWidget {
         children: [
           if (user != null) _ClockingStatusCard(userId: user.uid),
           const SizedBox(height: 24),
-          Text('Métricas del Sistema', style: TextStyle(color: Colors.white.withValues(alpha: 0.95), fontWeight: FontWeight.bold, fontSize: 18)),
+          const Text(
+            'Métricas del Sistema',
+            style: TextStyle(
+              color: Color(0xFF1E293B),
+              fontWeight: FontWeight.bold,
+              fontSize: 18,
+            ),
+          ),
           const SizedBox(height: 16),
           analysisState.when(
             data: (metrics) => Column(

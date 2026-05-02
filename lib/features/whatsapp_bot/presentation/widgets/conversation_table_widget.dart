@@ -166,25 +166,43 @@ class _ConversationTableWidgetState extends State<ConversationTableWidget> {
   Widget _buildTable(List<WhatsAppConversation> conversations) {
     if (conversations.isEmpty) {
       return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
+        child: Container(
+          padding: const EdgeInsets.symmetric(
+            horizontal: 28,
+            vertical: 22,
+          ),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.85),
+            borderRadius: BorderRadius.circular(14),
+          ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.smart_toy, size: 48, color: Colors.grey.shade300),
+              const Icon(
+                Icons.smart_toy,
+                size: 48,
+                color: Color(0xFF1E293B),
+              ),
               const SizedBox(height: 12),
               Text(
                 widget.conversations.isEmpty
                     ? 'Sin conversaciones aún'
                     : 'Ningún resultado con los filtros activos',
-                style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
+                style: const TextStyle(
+                  color: Color(0xFF1E293B),
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
-              const SizedBox(height: 4),
+              const SizedBox(height: 6),
               Text(
                 widget.conversations.isEmpty
                     ? 'El bot las irá registrando aquí cuando los pacientes interactúen.'
                     : 'Cambia los filtros o pulsa "Limpiar".',
-                style: TextStyle(color: Colors.grey.shade400, fontSize: 12),
+                style: const TextStyle(
+                  color: Color(0xFF454545),
+                  fontSize: 12,
+                ),
               ),
             ],
           ),

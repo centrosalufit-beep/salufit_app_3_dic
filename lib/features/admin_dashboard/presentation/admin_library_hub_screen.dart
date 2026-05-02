@@ -35,12 +35,9 @@ class _AdminLibraryHubScreenState extends State<AdminLibraryHubScreen> with Sing
     return Scaffold(
       backgroundColor: Colors.transparent,
       appBar: AppBar(
-        title: const Text('Librería Central', style: TextStyle(fontWeight: FontWeight.bold)),
+        title: const Text('Librería Central'),
         bottom: TabBar(
           controller: _tabController,
-          labelColor: Colors.tealAccent,
-          unselectedLabelColor: Colors.white70,
-          indicatorColor: Colors.tealAccent,
           tabs: const [
             Tab(text: 'EJERCICIOS', icon: Icon(Icons.fitness_center, size: 20)),
             Tab(text: 'PLANTILLAS LEGALES', icon: Icon(Icons.gavel, size: 20)),

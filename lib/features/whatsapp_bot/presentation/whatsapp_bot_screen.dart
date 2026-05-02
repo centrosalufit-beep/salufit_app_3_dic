@@ -43,14 +43,9 @@ class _WhatsAppBotScreenState extends ConsumerState<WhatsAppBotScreen>
       backgroundColor: Colors.transparent,
       appBar: AppBar(
         title: const Text('Bot WhatsApp'),
-        backgroundColor: const Color(0xFF1E293B),
-        foregroundColor: Colors.white,
         bottom: TabBar(
           controller: _tabController,
           isScrollable: true,
-          indicatorColor: AppColors.primary,
-          labelColor: Colors.white,
-          unselectedLabelColor: Colors.white70,
           tabs: const [
             Tab(icon: Icon(Icons.chat), text: 'Conversaciones'),
             Tab(icon: Icon(Icons.person_add), text: 'Leads'),

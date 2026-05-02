@@ -73,7 +73,10 @@ class RoleGate extends StatelessWidget {
         }
 
         if (isStaff) {
-          if (_isMobile && role == 'profesional') {
+          // Mobile: tanto admin como profesional usan el mismo dashboard
+          // mobile (Escanear QR + 6 features). En desktop, admin/profesional
+          // van al Hub de Windows.
+          if (_isMobile) {
             return wrapChild(
               ProfessionalDashboardScreen(
                 userId: user.uid,

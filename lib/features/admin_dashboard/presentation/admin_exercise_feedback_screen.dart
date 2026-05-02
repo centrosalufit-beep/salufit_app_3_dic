@@ -27,8 +27,6 @@ class AdminExerciseFeedbackScreen extends ConsumerWidget {
       backgroundColor: Colors.transparent,
       appBar: AppBar(
         title: const Text('Feedback de ejercicios'),
-        backgroundColor: const Color(0xFF1E293B),
-        foregroundColor: Colors.white,
       ),
       body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
         stream: stream,

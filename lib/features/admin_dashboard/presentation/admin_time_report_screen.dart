@@ -376,10 +376,23 @@ class _AdminTimeReportScreenState extends State<AdminTimeReportScreen> {
           // Tabla de resultados
           Expanded(
             child: _records.isEmpty && !_loading
-                ? const Center(
-                    child: Text(
-                      'Sin registros en este período',
-                      style: TextStyle(color: Colors.white70, fontSize: 14),
+                ? Center(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 10,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.85),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Text(
+                        'Sin registros en este período',
+                        style: TextStyle(
+                          color: Color(0xFF1E293B),
+                          fontSize: 14,
+                        ),
+                      ),
                     ),
                   )
                 : ListView.builder(

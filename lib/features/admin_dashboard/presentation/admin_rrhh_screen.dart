@@ -13,12 +13,7 @@ class AdminRRHHScreen extends StatelessWidget {
       child: Scaffold(
         backgroundColor: Colors.transparent,
         appBar: AppBar(
-          backgroundColor: const Color(0xFF1E293B),
-          foregroundColor: Colors.white,
-          title: const Text(
-            'Gestión de RRHH',
-            style: TextStyle(fontWeight: FontWeight.bold),
-          ),
+          title: const Text('Gestión de RRHH'),
           actions: [
             IconButton(
               icon: const Icon(Icons.sync, size: 22),
@@ -27,9 +22,6 @@ class AdminRRHHScreen extends StatelessWidget {
             ),
           ],
           bottom: const TabBar(
-            indicatorColor: Colors.tealAccent,
-            labelColor: Colors.tealAccent,
-            unselectedLabelColor: Colors.white70,
             tabs: <Widget>[
               Tab(icon: Icon(Icons.summarize), text: 'DESCARGAR INFORMES'),
               Tab(icon: Icon(Icons.edit_calendar), text: 'CORREGIR FICHAJES'),

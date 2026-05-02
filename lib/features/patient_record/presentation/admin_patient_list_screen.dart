@@ -20,11 +20,10 @@ class _AdminPatientListScreenState extends State<AdminPatientListScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(backgroundColor: Colors.transparent, 
+    return Scaffold(
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
         title: const Text('Buscador Maestro de Clientes (App)'),
-        backgroundColor: const Color(0xFF00796B),
-        foregroundColor: Colors.white,
       ),
       body: Column(
         children: [

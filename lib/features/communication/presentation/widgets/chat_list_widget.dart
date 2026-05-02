@@ -114,7 +114,7 @@ class ChatListWidget extends StatelessWidget {
                   title: Text(
                     nombre,
                     style: TextStyle(
-                      color: Colors.white,
+                      color: const Color(0xFF1E293B),
                       fontWeight:
                           hasUnread ? FontWeight.bold : FontWeight.normal,
                     ),
@@ -125,8 +125,11 @@ class ChatListWidget extends StatelessWidget {
                       Text(
                         isAdmin ? t.chatRoleAdminUpper : t.chatRoleProfessionalUpper,
                         style: TextStyle(
-                          color: isAdmin ? Colors.orange : Colors.tealAccent,
+                          color: isAdmin
+                              ? Colors.orange.shade800
+                              : const Color(0xFF00796B),
                           fontSize: 10,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                       if (lastMsg.isNotEmpty)
@@ -136,8 +139,8 @@ class ChatListWidget extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             color: hasUnread
-                                ? Colors.white70
-                                : Colors.white38,
+                                ? Colors.black87
+                                : Colors.black54,
                             fontSize: 11,
                           ),
                         ),

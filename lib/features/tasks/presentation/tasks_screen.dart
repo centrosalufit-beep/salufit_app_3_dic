@@ -57,9 +57,6 @@ class _TasksScreenState extends ConsumerState<TasksScreen>
         title: const Text('Tareas'),
         bottom: TabBar(
           controller: _tab,
-          indicatorColor: Colors.tealAccent,
-          labelColor: Colors.white,
-          unselectedLabelColor: Colors.white70,
           tabs: const [
             Tab(icon: Icon(Icons.inbox), text: 'Mis tareas'),
             Tab(icon: Icon(Icons.send), text: 'Asignadas por mí'),
@@ -140,23 +137,33 @@ class _TaskList extends StatelessWidget {
       data: (tasks) {
         if (tasks.isEmpty) {
           return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(
-                  Icons.inbox_outlined,
-                  size: 80,
-                  color: Colors.white38,
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  emptyMessage,
-                  style: const TextStyle(
-                    color: Colors.white70,
-                    fontSize: 16,
+            child: Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 24,
+                vertical: 18,
+              ),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.85),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(
+                    Icons.inbox_outlined,
+                    size: 64,
+                    color: Color(0xFF1E293B),
                   ),
-                ),
-              ],
+                  const SizedBox(height: 12),
+                  Text(
+                    emptyMessage,
+                    style: const TextStyle(
+                      color: Color(0xFF1E293B),
+                      fontSize: 15,
+                    ),
+                  ),
+                ],
+              ),
             ),
           );
         }

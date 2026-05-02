@@ -30,24 +30,38 @@ class LeadsPendingTab extends ConsumerWidget {
       data: (leads) {
         if (leads.isEmpty) {
           return Center(
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
+            child: Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 24,
+                vertical: 20,
+              ),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.85),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: const Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.person_add_alt,
-                      size: 64, color: Colors.grey.shade300),
-                  const SizedBox(height: 12),
+                  Icon(
+                    Icons.person_add_alt,
+                    size: 56,
+                    color: Color(0xFF1E293B),
+                  ),
+                  SizedBox(height: 12),
                   Text(
                     'Sin leads pendientes',
-                    style: TextStyle(color: Colors.grey.shade600),
+                    style: TextStyle(
+                      color: Color(0xFF1E293B),
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
-                  const SizedBox(height: 4),
+                  SizedBox(height: 6),
                   Text(
                     'El bot los irá registrando aquí cuando un número '
                     'desconocido pida cita por WhatsApp.',
                     style: TextStyle(
-                      color: Colors.grey.shade400,
+                      color: Color(0xFF454545),
                       fontSize: 12,
                     ),
                     textAlign: TextAlign.center,
