@@ -1,0 +1,22 @@
+# PLANTILLA — copia este archivo a `android/key.properties` y rellena
+# con los valores REALES del keystore que firma la app en Play Store.
+#
+# El archivo `android/key.properties` está gitignored y NUNCA debe subirse
+# a git: contiene la contraseña del keystore que firma los releases.
+#
+# Para más contexto y troubleshooting, ver BUILD_AAB.md en la raíz.
+
+# Contraseña del keystore (.jks) — la fijaste cuando se generó.
+storePassword=PON_AQUI_LA_PASSWORD_DEL_STORE
+
+# Contraseña de la key específica dentro del keystore. Suele ser la misma
+# que storePassword salvo que se haya configurado distinto.
+keyPassword=PON_AQUI_LA_PASSWORD_DE_LA_KEY
+
+# Alias de la key dentro del keystore. Ver con:
+#   keytool -list -v -keystore android/app/salufit_upload.jks
+keyAlias=upload
+
+# Ruta al .jks RELATIVA a android/app/. Si pones el .jks en android/app/
+# el valor es solo el nombre del archivo.
+storeFile=salufit_upload.jks
