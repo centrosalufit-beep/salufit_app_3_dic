@@ -32,17 +32,27 @@ class RoleGate extends StatelessWidget {
           );
         }
 
+        // ── Caso de error o doc inexistente ───────────────────────
+        // Antes esto disparaba `_forceLogout` con SnackBar invisible
+        // (el contexto se desmontaba al hacer signOut). Ahora mostramos
+        // una pantalla de error explícita con botón visible para que
+        // el usuario sepa exactamente qué pasa.
         if (snapshot.hasError || !snapshot.hasData || !snapshot.data!.exists) {
           debugPrint(
             '🛡️ RoleGate: uid=${user.uid} email=${user.email} '
             'hasError=${snapshot.hasError} hasData=${snapshot.hasData} '
             'exists=${snapshot.data?.exists} error=${snapshot.error}',
           );
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            _forceLogout(context);
-          });
-          return const Scaffold(
-            body: Center(child: CircularProgressIndicator()),
+          return _RoleGateErrorScreen(
+            user: user,
+            errorReason: snapshot.hasError
+                ? 'Error al consultar tu perfil:\n${snapshot.error}'
+                : 'No se ha encontrado tu perfil en la base de datos.\n'
+                    'Esto puede pasar si la activación no terminó correctamente.\n\n'
+                    'Pide al administrador que verifique:\n'
+                    '• Que existe un documento en `users_app` con tu UID:\n'
+                    '  ${user.uid}\n'
+                    '• Que existe una entrada en `bbdd` con tu número de historia.',
           );
         }
 
@@ -50,6 +60,11 @@ class RoleGate extends StatelessWidget {
         final role = (data?['rol'] ?? 'cliente').toString().toLowerCase();
         final termsAccepted = data?['termsAccepted'] as bool? ?? false;
         final isDemo = data?['isDemoAccount'] as bool? ?? false;
+
+        debugPrint(
+          '🛡️ RoleGate OK: uid=${user.uid} email=${user.email} role=$role '
+          'termsAccepted=$termsAccepted isDemo=$isDemo',
+        );
 
         // Clientes deben aceptar términos (salvo cuenta demo)
         if (!termsAccepted && !isDemo && role == 'cliente') {
@@ -95,19 +110,92 @@ class RoleGate extends StatelessWidget {
       },
     );
   }
+}
 
-  Future<void> _forceLogout(BuildContext context) async {
-    await FirebaseAuth.instance.signOut();
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Tu sesión ha caducado o el perfil no es válido. '
-            'Por favor, identifícate de nuevo.',
+/// Pantalla de error visible cuando RoleGate no puede resolver el perfil.
+/// Muestra UID y motivo, y botón explícito para volver al login.
+class _RoleGateErrorScreen extends StatelessWidget {
+  const _RoleGateErrorScreen({
+    required this.user,
+    required this.errorReason,
+  });
+
+  final User user;
+  final String errorReason;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF8FAFC),
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(32),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.shade50,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    Icons.warning_amber_rounded,
+                    color: Colors.orange.shade700,
+                    size: 56,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                const Text(
+                  'No se pudo iniciar sesión',
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF1E293B),
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.grey.shade300),
+                  ),
+                  child: Text(
+                    errorReason,
+                    style: const TextStyle(fontSize: 13, color: Colors.black87),
+                    textAlign: TextAlign.left,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'Email: ${user.email ?? '(sin email)'}',
+                  style: const TextStyle(fontSize: 11, color: Colors.black54),
+                ),
+                const SizedBox(height: 24),
+                SizedBox(
+                  width: 280,
+                  child: ElevatedButton.icon(
+                    onPressed: () async {
+                      await FirebaseAuth.instance.signOut();
+                    },
+                    icon: const Icon(Icons.logout),
+                    label: const Text('VOLVER AL INICIO'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF009688),
+                      foregroundColor: Colors.white,
+                      minimumSize: const Size.fromHeight(48),
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
-          backgroundColor: Colors.orange,
         ),
-      );
-    }
+      ),
+    );
   }
 }

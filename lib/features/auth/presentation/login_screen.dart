@@ -1,3 +1,5 @@
+import 'dart:developer' as dev;
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:salufit_app/core/services/test_lab_detector.dart';
@@ -52,10 +54,58 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     super.dispose();
   }
 
+  /// Convierte el código de error de Firebase Auth a mensaje legible en
+  /// español. Sin esto, los errores aparecían como exception genérica
+  /// (o silenciosamente, ver bug 2025-05-02).
+  String _readableAuthError(Object error) {
+    if (error is FirebaseAuthException) {
+      switch (error.code) {
+        case 'invalid-credential':
+        case 'wrong-password':
+        case 'user-not-found':
+          return 'Correo o contraseña incorrectos.';
+        case 'invalid-email':
+          return 'El correo no tiene formato válido.';
+        case 'user-disabled':
+          return 'Tu cuenta está deshabilitada. Contacta con el centro.';
+        case 'too-many-requests':
+          return 'Demasiados intentos. Espera unos minutos antes de probar de nuevo.';
+        case 'network-request-failed':
+          return 'Sin conexión a internet. Comprueba tu red.';
+        default:
+          return 'Error al iniciar sesión: ${error.message ?? error.code}';
+      }
+    }
+    return 'Error al iniciar sesión: $error';
+  }
+
   @override
   Widget build(BuildContext context) {
     final loginState = ref.watch(loginControllerProvider);
     final t = AppLocalizations.of(context);
+
+    // Escuchar errores del LoginController y mostrarlos. Antes los errores
+    // se silenciaban y el usuario veía el spinner desaparecer sin feedback.
+    ref.listen<AsyncValue<void>>(loginControllerProvider, (prev, next) {
+      if (next is AsyncError) {
+        dev.log(
+          '>>> [LOGIN] error: ${next.error.runtimeType} '
+          '${(next.error is FirebaseAuthException) ? (next.error as FirebaseAuthException).code : ''}',
+        );
+        if (!mounted) return;
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(
+            SnackBar(
+              content: Text(_readableAuthError(next.error)),
+              backgroundColor: Colors.redAccent,
+              duration: const Duration(seconds: 5),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+      }
+    });
+
     return Scaffold(
       body: Stack(
         children: [
