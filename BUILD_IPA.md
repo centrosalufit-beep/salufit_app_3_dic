@@ -9,6 +9,35 @@ Compañera de [`BUILD_AAB.md`](BUILD_AAB.md). Esta guía es para compilar el
 
 ---
 
+## 🚀 Atajo: script todo-en-uno de comprobaciones + preparación
+
+Si ya has subido versiones iOS antes desde este Mac, lo más probable es
+que tengas casi todo. Ejecuta este script para que verifique TODO de
+golpe (Xcode, CocoaPods, Flutter, certificados, plist, repo, versión)
+y prepare el entorno (`pub get`, `pod install`, `build_runner`,
+`analyze`):
+
+```bash
+cd salufit_app_3_dic     # tras hacer git clone (sec. 2)
+git checkout feat/admin-windows-bot
+bash scripts/check_mac_ios.sh
+```
+
+Si todas las comprobaciones pasan ✅, el script te dejará listo para:
+
+```bash
+flutter build ipa --release
+```
+
+Y luego pasas directamente a la sección **6** de esta guía (subir el
+.ipa con Transporter).
+
+Si alguna comprobación falla ❌, el script te dice exactamente qué
+falta y cómo resolverlo. Los detalles manuales paso a paso siguen
+abajo por si los necesitas.
+
+---
+
 ## 1. Requisitos en el Mac (una sola vez)
 
 ```bash
@@ -82,29 +111,22 @@ signing" está activado, Xcode los gestiona solo. Si no, importa el
 version: 2.0.9+141
 ```
 
-iOS lleva su **propia secuencia de build numbers** en App Store Connect,
-independiente de Android. Antes de compilar:
+**Decisión de proyecto**: la build iOS comparte número con Android para
+mantener correlación entre Play Store y App Store. Sube tal cual con
+**141** y App Store lo aceptará si nunca subiste un build iOS con ≥141.
 
-1. Entra a https://appstoreconnect.apple.com → Salufit iOS → última build.
-2. Si el último build subido es **menor que 141** → 141 se acepta, no
-   tocar `pubspec.yaml`.
-3. Si el último es **mayor o igual que 141** (porque alguna vez subiste
-   builds iOS independientes), edita temporalmente:
-
-```yaml
-version: 2.0.9+250    # cualquier número mayor que el último iOS subido
-```
-
-⚠️ Si modificas eso para iOS, **NO lo commitees** — rompería la
-numeración Android. Tras el upload puedes revertir con `git checkout
-pubspec.yaml`.
-
-Alternativa más limpia (avanzada): pasar `--build-number` al comando
-de build sin tocar `pubspec.yaml`:
+Si por casualidad ya subiste un iOS con número ≥141 (porque en algún
+momento iOS y Android se desincronizaron), App Store rechazará la
+subida con `Invalid build number`. En ese caso compila con un número
+mayor pasándolo por flag (sin tocar `pubspec.yaml` para no romper la
+correlación con Android):
 
 ```bash
-flutter build ipa --release --build-number=250
+flutter build ipa --release --build-number=NNN
 ```
+
+Donde `NNN` es mayor que el último iOS subido. Tras la subida no hay
+nada que revertir — el `pubspec.yaml` sigue en 141 para Android.
 
 ---
 
