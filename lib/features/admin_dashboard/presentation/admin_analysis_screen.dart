@@ -1,8 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:salufit_app/core/utils/safe_parsing_extensions.dart';
 
@@ -91,7 +89,6 @@ class AdminAnalysisScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final user = FirebaseAuth.instance.currentUser;
     final analysisState = ref.watch(adminAnalysisProvider);
 
     return Scaffold(
@@ -113,8 +110,6 @@ class AdminAnalysisScreen extends ConsumerWidget {
       body: ListView(
         padding: const EdgeInsets.all(24),
         children: [
-          if (user != null) _ClockingStatusCard(userId: user.uid),
-          const SizedBox(height: 24),
           const Text(
             'Métricas del Sistema',
             style: TextStyle(
@@ -468,64 +463,6 @@ class _NonRenewedList extends StatelessWidget {
               ],
             );
           },
-        );
-      },
-    );
-  }
-}
-
-class _ClockingStatusCard extends StatelessWidget {
-  const _ClockingStatusCard({required this.userId});
-  final String userId;
-
-  @override
-  Widget build(BuildContext context) {
-    return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('timeClockRecords')
-          .where('userId', isEqualTo: userId)
-          .limit(20)
-          .snapshots(),
-      builder: (context, snapshot) {
-        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-          return const Card(child: ListTile(title: Text('Sin registros de jornada hoy')));
-        }
-        // Ordenar en código para evitar índice compuesto
-        final sorted = snapshot.data!.docs.toList()
-          ..sort((a, b) {
-            final tsA = (a.get('timestamp') as Timestamp?)?.millisecondsSinceEpoch ?? 0;
-            final tsB = (b.get('timestamp') as Timestamp?)?.millisecondsSinceEpoch ?? 0;
-            return tsB.compareTo(tsA);
-          });
-        final doc = sorted.first;
-        final type = doc.get('type') as String;
-        final timestamp = (doc.get('timestamp') as Timestamp?)?.toDate() ?? DateTime.now();
-        final isClockedIn = type == 'IN';
-
-        return Card(
-          elevation: 4,
-          color: isClockedIn ? Colors.teal.shade700 : Colors.white.withValues(alpha: 0.9),
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: Row(
-              children: [
-                Icon(isClockedIn ? Icons.timer : Icons.timer_off, size: 40, color: isClockedIn ? Colors.white : Colors.grey),
-                const SizedBox(width: 20),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(isClockedIn ? 'JORNADA ACTIVA' : 'FUERA DE JORNADA', 
-                        style: TextStyle(fontWeight: FontWeight.bold, color: isClockedIn ? Colors.white : Colors.black87)),
-                      Text('Último registro: ${DateFormat('HH:mm').format(timestamp)}', 
-                        style: TextStyle(color: isClockedIn ? Colors.white70 : Colors.black54, fontSize: 12)),
-                    ],
-                  ),
-                ),
-                if (isClockedIn) const Text('EN CURSO', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-              ],
-            ),
-          ),
         );
       },
     );

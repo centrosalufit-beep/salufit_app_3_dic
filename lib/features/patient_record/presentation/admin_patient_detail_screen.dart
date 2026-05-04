@@ -73,7 +73,7 @@ class _AdminPatientDetailScreenState extends State<AdminPatientDetailScreen>
   }
 
   Future<void> _subirDocClinico() async {
-    final result = await FilePicker.platform.pickFiles(
+    final result = await FilePicker.pickFiles(
       type: FileType.custom,
       allowedExtensions: <String>['pdf', 'jpg', 'png', 'jpeg'],
     );

@@ -64,10 +64,12 @@ class InitHelper {
     if (!kIsWeb && defaultTargetPlatform != TargetPlatform.windows) {
       // Activa siempre el provider de debug en desarrollo
       await FirebaseAppCheck.instance.activate(
-        androidProvider:
-            kDebugMode ? AndroidProvider.debug : AndroidProvider.playIntegrity,
-        appleProvider:
-            kDebugMode ? AppleProvider.debug : AppleProvider.deviceCheck,
+        providerAndroid: kDebugMode
+            ? const AndroidDebugProvider()
+            : const AndroidPlayIntegrityProvider(),
+        providerApple: kDebugMode
+            ? const AppleDebugProvider()
+            : const AppleDeviceCheckProvider(),
       );
     }
 

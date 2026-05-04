@@ -10,11 +10,11 @@ part of 'material_providers.dart';
 // ignore_for_file: type=lint, type=warning
 
 @ProviderFor(DailyProgress)
-const dailyProgressProvider = DailyProgressProvider._();
+final dailyProgressProvider = DailyProgressProvider._();
 
 final class DailyProgressProvider
     extends $NotifierProvider<DailyProgress, List<String>> {
-  const DailyProgressProvider._()
+  DailyProgressProvider._()
     : super(
         from: null,
         argument: null,
@@ -48,7 +48,6 @@ abstract class _$DailyProgress extends $Notifier<List<String>> {
   @$mustCallSuper
   @override
   void runBuild() {
-    final created = build();
     final ref = this.ref as $Ref<List<String>, List<String>>;
     final element =
         ref.element
@@ -58,16 +57,16 @@ abstract class _$DailyProgress extends $Notifier<List<String>> {
               Object?,
               Object?
             >;
-    element.handleValue(ref, created);
+    element.handleCreate(ref, build);
   }
 }
 
 @ProviderFor(MyAssignments)
-const myAssignmentsProvider = MyAssignmentsProvider._();
+final myAssignmentsProvider = MyAssignmentsProvider._();
 
 final class MyAssignmentsProvider
     extends $StreamNotifierProvider<MyAssignments, List<Map<String, dynamic>>> {
-  const MyAssignmentsProvider._()
+  MyAssignmentsProvider._()
     : super(
         from: null,
         argument: null,
@@ -94,7 +93,6 @@ abstract class _$MyAssignments
   @$mustCallSuper
   @override
   void runBuild() {
-    final created = build();
     final ref =
         this.ref
             as $Ref<
@@ -112,12 +110,12 @@ abstract class _$MyAssignments
               Object?,
               Object?
             >;
-    element.handleValue(ref, created);
+    element.handleCreate(ref, build);
   }
 }
 
 @ProviderFor(exerciseDetails)
-const exerciseDetailsProvider = ExerciseDetailsFamily._();
+final exerciseDetailsProvider = ExerciseDetailsFamily._();
 
 final class ExerciseDetailsProvider
     extends
@@ -129,7 +127,7 @@ final class ExerciseDetailsProvider
     with
         $FutureModifier<Map<String, dynamic>?>,
         $FutureProvider<Map<String, dynamic>?> {
-  const ExerciseDetailsProvider._({
+  ExerciseDetailsProvider._({
     required ExerciseDetailsFamily super.from,
     required String? super.argument,
   }) : super(
@@ -177,7 +175,7 @@ String _$exerciseDetailsHash() => r'5cd9342ff20833735915f2f048d33fe91d691b5f';
 
 final class ExerciseDetailsFamily extends $Family
     with $FunctionalFamilyOverride<FutureOr<Map<String, dynamic>?>, String?> {
-  const ExerciseDetailsFamily._()
+  ExerciseDetailsFamily._()
     : super(
         retry: null,
         name: r'exerciseDetailsProvider',

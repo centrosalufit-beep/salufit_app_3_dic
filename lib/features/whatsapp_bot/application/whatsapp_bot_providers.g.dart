@@ -12,7 +12,7 @@ part of 'whatsapp_bot_providers.dart';
 /// la última interacción (descendente). Limit 100 para no saturar la UI.
 
 @ProviderFor(whatsappConversations)
-const whatsappConversationsProvider = WhatsappConversationsProvider._();
+final whatsappConversationsProvider = WhatsappConversationsProvider._();
 
 /// Stream con las conversaciones más recientes del bot, ordenadas por
 /// la última interacción (descendente). Limit 100 para no saturar la UI.
@@ -29,7 +29,7 @@ final class WhatsappConversationsProvider
         $StreamProvider<List<WhatsAppConversation>> {
   /// Stream con las conversaciones más recientes del bot, ordenadas por
   /// la última interacción (descendente). Limit 100 para no saturar la UI.
-  const WhatsappConversationsProvider._()
+  WhatsappConversationsProvider._()
     : super(
         from: null,
         argument: null,
@@ -62,7 +62,7 @@ String _$whatsappConversationsHash() =>
 /// ordenadas por fecha ascendente. Limit 200.
 
 @ProviderFor(upcomingAppointments)
-const upcomingAppointmentsProvider = UpcomingAppointmentsProvider._();
+final upcomingAppointmentsProvider = UpcomingAppointmentsProvider._();
 
 /// Citas activas (futuras o de hoy) en `clinni_appointments`,
 /// ordenadas por fecha ascendente. Limit 200.
@@ -79,7 +79,7 @@ final class UpcomingAppointmentsProvider
         $StreamProvider<List<ClinniAppointment>> {
   /// Citas activas (futuras o de hoy) en `clinni_appointments`,
   /// ordenadas por fecha ascendente. Limit 200.
-  const UpcomingAppointmentsProvider._()
+  UpcomingAppointmentsProvider._()
     : super(
         from: null,
         argument: null,
@@ -111,7 +111,7 @@ String _$upcomingAppointmentsHash() =>
 /// Configuración del bot (`config/whatsapp_bot`). Si no existe, devuelve null.
 
 @ProviderFor(botConfig)
-const botConfigProvider = BotConfigProvider._();
+final botConfigProvider = BotConfigProvider._();
 
 /// Configuración del bot (`config/whatsapp_bot`). Si no existe, devuelve null.
 
@@ -126,7 +126,7 @@ final class BotConfigProvider
         $FutureModifier<Map<String, dynamic>?>,
         $StreamProvider<Map<String, dynamic>?> {
   /// Configuración del bot (`config/whatsapp_bot`). Si no existe, devuelve null.
-  const BotConfigProvider._()
+  BotConfigProvider._()
     : super(
         from: null,
         argument: null,
@@ -160,7 +160,7 @@ String _$botConfigHash() => r'52ef664b9d846cf9a425c03f3daf60fbb15f1a3a';
 /// soporta Windows desktop).
 
 @ProviderFor(importClinniExcel)
-const importClinniExcelProvider = ImportClinniExcelFamily._();
+final importClinniExcelProvider = ImportClinniExcelFamily._();
 
 /// Llama a la Cloud Function `importClinniAppointments` (onRequest) con el
 /// contenido del Excel codificado en base64. Usa http POST con Firebase Auth
@@ -179,7 +179,7 @@ final class ImportClinniExcelProvider
   /// contenido del Excel codificado en base64. Usa http POST con Firebase Auth
   /// ID token en header Authorization Bearer (cloud_functions plugin no
   /// soporta Windows desktop).
-  const ImportClinniExcelProvider._({
+  ImportClinniExcelProvider._({
     required ImportClinniExcelFamily super.from,
     required ({String fileBase64, String fileName}) super.argument,
   }) : super(
@@ -240,7 +240,7 @@ final class ImportClinniExcelFamily extends $Family
           FutureOr<ImportResult>,
           ({String fileBase64, String fileName})
         > {
-  const ImportClinniExcelFamily._()
+  ImportClinniExcelFamily._()
     : super(
         retry: null,
         name: r'importClinniExcelProvider',
@@ -270,7 +270,7 @@ final class ImportClinniExcelFamily extends $Family
 /// contenido del Excel `listado_v26.xlsx` codificado en base64.
 
 @ProviderFor(importClinniPatientsExcel)
-const importClinniPatientsExcelProvider = ImportClinniPatientsExcelFamily._();
+final importClinniPatientsExcelProvider = ImportClinniPatientsExcelFamily._();
 
 /// Llama a la Cloud Function `importClinniPatients` (onRequest) con el
 /// contenido del Excel `listado_v26.xlsx` codificado en base64.
@@ -287,7 +287,7 @@ final class ImportClinniPatientsExcelProvider
         $FutureProvider<ImportPatientsResult> {
   /// Llama a la Cloud Function `importClinniPatients` (onRequest) con el
   /// contenido del Excel `listado_v26.xlsx` codificado en base64.
-  const ImportClinniPatientsExcelProvider._({
+  ImportClinniPatientsExcelProvider._({
     required ImportClinniPatientsExcelFamily super.from,
     required ({String fileBase64, String fileName}) super.argument,
   }) : super(
@@ -348,7 +348,7 @@ final class ImportClinniPatientsExcelFamily extends $Family
           FutureOr<ImportPatientsResult>,
           ({String fileBase64, String fileName})
         > {
-  const ImportClinniPatientsExcelFamily._()
+  ImportClinniPatientsExcelFamily._()
     : super(
         retry: null,
         name: r'importClinniPatientsExcelProvider',

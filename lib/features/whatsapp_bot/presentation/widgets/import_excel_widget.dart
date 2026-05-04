@@ -19,7 +19,7 @@ class _ImportExcelButtonState extends ConsumerState<ImportExcelButton> {
   Future<void> _pickAndImport() async {
     setState(() => _processing = true);
     try {
-      final result = await FilePicker.platform.pickFiles(
+      final result = await FilePicker.pickFiles(
         type: FileType.custom,
         allowedExtensions: ['xlsx', 'xls'],
         withData: true,
@@ -159,7 +159,7 @@ class _ImportPatientsButtonState extends ConsumerState<ImportPatientsButton> {
   Future<void> _pickAndImport() async {
     setState(() => _processing = true);
     try {
-      final result = await FilePicker.platform.pickFiles(
+      final result = await FilePicker.pickFiles(
         type: FileType.custom,
         allowedExtensions: ['xlsx', 'xls'],
         withData: true,

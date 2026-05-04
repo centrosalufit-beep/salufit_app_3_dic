@@ -10,7 +10,6 @@ import 'package:salufit_app/features/admin_dashboard/presentation/admin_crm_scre
 import 'package:salufit_app/features/admin_dashboard/presentation/admin_exercise_feedback_screen.dart';
 import 'package:salufit_app/features/admin_dashboard/presentation/admin_library_hub_screen.dart';
 import 'package:salufit_app/features/admin_dashboard/presentation/admin_renewal_screen.dart';
-import 'package:salufit_app/features/admin_dashboard/presentation/admin_rrhh_screen.dart';
 import 'package:salufit_app/features/bookings/presentation/admin_class_manager_screen.dart';
 import 'package:salufit_app/features/communication/presentation/internal_management_screen.dart';
 import 'package:salufit_app/features/patient_record/presentation/admin_patient_detail_screen.dart';
@@ -31,7 +30,6 @@ enum HomeFeature {
   team,
   crm,
   tasks,
-  rrhh,
   library,
   feedback,
   botWa,
@@ -113,7 +111,6 @@ class _DesktopScaffoldState extends ConsumerState<DesktopScaffold> {
         HomeFeature.team,
         HomeFeature.crm,
         if (_showTasks) HomeFeature.tasks,
-        if (_isAdmin) HomeFeature.rrhh,
         if (_isAdmin) HomeFeature.library,
         HomeFeature.feedback,
         if (_isAdmin) HomeFeature.botWa,
@@ -137,8 +134,6 @@ class _DesktopScaffoldState extends ConsumerState<DesktopScaffold> {
         return 'CRM';
       case HomeFeature.tasks:
         return 'Tareas';
-      case HomeFeature.rrhh:
-        return 'RRHH';
       case HomeFeature.library:
         return 'Librería';
       case HomeFeature.feedback:
@@ -166,8 +161,6 @@ class _DesktopScaffoldState extends ConsumerState<DesktopScaffold> {
         return Icons.leaderboard;
       case HomeFeature.tasks:
         return Icons.task_alt;
-      case HomeFeature.rrhh:
-        return Icons.badge;
       case HomeFeature.library:
         return Icons.auto_stories;
       case HomeFeature.feedback:
@@ -198,8 +191,6 @@ class _DesktopScaffoldState extends ConsumerState<DesktopScaffold> {
         return const Color(0xFF3949AB); // indigo (datos)
       case HomeFeature.tasks:
         return const Color(0xFFE53935); // rojo (urgencia)
-      case HomeFeature.rrhh:
-        return const Color(0xFF8D6E63); // marrón cálido
       case HomeFeature.library:
         return const Color(0xFF5E35B1); // púrpura oscuro
       case HomeFeature.feedback:
@@ -250,8 +241,6 @@ class _DesktopScaffoldState extends ConsumerState<DesktopScaffold> {
           currentUserId: widget.userId,
           currentUserName: _currentUserName,
         );
-      case HomeFeature.rrhh:
-        return const AdminRRHHScreen();
       case HomeFeature.library:
         return const AdminLibraryHubScreen();
       case HomeFeature.feedback:

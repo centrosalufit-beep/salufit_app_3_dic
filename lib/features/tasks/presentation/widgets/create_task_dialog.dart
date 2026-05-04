@@ -46,10 +46,11 @@ class _CreateTaskDialogState extends ConsumerState<CreateTaskDialog> {
       final snap = await ref
           .read(firebaseFirestoreProvider)
           .collection('users_app')
-          .where('role', whereIn: ['admin', 'profesional', 'administrador'])
+          .where('rol', whereIn: ['admin', 'profesional', 'administrador'])
           .get();
+      // Incluimos también al propio usuario para permitir auto-asignación
+      // (recordatorios). Lo marcamos visualmente con "(yo)" al final.
       final list = snap.docs
-          .where((d) => d.id != widget.currentUserId)
           .map((d) {
             final data = d.data();
             final full = (data['nombreCompleto'] as String?) ?? '';
@@ -61,7 +62,11 @@ class _CreateTaskDialogState extends ConsumerState<CreateTaskDialog> {
             final display = combined.isNotEmpty
                 ? combined
                 : (data['email'] as String?) ?? d.id;
-            return _StaffUser(uid: d.id, nombre: display);
+            final isSelf = d.id == widget.currentUserId;
+            return _StaffUser(
+              uid: d.id,
+              nombre: isSelf ? '$display (yo)' : display,
+            );
           })
           .toList()
         ..sort((a, b) => a.nombre.compareTo(b.nombre));

@@ -27,8 +27,6 @@ class ProfessionalDesktopDashboardScreen extends ConsumerWidget {
             children: [
               const _WelcomeHeader(),
               const SizedBox(height: 28),
-              _JornadaCardDesktop(userId: userId),
-              const SizedBox(height: 28),
               LayoutBuilder(
                 builder: (context, constraints) {
                   final isWide = constraints.maxWidth > 900;
@@ -97,122 +95,6 @@ class _WelcomeHeader extends StatelessWidget {
         ),
       ],
     );
-  }
-}
-
-class _JornadaCardDesktop extends ConsumerWidget {
-  const _JornadaCardDesktop({required this.userId});
-  final String userId;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return StreamBuilder<QuerySnapshot>(
-      stream: ref
-          .watch(firebaseFirestoreProvider)
-          .collection('timeClockRecords')
-          .where('userId', isEqualTo: userId)
-          .limit(20)
-          .snapshots(),
-      builder: (context, snapshot) {
-        QueryDocumentSnapshot? lastDoc;
-        if (snapshot.hasData && snapshot.data!.docs.isNotEmpty) {
-          final sorted = snapshot.data!.docs.toList()
-            ..sort((a, b) {
-              final tsA = ((a.data()! as Map<String, dynamic>)['timestamp']
-                          as Timestamp?)
-                      ?.millisecondsSinceEpoch ??
-                  0;
-              final tsB = ((b.data()! as Map<String, dynamic>)['timestamp']
-                          as Timestamp?)
-                      ?.millisecondsSinceEpoch ??
-                  0;
-              return tsB.compareTo(tsA);
-            });
-          lastDoc = sorted.first;
-        }
-        final isClockedIn = lastDoc != null &&
-            (lastDoc.data()! as Map<String, dynamic>)['type'] == 'IN';
-        final lastTime = lastDoc != null
-            ? ((lastDoc.data()! as Map<String, dynamic>)['timestamp']
-                    as Timestamp?)
-                ?.toDate()
-            : null;
-
-        return Container(
-          padding: const EdgeInsets.all(28),
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: isClockedIn
-                  ? [const Color(0xFF009688), const Color(0xFF4DB6AC)]
-                  : [const Color(0xFF455A64), const Color(0xFF78909C)],
-            ),
-            borderRadius: BorderRadius.circular(24),
-            boxShadow: [
-              BoxShadow(
-                color: (isClockedIn
-                        ? const Color(0xFF009688)
-                        : const Color(0xFF455A64))
-                    .withValues(alpha: 0.3),
-                blurRadius: 16,
-                offset: const Offset(0, 8),
-              ),
-            ],
-          ),
-          child: Row(
-            children: [
-              Icon(
-                isClockedIn ? Icons.timer : Icons.timer_off,
-                color: Colors.white,
-                size: 56,
-              ),
-              const SizedBox(width: 20),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      isClockedIn ? 'JORNADA ACTIVA' : 'FUERA DE JORNADA',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w900,
-                        fontSize: 22,
-                        letterSpacing: 0.5,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      lastTime != null
-                          ? (isClockedIn
-                              ? 'Entrada: ${_fmt(lastTime)}'
-                              : 'Última salida: ${_fmt(lastTime)}')
-                          : 'Sin fichajes registrados',
-                      style: const TextStyle(
-                        color: Colors.white70,
-                        fontSize: 14,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    const Text(
-                      'Gestiona tu fichaje desde el panel lateral izquierdo.',
-                      style: TextStyle(
-                        color: Colors.white60,
-                        fontSize: 12,
-                        fontStyle: FontStyle.italic,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  String _fmt(DateTime d) {
-    String two(int n) => n.toString().padLeft(2, '0');
-    return '${two(d.day)}/${two(d.month)} ${two(d.hour)}:${two(d.minute)}';
   }
 }
 

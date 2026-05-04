@@ -1,50 +1,53 @@
 name: salufit_app
 description: Aplicación de gestión para Centro Salufit.
 publish_to: 'none'
-version: 2.0.9+141
+version: 2.0.10+142
 
 environment:
   sdk: '>=3.8.0 <4.0.0'
 
 dependencies:
   chewie: ^1.8.5
-  cloud_firestore: ^5.0.0
-  cloud_functions: ^5.0.0
+  cloud_firestore: ^6.0.0
+  cloud_functions: ^6.0.0
   crypto: ^3.0.0
-  csv: ^6.0.0
   cupertino_icons: ^1.0.6
+  # Bloqueado en 10.x: 13 requiere Flutter 3.41.6 (cumplimos) pero arrastra win32 6
+  # incompatible con flutter_secure_storage 9. Sin afectación funcional.
   device_info_plus: ^10.0.0
   excel: ^4.0.6
-  file_picker: ^8.1.0
-  firebase_analytics: ^11.6.0
-  firebase_app_check: ^0.3.1
-  firebase_auth: ^5.0.0
-  firebase_core: ^3.0.0
-  firebase_crashlytics: ^4.3.10
-  firebase_messaging: ^15.0.0
-  firebase_storage: ^12.0.0
+  file_picker: ^11.0.0
+  firebase_analytics: ^12.0.0
+  firebase_app_check: ^0.4.0
+  firebase_auth: ^6.0.0
+  firebase_core: ^4.0.0
+  firebase_crashlytics: ^5.0.0
+  # Pineado a 16.0.x para evitar bug #18110 en 16.1.x (crash foreground notif iOS)
+  firebase_messaging: '>=16.0.0 <16.1.0'
+  firebase_storage: ^13.0.0
   flutter:
     sdk: flutter
-  flutter_local_notifications: ^17.0.0
+  flutter_local_notifications: ^20.0.0
   flutter_localizations:
     sdk: flutter
-  flutter_riverpod: "^3.0.0-dev.0"
+  flutter_riverpod: ^3.3.0
+  # Bloqueado en 9.x: 10.x usa win32 5 (incompatible con package_info_plus 10 que usa win32 6).
+  # Sin afectación funcional.
   flutter_secure_storage: ^9.0.0
   freezed_annotation: ^3.1.0
   http: ^1.6.0
   image_picker: ^1.1.2
   intl: ^0.20.0
   json_annotation: ^4.9.0
-  local_auth: ^2.2.0
   mobile_scanner: ^7.1.4
-  network_info_plus: ^5.0.0
+  # Bloqueado en 8.x por mismo motivo win32 5 vs 6.
   package_info_plus: ^8.0.0
   path: ^1.9.0
   pdf: ^3.10.0
-  permission_handler: ^11.3.0
+  permission_handler: ^12.0.0
   printing: ^5.13.0
   qr_flutter: ^4.1.0
-  riverpod_annotation: "^3.0.0-dev.0"
+  riverpod_annotation: ^4.0.0
   shared_preferences: ^2.2.0
   skeletonizer: ^2.1.2
   tutorial_coach_mark: ^1.3.3
@@ -58,13 +61,13 @@ dev_dependencies:
     sdk: flutter
   freezed: ^3.1.0
   json_serializable: ^6.9.5
-  riverpod_generator: "^3.0.0-dev.0"
+  riverpod_generator: ^4.0.0
   very_good_analysis: ^5.1.0
   integration_test:
     sdk: flutter
   # Testing UI y mocks
-  fake_cloud_firestore: ^3.0.0
-  firebase_auth_mocks: ^0.14.0
+  fake_cloud_firestore: ^4.1.0
+  firebase_auth_mocks: ^0.15.1
 
 flutter:
   uses-material-design: true

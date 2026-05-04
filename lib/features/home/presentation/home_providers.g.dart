@@ -10,10 +10,10 @@ part of 'home_providers.dart';
 // ignore_for_file: type=lint, type=warning
 
 @ProviderFor(HomeTab)
-const homeTabProvider = HomeTabProvider._();
+final homeTabProvider = HomeTabProvider._();
 
 final class HomeTabProvider extends $NotifierProvider<HomeTab, int> {
-  const HomeTabProvider._()
+  HomeTabProvider._()
     : super(
         from: null,
         argument: null,
@@ -47,7 +47,6 @@ abstract class _$HomeTab extends $Notifier<int> {
   @$mustCallSuper
   @override
   void runBuild() {
-    final created = build();
     final ref = this.ref as $Ref<int, int>;
     final element =
         ref.element
@@ -57,16 +56,16 @@ abstract class _$HomeTab extends $Notifier<int> {
               Object?,
               Object?
             >;
-    element.handleValue(ref, created);
+    element.handleCreate(ref, build);
   }
 }
 
 @ProviderFor(BookingDate)
-const bookingDateProvider = BookingDateProvider._();
+final bookingDateProvider = BookingDateProvider._();
 
 final class BookingDateProvider
     extends $NotifierProvider<BookingDate, DateTime> {
-  const BookingDateProvider._()
+  BookingDateProvider._()
     : super(
         from: null,
         argument: null,
@@ -100,7 +99,6 @@ abstract class _$BookingDate extends $Notifier<DateTime> {
   @$mustCallSuper
   @override
   void runBuild() {
-    final created = build();
     final ref = this.ref as $Ref<DateTime, DateTime>;
     final element =
         ref.element
@@ -110,6 +108,6 @@ abstract class _$BookingDate extends $Notifier<DateTime> {
               Object?,
               Object?
             >;
-    element.handleValue(ref, created);
+    element.handleCreate(ref, build);
   }
 }

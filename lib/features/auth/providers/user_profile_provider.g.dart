@@ -10,7 +10,7 @@ part of 'user_profile_provider.dart';
 // ignore_for_file: type=lint, type=warning
 
 @ProviderFor(userProfile)
-const userProfileProvider = UserProfileProvider._();
+final userProfileProvider = UserProfileProvider._();
 
 final class UserProfileProvider
     extends
@@ -20,7 +20,7 @@ final class UserProfileProvider
           Stream<UserModel?>
         >
     with $FutureModifier<UserModel?>, $StreamProvider<UserModel?> {
-  const UserProfileProvider._()
+  UserProfileProvider._()
     : super(
         from: null,
         argument: null,

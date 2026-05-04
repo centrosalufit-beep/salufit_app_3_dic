@@ -38,10 +38,6 @@ class AppConfig {
   static const String rolAdmin = 'admin';
   static const String rolProfesional = 'profesional';
 
-  // --- SEGURIDAD Y HARDWARE ---
-  // INFO (Arquitectura): Sincronizar con Firestore config/time_clock_settings
-  static const String wifiPermitida = 'DIGIFIBRA-3AE9';
-
   // --- BACKEND / CLOUD FUNCTIONS (Gen 2 - Producción) ---
   // ID del proyecto extraído: 6cmp56xv3a
   //
@@ -59,10 +55,6 @@ class AppConfig {
       'https://generarclasesmensuales-6cmp56xv3a-uc.a.run.app';
   static const String urlRenovarBonos =
       'https://renovarbonosbatch-6cmp56xv3a-uc.a.run.app';
-
-  // Staff — fichaje
-  static const String urlFichar =
-      'https://registrarfichaje-6cmp56xv3a-uc.a.run.app';
 
   /// Lógica centralizada de permisos
   static bool esStaff(String? role) {

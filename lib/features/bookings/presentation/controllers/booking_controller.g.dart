@@ -10,11 +10,11 @@ part of 'booking_controller.dart';
 // ignore_for_file: type=lint, type=warning
 
 @ProviderFor(BookingController)
-const bookingControllerProvider = BookingControllerProvider._();
+final bookingControllerProvider = BookingControllerProvider._();
 
 final class BookingControllerProvider
     extends $NotifierProvider<BookingController, AsyncValue<void>> {
-  const BookingControllerProvider._()
+  BookingControllerProvider._()
     : super(
         from: null,
         argument: null,
@@ -48,7 +48,6 @@ abstract class _$BookingController extends $Notifier<AsyncValue<void>> {
   @$mustCallSuper
   @override
   void runBuild() {
-    final created = build();
     final ref = this.ref as $Ref<AsyncValue<void>, AsyncValue<void>>;
     final element =
         ref.element
@@ -58,6 +57,6 @@ abstract class _$BookingController extends $Notifier<AsyncValue<void>> {
               Object?,
               Object?
             >;
-    element.handleValue(ref, created);
+    element.handleCreate(ref, build);
   }
 }

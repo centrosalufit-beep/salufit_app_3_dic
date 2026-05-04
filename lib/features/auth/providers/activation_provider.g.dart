@@ -10,11 +10,11 @@ part of 'activation_provider.dart';
 // ignore_for_file: type=lint, type=warning
 
 @ProviderFor(ActivationController)
-const activationControllerProvider = ActivationControllerProvider._();
+final activationControllerProvider = ActivationControllerProvider._();
 
 final class ActivationControllerProvider
     extends $AsyncNotifierProvider<ActivationController, void> {
-  const ActivationControllerProvider._()
+  ActivationControllerProvider._()
     : super(
         from: null,
         argument: null,
@@ -41,7 +41,6 @@ abstract class _$ActivationController extends $AsyncNotifier<void> {
   @$mustCallSuper
   @override
   void runBuild() {
-    build();
     final ref = this.ref as $Ref<AsyncValue<void>, void>;
     final element =
         ref.element
@@ -51,6 +50,6 @@ abstract class _$ActivationController extends $AsyncNotifier<void> {
               Object?,
               Object?
             >;
-    element.handleValue(ref, null);
+    element.handleCreate(ref, build);
   }
 }

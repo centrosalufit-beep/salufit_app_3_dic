@@ -85,7 +85,7 @@ class NotificationService {
         InitializationSettings(android: androidInit, iOS: iosInit);
 
     await _localNotifications.initialize(
-      initSettings,
+      settings: initSettings,
       onDidReceiveNotificationResponse: (response) {
         if (kDebugMode) {
           debugPrint('Notificacion tocada');
@@ -118,10 +118,11 @@ class NotificationService {
     final payloadData = jsonEncode(message.data);
 
     await _localNotifications.show(
-      message.hashCode,
-      '📅 Actualización de Agenda',
-      'Tienes información importante sobre tu próxima cita. Entra para gestionarla.',
-      NotificationDetails(
+      id: message.hashCode,
+      title: '📅 Actualización de Agenda',
+      body:
+          'Tienes información importante sobre tu próxima cita. Entra para gestionarla.',
+      notificationDetails: NotificationDetails(
         android: AndroidNotificationDetails(
           _androidChannel.id,
           _androidChannel.name,

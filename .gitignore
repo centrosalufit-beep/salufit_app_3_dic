@@ -68,3 +68,6 @@ installer/*.exe
 
 # Claude Code runtime
 .claude/scheduled_tasks.lock
+
+# Firebase iOS config — NUNCA subir al repo
+ios/Runner/GoogleService-Info.plist

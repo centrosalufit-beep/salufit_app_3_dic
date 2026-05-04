@@ -10,12 +10,12 @@ part of 'auth_provider.dart';
 // ignore_for_file: type=lint, type=warning
 
 @ProviderFor(authState)
-const authStateProvider = AuthStateProvider._();
+final authStateProvider = AuthStateProvider._();
 
 final class AuthStateProvider
     extends $FunctionalProvider<AsyncValue<User?>, User?, Stream<User?>>
     with $FutureModifier<User?>, $StreamProvider<User?> {
-  const AuthStateProvider._()
+  AuthStateProvider._()
     : super(
         from: null,
         argument: null,
