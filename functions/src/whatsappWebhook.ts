@@ -1066,6 +1066,17 @@ async function executeAction(
           estado: "resuelta",
           resultado: "cita_confirmada",
         });
+        // Aviso al grupo de recepción: el paciente ha confirmado.
+        // Útil para que recepción sepa qué citas están garantizadas y a
+        // cuáles tiene que hacer seguimiento manual telefónico.
+        await notifyRecepcion(config, waToken, buildRecepcionMsg({
+          icono: "✅",
+          titulo: "CITA CONFIRMADA POR EL PACIENTE",
+          nombre: cita.pacienteNombre,
+          telefono,
+          citaActual: `${formatFechaES(cita.fechaCita, "es")} con ${cita.profesional}`,
+          cta: "Bot marcó la cita como confirmada. No requiere acción.",
+        }));
       } else {
         await appendMessageToConversation(convId, "bot", "(sin cita asociada)", {
           estado: "escalada",
