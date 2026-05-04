@@ -10,10 +10,10 @@ part of 'menu_nav.dart';
 // ignore_for_file: type=lint, type=warning
 
 @ProviderFor(MenuIndex)
-const menuIndexProvider = MenuIndexProvider._();
+final menuIndexProvider = MenuIndexProvider._();
 
 final class MenuIndexProvider extends $NotifierProvider<MenuIndex, int> {
-  const MenuIndexProvider._()
+  MenuIndexProvider._()
     : super(
         from: null,
         argument: null,
@@ -47,7 +47,6 @@ abstract class _$MenuIndex extends $Notifier<int> {
   @$mustCallSuper
   @override
   void runBuild() {
-    final created = build();
     final ref = this.ref as $Ref<int, int>;
     final element =
         ref.element
@@ -57,6 +56,6 @@ abstract class _$MenuIndex extends $Notifier<int> {
               Object?,
               Object?
             >;
-    element.handleValue(ref, created);
+    element.handleCreate(ref, build);
   }
 }

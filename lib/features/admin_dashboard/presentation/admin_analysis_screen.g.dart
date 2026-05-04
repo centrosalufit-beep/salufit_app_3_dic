@@ -10,11 +10,11 @@ part of 'admin_analysis_screen.dart';
 // ignore_for_file: type=lint, type=warning
 
 @ProviderFor(AdminAnalysis)
-const adminAnalysisProvider = AdminAnalysisProvider._();
+final adminAnalysisProvider = AdminAnalysisProvider._();
 
 final class AdminAnalysisProvider
     extends $AsyncNotifierProvider<AdminAnalysis, List<AnalysisMetric>> {
-  const AdminAnalysisProvider._()
+  AdminAnalysisProvider._()
     : super(
         from: null,
         argument: null,
@@ -40,7 +40,6 @@ abstract class _$AdminAnalysis extends $AsyncNotifier<List<AnalysisMetric>> {
   @$mustCallSuper
   @override
   void runBuild() {
-    final created = build();
     final ref =
         this.ref
             as $Ref<AsyncValue<List<AnalysisMetric>>, List<AnalysisMetric>>;
@@ -55,6 +54,6 @@ abstract class _$AdminAnalysis extends $AsyncNotifier<List<AnalysisMetric>> {
               Object?,
               Object?
             >;
-    element.handleValue(ref, created);
+    element.handleCreate(ref, build);
   }
 }

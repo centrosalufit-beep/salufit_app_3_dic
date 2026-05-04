@@ -420,7 +420,7 @@ class _AdminExerciseLibraryScreenState
       if (mode == 'folder') {
         // Seleccionar carpeta y leer todos los vídeos
         final folderPath =
-            await FilePicker.platform.getDirectoryPath();
+            await FilePicker.getDirectoryPath();
         if (folderPath == null) return;
 
         const validExts = {'.mp4', '.mov', '.avi', '.mkv', '.webm'};
@@ -439,7 +439,7 @@ class _AdminExerciseLibraryScreenState
               ));
       } else {
         // Seleccionar archivos individuales
-        final result = await FilePicker.platform.pickFiles(
+        final result = await FilePicker.pickFiles(
           allowMultiple: true,
         );
         if (result == null || result.files.isEmpty) return;

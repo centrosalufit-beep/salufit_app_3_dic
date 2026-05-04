@@ -48,14 +48,6 @@ service cloud.firestore {
     }
 
     // ═══════════════════════════════════════════════════════════════
-    // USERS (legado) — Solo lectura para staff, sin escritura
-    // ═══════════════════════════════════════════════════════════════
-    match /users/{userId} {
-      allow read: if isOwner(userId) || isStaff();
-      allow write: if false; // Colección legacy, bloqueada para nueva escritura
-    }
-
-    // ═══════════════════════════════════════════════════════════════
     // BBDD — Base de datos maestra (solo staff)
     // ═══════════════════════════════════════════════════════════════
     match /bbdd/{id} {
@@ -163,15 +155,6 @@ service cloud.firestore {
     match /appointments/{id} {
       allow read, list: if isStaff() || (isAuthenticated() && resource.data.userId == request.auth.uid);
       allow write: if isStaff();
-    }
-
-    // ═══════════════════════════════════════════════════════════════
-    // FICHAJES — Solo staff, cliente nunca
-    // ═══════════════════════════════════════════════════════════════
-    match /timeClockRecords/{id} {
-      allow read: if isStaff();
-      allow create: if isStaff();
-      allow update, delete: if isAdmin();
     }
 
     // ═══════════════════════════════════════════════════════════════

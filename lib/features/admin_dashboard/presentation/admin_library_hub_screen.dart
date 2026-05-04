@@ -65,7 +65,7 @@ class _ConsentTemplateTabState extends State<_ConsentTemplateTab> {
   bool _isUploading = false;
 
   Future<void> _uploadTemplate() async {
-    final result = await FilePicker.platform.pickFiles(
+    final result = await FilePicker.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['pdf'],
     );

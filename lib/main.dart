@@ -63,8 +63,8 @@ void main() async {
 
       if (kDebugMode) {
         await FirebaseAppCheck.instance.activate(
-          androidProvider: AndroidProvider.debug,
-          appleProvider: AppleProvider.debug,
+          providerAndroid: const AndroidDebugProvider(),
+          providerApple: const AppleDebugProvider(),
         );
       } else {
         await FirebaseAppCheck.instance.activate();

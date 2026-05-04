@@ -10,12 +10,12 @@ part of 'auth_providers.dart';
 // ignore_for_file: type=lint, type=warning
 
 @ProviderFor(authService)
-const authServiceProvider = AuthServiceProvider._();
+final authServiceProvider = AuthServiceProvider._();
 
 final class AuthServiceProvider
     extends $FunctionalProvider<AuthService, AuthService, AuthService>
     with $Provider<AuthService> {
-  const AuthServiceProvider._()
+  AuthServiceProvider._()
     : super(
         from: null,
         argument: null,
@@ -51,12 +51,12 @@ final class AuthServiceProvider
 String _$authServiceHash() => r'ed0872794ec8e4cb3f50cb37b9c0b9467eb51ddb';
 
 @ProviderFor(authUser)
-const authUserProvider = AuthUserProvider._();
+final authUserProvider = AuthUserProvider._();
 
 final class AuthUserProvider
     extends $FunctionalProvider<AsyncValue<User?>, User?, Stream<User?>>
     with $FutureModifier<User?>, $StreamProvider<User?> {
-  const AuthUserProvider._()
+  AuthUserProvider._()
     : super(
         from: null,
         argument: null,
@@ -84,12 +84,12 @@ final class AuthUserProvider
 String _$authUserHash() => r'1090355218996de60e7e0681775b2f834ec4f9f7';
 
 @ProviderFor(currentUserId)
-const currentUserIdProvider = CurrentUserIdProvider._();
+final currentUserIdProvider = CurrentUserIdProvider._();
 
 final class CurrentUserIdProvider
     extends $FunctionalProvider<String?, String?, String?>
     with $Provider<String?> {
-  const CurrentUserIdProvider._()
+  CurrentUserIdProvider._()
     : super(
         from: null,
         argument: null,
@@ -125,12 +125,12 @@ final class CurrentUserIdProvider
 String _$currentUserIdHash() => r'a871d817f5d44e42a0580e390faf08b64566888c';
 
 @ProviderFor(currentUserEmail)
-const currentUserEmailProvider = CurrentUserEmailProvider._();
+final currentUserEmailProvider = CurrentUserEmailProvider._();
 
 final class CurrentUserEmailProvider
     extends $FunctionalProvider<String?, String?, String?>
     with $Provider<String?> {
-  const CurrentUserEmailProvider._()
+  CurrentUserEmailProvider._()
     : super(
         from: null,
         argument: null,

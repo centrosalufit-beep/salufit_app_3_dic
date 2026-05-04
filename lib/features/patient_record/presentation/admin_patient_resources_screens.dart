@@ -70,7 +70,7 @@ class _AdminPatientDocumentsScreenState
   }
 
   Future<void> _seleccionarArchivoExistente() async {
-    final result = await FilePicker.platform.pickFiles(
+    final result = await FilePicker.pickFiles(
       type: FileType.custom,
       allowedExtensions: <String>['pdf', 'jpg', 'png', 'jpeg'],
     );

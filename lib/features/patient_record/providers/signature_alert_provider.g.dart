@@ -10,11 +10,11 @@ part of 'signature_alert_provider.dart';
 // ignore_for_file: type=lint, type=warning
 
 @ProviderFor(SignatureAlert)
-const signatureAlertProvider = SignatureAlertProvider._();
+final signatureAlertProvider = SignatureAlertProvider._();
 
 final class SignatureAlertProvider
     extends $NotifierProvider<SignatureAlert, bool> {
-  const SignatureAlertProvider._()
+  SignatureAlertProvider._()
     : super(
         from: null,
         argument: null,
@@ -48,7 +48,6 @@ abstract class _$SignatureAlert extends $Notifier<bool> {
   @$mustCallSuper
   @override
   void runBuild() {
-    final created = build();
     final ref = this.ref as $Ref<bool, bool>;
     final element =
         ref.element
@@ -58,6 +57,6 @@ abstract class _$SignatureAlert extends $Notifier<bool> {
               Object?,
               Object?
             >;
-    element.handleValue(ref, created);
+    element.handleCreate(ref, build);
   }
 }

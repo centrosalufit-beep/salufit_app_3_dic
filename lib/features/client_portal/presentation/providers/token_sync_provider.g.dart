@@ -10,12 +10,12 @@ part of 'token_sync_provider.dart';
 // ignore_for_file: type=lint, type=warning
 
 @ProviderFor(userTokenSync)
-const userTokenSyncProvider = UserTokenSyncProvider._();
+final userTokenSyncProvider = UserTokenSyncProvider._();
 
 final class UserTokenSyncProvider
     extends $FunctionalProvider<String?, String?, String?>
     with $Provider<String?> {
-  const UserTokenSyncProvider._()
+  UserTokenSyncProvider._()
     : super(
         from: null,
         argument: null,
