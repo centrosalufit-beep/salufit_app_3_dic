@@ -115,28 +115,74 @@ function findColumn(
   return -1;
 }
 
+/**
+ * Construye un Date que representa "year-month-day hh:mm en Europe/Madrid"
+ * como instante UTC. Necesario porque el servidor Cloud Functions corre
+ * en UTC y `new Date(y,m,d,h,m)` interpretaría los args como UTC, lo que
+ * da el horario erróneo. Maneja DST correctamente (CEST verano UTC+2,
+ * CET invierno UTC+1).
+ */
+function buildMadridDate(
+    year: number, monthIdx0: number, day: number, hh: number, mm: number,
+): Date {
+  // Truco: creamos un sample en UTC con esos valores. Luego calculamos
+  // qué offset tiene Madrid en ESE momento y lo restamos.
+  const sample = new Date(Date.UTC(year, monthIdx0, day, hh, mm));
+  const localMadrid = new Date(
+      sample.toLocaleString("en-US", {timeZone: "Europe/Madrid"}),
+  );
+  const utcEquiv = new Date(
+      sample.toLocaleString("en-US", {timeZone: "UTC"}),
+  );
+  const offsetMs = localMadrid.getTime() - utcEquiv.getTime();
+  return new Date(sample.getTime() - offsetMs);
+}
+
+/**
+ * Convierte un Date "naive" (creado en TZ del servidor UTC pero que
+ * debería interpretarse como hora Madrid) al instante UTC correcto.
+ * Útil cuando xlsx con cellDates:true devuelve Dates "naive" en mayo
+ * que serían 9:30 UTC pero el autor del Excel quiso decir 9:30 Madrid.
+ */
+function reinterpretAsMadrid(naive: Date): Date {
+  return buildMadridDate(
+      naive.getUTCFullYear(),
+      naive.getUTCMonth(),
+      naive.getUTCDate(),
+      naive.getUTCHours(),
+      naive.getUTCMinutes(),
+  );
+}
+
 function parseDate(raw: unknown): Date | null {
   if (!raw) return null;
-  if (raw instanceof Date) return raw;
+  // Excel cellDates:true devuelve Dates "naive" en UTC que representan
+  // la hora Madrid del autor. Reinterpretamos.
+  if (raw instanceof Date) return reinterpretAsMadrid(raw);
   if (typeof raw === "number") {
-    // Excel serial date (días desde 1900-01-01)
+    // Excel serial date (días desde 1900-01-01). Reinterpretado como Madrid.
     const utcDays = Math.floor(raw - 25569);
     const utcMs = utcDays * 86400 * 1000;
     const fractional = raw - Math.floor(raw);
-    return new Date(utcMs + fractional * 86400 * 1000);
+    const naive = new Date(utcMs + fractional * 86400 * 1000);
+    return reinterpretAsMadrid(naive);
   }
   if (typeof raw === "string") {
     const trimmed = raw.trim();
     if (!trimmed) return null;
-    // Intentar formatos: "DD/MM/YYYY HH:mm", "YYYY-MM-DD HH:mm", ISO
-    const isoLike = trimmed.replace(" ", "T");
-    const dt1 = new Date(isoLike);
-    if (!isNaN(dt1.getTime())) return dt1;
+    // Solo aceptamos DD/MM/YYYY (formato España de Clinni). NO usamos
+    // new Date(string) porque interpreta MM/DD ambiguamente.
     const m = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})(?:[ T](\d{1,2}):(\d{2}))?/);
     if (m) {
       const [, dd, mm, yy, hh = "0", mn = "0"] = m;
       const year = yy.length === 2 ? 2000 + Number(yy) : Number(yy);
-      return new Date(year, Number(mm) - 1, Number(dd), Number(hh), Number(mn));
+      return buildMadridDate(year, Number(mm) - 1, Number(dd), Number(hh), Number(mn));
+    }
+    // Formato ISO YYYY-MM-DD HH:MM (también de Madrid si Clinni lo usa).
+    const iso = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{1,2}):(\d{2}))?/);
+    if (iso) {
+      const [, yy, mm, dd, hh = "0", mn = "0"] = iso;
+      return buildMadridDate(Number(yy), Number(mm) - 1, Number(dd), Number(hh), Number(mn));
     }
   }
   return null;
