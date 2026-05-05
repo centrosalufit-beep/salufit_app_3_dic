@@ -202,6 +202,13 @@ async function findUpcomingAppointment(
   // Tolerante a fallos: si Firestore devuelve error (índice faltante, timeout,
   // permisos), devolvemos null en lugar de propagar la excepción para que el
   // bot al menos pueda responder algo al paciente.
+  //
+  // CRÍTICO: si el paciente tiene varias citas futuras (caso real
+  // detectado: 12 pacientes con citas el mismo día), debemos preferir
+  // la PRIMERA SIN responder aún (recordatorioBotonPulsado != true).
+  // Antes esto cogía siempre la primera por orden, lo que provocaba que
+  // el botón "Confirmar" del segundo recordatorio actuara sobre la cita
+  // del primer recordatorio (que ya estaba respondida).
   try {
     const now = admin.firestore.Timestamp.now();
     const snap = await db
@@ -210,10 +217,17 @@ async function findUpcomingAppointment(
         .where("fechaCita", ">=", now)
         .where("estado", "in", ["pendiente", "confirmada", "reagendada"])
         .orderBy("fechaCita")
-        .limit(1)
+        .limit(5)
         .get();
     if (snap.empty) return null;
-    const doc = snap.docs[0];
+
+    // Preferimos la primera cita aún SIN respuesta a botón. Si todas ya
+    // están respondidas, devolvemos la primera (caer en el flujo de
+    // "ya tenemos tu respuesta").
+    const sinRespuesta = snap.docs.find(
+        (d) => d.data().recordatorioBotonPulsado !== true,
+    );
+    const doc = sinRespuesta ?? snap.docs[0];
     const data = doc.data();
     return {
       id: doc.id,
@@ -1031,6 +1045,7 @@ async function processIncomingText(
       config,
       waToken,
       patient?.nombreCompleto || cita?.pacienteNombre || telefono,
+      classification.respuesta,
   );
 }
 
@@ -1046,7 +1061,11 @@ async function executeAction(
     config: BotConfig,
     waToken: string,
     pacienteNombre: string,
+    respuestaBot: string,
 ): Promise<void> {
+  // Preview de la respuesta de Claude para incluir en notifyRecepcion en
+  // caso "consulta" / "escalate" — recepción quiere ver lo que el bot dijo.
+  const respuestaBotPreview = (respuestaBot || "").slice(0, 250);
   switch (intent) {
     case "confirmar":
       if (cita) {
@@ -1507,12 +1526,25 @@ async function executeAction(
     }
 
     case "consulta":
-      // La respuesta ya se envió en classifyIntent. Marcar como consulta pendiente.
-      // (No la cerramos como "resuelta" porque puede que recepción quiera revisarla.)
+      // La respuesta ya se envió en classifyIntent. Marcar como consulta
+      // pendiente y avisar a recepción con resumen de pregunta+respuesta.
+      // Antes esto NO avisaba — recepción no se enteraba de las consultas.
       await db
           .collection("whatsapp_conversations")
           .doc(convId)
           .update({estado: "consulta_pendiente", resultado: "consulta_respondida"});
+      await notifyRecepcion(config, waToken, buildRecepcionMsg({
+        icono: "💬",
+        titulo: "CONSULTA RESPONDIDA POR BOT",
+        nombre: pacienteNombre,
+        telefono,
+        mensajeOriginal,
+        extra: [
+          `🤖 Respuesta bot: ${(respuestaBotPreview || "(sin texto)")
+              .slice(0, 200)}`,
+        ],
+        cta: "El bot ha contestado. Si la respuesta fue incompleta o el paciente necesita más info, retoma tú la conversación.",
+      }));
       return;
 
     case "escalate":
@@ -1531,11 +1563,20 @@ async function executeAction(
       return;
 
     case "fuera_horario":
-      // La respuesta ya indicó horario; nada extra.
+      // La respuesta ya indicó horario; avisamos a recepción para que la
+      // primera persona que abra mañana vea el mensaje pendiente.
       await db
           .collection("whatsapp_conversations")
           .doc(convId)
           .update({estado: "resuelta", resultado: "fuera_horario"});
+      await notifyRecepcion(config, waToken, buildRecepcionMsg({
+        icono: "🌙",
+        titulo: "MENSAJE FUERA DE HORARIO",
+        nombre: pacienteNombre,
+        telefono,
+        mensajeOriginal,
+        cta: "El bot avisó al paciente que estamos fuera de horario. Atender mañana.",
+      }));
       return;
   }
 }
@@ -1824,6 +1865,7 @@ async function processInteractiveReply(
       intent, "es", dentro48h, false, convId, cita, telefono,
       `(botón: ${buttonId})`, config, waToken,
       cita?.pacienteNombre || telefono,
+      "", // sin respuesta de Claude — viene de un botón directo
   );
 }
 

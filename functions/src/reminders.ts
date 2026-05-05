@@ -21,7 +21,7 @@ import {onCall, HttpsError} from "firebase-functions/v2/https";
 import {defineSecret} from "firebase-functions/params";
 import * as functions from "firebase-functions";
 import * as admin from "firebase-admin";
-import {sendButtonMessage, sendTemplateMessage} from "./whatsapp";
+import {sendButtonMessage, sendTemplateMessage, sendTextMessage} from "./whatsapp";
 
 if (admin.apps.length === 0) {
   admin.initializeApp();
@@ -34,6 +34,7 @@ interface BotConfig {
   whatsappPhoneId: string;
   horasAntelacionRecordatorio: number;
   activo: boolean;
+  grupoRecepcionId: string;
 }
 
 async function loadConfig(): Promise<BotConfig> {
@@ -44,6 +45,7 @@ async function loadConfig(): Promise<BotConfig> {
         whatsappPhoneId: "723362620868862",
         horasAntelacionRecordatorio: 24,
         activo: true,
+        grupoRecepcionId: "",
       };
     }
     const data = doc.data() ?? {};
@@ -52,6 +54,7 @@ async function loadConfig(): Promise<BotConfig> {
       horasAntelacionRecordatorio:
         (data.horasAntelacionRecordatorio as number) ?? 24,
       activo: data.activo !== false,
+      grupoRecepcionId: (data.grupoRecepcionId as string) || "",
     };
   } catch (e) {
     functions.logger.warn("loadConfig failed", e);
@@ -59,6 +62,7 @@ async function loadConfig(): Promise<BotConfig> {
       whatsappPhoneId: "723362620868862",
       horasAntelacionRecordatorio: 24,
       activo: true,
+      grupoRecepcionId: "",
     };
   }
 }
@@ -112,12 +116,30 @@ async function runReminders(opts?: {
       size: 1,
     } as unknown as FirebaseFirestore.QuerySnapshot;
   } else {
-    const horasIni = opts?.forceWindowHoursStart ??
-      (config.horasAntelacionRecordatorio - 4);
+    // VENTANA DEL CRON — política T-26h a T-2h.
+    //
+    // Antes era [T-20h, T+48h] que tenía un bug grave: citas con menos
+    // de 20h vista NUNCA entraban en ventana, así que cualquier cita
+    // del mismo día NO recibía recordatorio.
+    //
+    // Nueva política: cubre citas entre 2 y 26 horas en el futuro. Un
+    // cron cada 30 min asegura que cualquier cita en ese rango entre
+    // en ventana al menos una vez. Una cita a las 18:00 hoy:
+    //   - Cron 16:00 (anterior): vista 2h → IN
+    //   - Cron 16:30: vista 1.5h → fuera
+    //   El primer paso ya la pilló y marcó recordatorioEnviado=true.
+    //
+    // forceWindowHoursStart/End mantenidos para tests manuales.
+    const horasIni = opts?.forceWindowHoursStart ?? 2;
     const horasFin = opts?.forceWindowHoursEnd ??
-      (config.horasAntelacionRecordatorio + 24);
+      (config.horasAntelacionRecordatorio + 2);
     const desde = new Date(now.getTime() + horasIni * 60 * 60 * 1000);
     const hasta = new Date(now.getTime() + horasFin * 60 * 60 * 1000);
+    functions.logger.info("Ventana recordatorios", {
+      horasIni, horasFin,
+      desde: desde.toISOString(),
+      hasta: hasta.toISOString(),
+    });
 
     docsSnap = await db
         .collection("clinni_appointments")
@@ -137,7 +159,70 @@ async function runReminders(opts?: {
   let sent = 0;
   let failed = 0;
 
+  // ANTI-SPAM duplicados: si un paciente tiene varias citas el mismo
+  // día (caso real: 12 pacientes con duplicados), enviamos UN único
+  // recordatorio para la cita más temprana y marcamos las otras
+  // como "recordatorioEnviado=true + agrupadaConPrimera=true". Recepción
+  // recibe un DM avisando para gestionar manualmente las extras.
+  const byPatientDay = new Map<string, FirebaseFirestore.QueryDocumentSnapshot[]>();
   for (const doc of docsSnap.docs) {
+    const d = doc.data();
+    const tel = (d.pacienteTelefono as string) || "";
+    const f = (d.fechaCita as admin.firestore.Timestamp).toDate();
+    if (!tel) continue;
+    const dayMadrid = f.toLocaleString("sv-SE", {
+      timeZone: "Europe/Madrid",
+    }).slice(0, 10);
+    const key = `${tel}_${dayMadrid}`;
+    if (!byPatientDay.has(key)) byPatientDay.set(key, []);
+    byPatientDay.get(key)!.push(doc);
+  }
+
+  // Marcar las "secundarias" (todas las que no son la más temprana)
+  // como ya enviadas, y construir lista de "primarias" a procesar.
+  const primaryDocs: FirebaseFirestore.QueryDocumentSnapshot[] = [];
+  const skippedDuplicates: Array<{telefono: string; nombre: string; citas: string[]}> = [];
+  for (const [, group] of byPatientDay) {
+    group.sort((a, b) => {
+      const ta = (a.data().fechaCita as admin.firestore.Timestamp).toMillis();
+      const tb = (b.data().fechaCita as admin.firestore.Timestamp).toMillis();
+      return ta - tb;
+    });
+    primaryDocs.push(group[0]);
+    if (group.length > 1) {
+      const dup = group.slice(1);
+      const ddata = group[0].data();
+      const horas = group.map((d) => {
+        const f = (d.data().fechaCita as admin.firestore.Timestamp).toDate();
+        return f.toLocaleString("es-ES", {
+          timeZone: "Europe/Madrid",
+          hour: "2-digit", minute: "2-digit", hour12: false,
+        });
+      });
+      skippedDuplicates.push({
+        telefono: (ddata.pacienteTelefono as string) || "",
+        nombre: (ddata.pacienteNombre as string) || "",
+        citas: horas,
+      });
+      // Marcar las extras como enviadas para que el cron no las re-procese.
+      for (const extra of dup) {
+        await extra.ref.update({
+          recordatorioEnviado: true,
+          fechaRecordatorio: admin.firestore.FieldValue.serverTimestamp(),
+          agrupadaConPrimera: group[0].id,
+          motivoNoNotificacion: "duplicada_misma_persona_mismo_dia",
+        });
+      }
+    }
+  }
+
+  if (skippedDuplicates.length > 0) {
+    functions.logger.info("Citas duplicadas detectadas", {
+      total: skippedDuplicates.length, samples: skippedDuplicates.slice(0, 5),
+    });
+  }
+
+  for (const doc of primaryDocs) {
     const data = doc.data();
     const telefono = (data.pacienteTelefono as string) ?? "";
     const nombre = (data.pacienteNombre as string) ?? "";
@@ -151,7 +236,19 @@ async function runReminders(opts?: {
     // 2026-04-30): si recepción reasigna por agenda, el cliente no debe
     // tener expectativa fijada con un nombre. Mostramos solo el servicio.
     void profesional;
-    const body =
+
+    // Texto EXACTO del template Meta `recordatorio_cita_v2` (aprobado).
+    // Este es el que verá el paciente cuando se envía por template.
+    // Lo guardamos en la conversación para que el panel muestre lo real.
+    const templateBody =
+      `Hola ${nombre || "paciente"}, te recordamos tu cita en Centro Salufit:\n\n` +
+      `📅 ${fechaFmt}\n` +
+      `💼 ${servicio || "Cita"}\n\n` +
+      "Por favor, confirma tu asistencia:";
+
+    // Texto del fallback (texto libre) — solo se usa si el template
+    // falla y el paciente ya tiene ventana 24h abierta con el bot.
+    const fallbackBody =
       `¡Hola ${nombre}! 👋 Te recordamos tu cita:\n\n` +
       `📅 ${fechaFmt}\n` +
       `💼 ${servicio || "Cita"}\n\n` +
@@ -171,6 +268,7 @@ async function runReminders(opts?: {
         "es",
         [nombre || "paciente", fechaFmt, servicio || "Cita"],
     );
+    let usedTemplate = result.success;
 
     // FALLBACK: si la API rechaza el template (no aprobado, error, etc.)
     // intentamos texto libre con botones interactivos. SOLO funcionará si
@@ -182,7 +280,7 @@ async function runReminders(opts?: {
       );
       result = await sendButtonMessage(
           {phoneId: config.whatsappPhoneId, token: waToken, to: telefono},
-          body,
+          fallbackBody,
           [
             {id: "btn_confirm", title: "Confirmar"},
             {id: "btn_reschedule", title: "Cambiar cita"},
@@ -197,6 +295,11 @@ async function runReminders(opts?: {
         recordatorioEnviado: true,
         fechaRecordatorio: admin.firestore.FieldValue.serverTimestamp(),
       });
+      // Guardamos el texto que REALMENTE recibió el paciente — depende de
+      // si fue por template o por fallback. Antes guardábamos siempre el
+      // fallback aunque el envío fuera por template, lo que confundía al
+      // panel admin.
+      const textoEnviado = usedTemplate ? templateBody : fallbackBody;
       await db.collection("whatsapp_conversations").add({
         pacienteNombre: nombre,
         pacienteTelefono: telefono,
@@ -205,10 +308,11 @@ async function runReminders(opts?: {
         estado: "activa",
         intencionDetectada: null,
         resultado: null,
+        viaTemplate: usedTemplate,
         mensajes: [
           {
             rol: "bot",
-            texto: body,
+            texto: textoEnviado,
             timestamp: admin.firestore.Timestamp.now(),
           },
         ],
@@ -228,8 +332,39 @@ async function runReminders(opts?: {
     }
   }
 
+  // Si hay duplicados detectados, avisar al grupo de recepción para
+  // que gestione manualmente las citas extra del mismo paciente. El bot
+  // solo envió recordatorio para la primera (más temprana) de cada uno.
+  if (skippedDuplicates.length > 0 && config.grupoRecepcionId) {
+    const lines = [
+      "📅 RECORDATORIOS — pacientes con varias citas mismo día",
+      "",
+      "El bot envió UN recordatorio (la cita más temprana) a estos pacientes.",
+      "Las citas extra están marcadas como notificadas para evitar spam.",
+      "Llama tú para confirmar las demás:",
+      "",
+    ];
+    for (const dup of skippedDuplicates) {
+      lines.push(`👤 ${dup.nombre} · 📞 ${dup.telefono}`);
+      lines.push(`   Citas hoy/mañana: ${dup.citas.join(", ")}`);
+    }
+    try {
+      await sendTextMessage(
+          {
+            phoneId: config.whatsappPhoneId,
+            token: waToken,
+            to: config.grupoRecepcionId,
+          },
+          lines.join("\n"),
+      );
+    } catch (e) {
+      functions.logger.warn("Aviso duplicados a recepción falló", e);
+    }
+  }
+
   functions.logger.info("Recordatorios procesados", {
     sent, failed, total: docsSnap.size,
+    duplicadosAgrupados: skippedDuplicates.length,
   });
   return {sent, failed, scanned: docsSnap.size};
 }
