@@ -8,6 +8,7 @@ import 'package:salufit_app/features/whatsapp_bot/presentation/widgets/conversat
 import 'package:salufit_app/features/whatsapp_bot/presentation/widgets/import_excel_widget.dart';
 import 'package:salufit_app/features/whatsapp_bot/presentation/widgets/leads_pending_tab.dart';
 import 'package:salufit_app/features/whatsapp_bot/presentation/widgets/pending_appointments_tab.dart';
+import 'package:salufit_app/features/whatsapp_bot/presentation/widgets/problem_appointments_tab.dart';
 import 'package:salufit_app/features/whatsapp_bot/presentation/widgets/professional_absences_tab.dart';
 
 class WhatsAppBotScreen extends ConsumerStatefulWidget {
@@ -24,7 +25,7 @@ class _WhatsAppBotScreenState extends ConsumerState<WhatsAppBotScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 6, vsync: this);
+    _tabController = TabController(length: 7, vsync: this);
   }
 
   @override
@@ -48,6 +49,7 @@ class _WhatsAppBotScreenState extends ConsumerState<WhatsAppBotScreen>
           isScrollable: true,
           tabs: const [
             Tab(icon: Icon(Icons.chat), text: 'Conversaciones'),
+            Tab(icon: Icon(Icons.warning_amber_rounded), text: 'Problemas'),
             Tab(icon: Icon(Icons.person_add), text: 'Leads'),
             Tab(icon: Icon(Icons.event_note), text: 'Citas pendientes'),
             Tab(icon: Icon(Icons.business), text: 'Centro'),
@@ -122,6 +124,7 @@ class _WhatsAppBotScreenState extends ConsumerState<WhatsAppBotScreen>
                   ),
                   data: (list) => ConversationTableWidget(conversations: list),
                 ),
+                const ProblemAppointmentsTab(),
                 const LeadsPendingTab(),
                 const PendingAppointmentsTab(),
                 const ClinicInfoTab(),

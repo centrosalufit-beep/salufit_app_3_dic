@@ -18,11 +18,17 @@ import * as admin from "firebase-admin";
 // Re-export WhatsApp Bot Cloud Functions (Fase 1)
 export { importClinniAppointments, importClinniPatients } from "./clinniImport";
 export { whatsappWebhook } from "./whatsappWebhook";
-export { sendAppointmentReminders, triggerRemindersNow, expirePastAppointments } from "./reminders";
+export { sendAppointmentReminders, triggerRemindersNow, triggerReminderHttp, expirePastAppointments } from "./reminders";
 export { archiveOldAppointments } from "./archiveAppointments";
 export { checkConversationTimeouts } from "./conversationTimeouts";
 export { sendReagendarConfirmation } from "./confirmReagendar";
 export { replicateClassesMonth } from "./replicateClasses";
+export {
+  processEmailQueue,
+  retryFailedEmails,
+  excelImportReminder,
+  cronHealthCheck,
+} from "./emailNotifier";
 
 // Dominios autorizados a llamar nuestras funciones HTTP
 const ALLOWED_ORIGINS = [

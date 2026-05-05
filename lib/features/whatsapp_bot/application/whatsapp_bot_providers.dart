@@ -181,3 +181,13 @@ Future<void> sendReagendarConfirmation(String conversationId) async {
     'conversationId': conversationId,
   });
 }
+
+/// Llama a `triggerReminderHttp`: fuerza el reenvío del recordatorio
+/// para una cita concreta. Ignora la ventana T-24h y resetea el flag
+/// `recordatorioEnviado` para que el cron lo re-procese inmediatamente.
+Future<Map<String, dynamic>> triggerReminderHttp(String appointmentId) async {
+  final data = await _postCloudFunction('triggerReminderHttp', {
+    'appointmentId': appointmentId,
+  });
+  return data;
+}

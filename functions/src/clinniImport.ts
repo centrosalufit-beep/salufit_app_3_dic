@@ -188,12 +188,32 @@ function parseDate(raw: unknown): Date | null {
   return null;
 }
 
+/**
+ * Mapea el estado del Excel Clinni al estado normalizado de Firestore.
+ * Estados del modelo: pendiente, confirmada, cancelada, atendida, ausente,
+ * vencida, reagendada.
+ */
+function mapEstadoExcel(estadoExcel: string): string {
+  const e = estadoExcel.toLowerCase().trim();
+  if (e === "atendida" || e === "facturada") return "atendida";
+  if (e === "ausente") return "ausente";
+  if (["cancelada", "cancelado", "anulada", "anulado"].includes(e)) return "cancelada";
+  if (e === "pendiente") return "pendiente";
+  return "pendiente";
+}
+
 function buildDeduplicationKey(
     pacienteTelefono: string,
     fechaCita: Date,
     profesional: string,
+    fallbackNombre = "",
 ): string {
-  return `${pacienteTelefono}_${fechaCita.toISOString()}_${profesional.trim().toLowerCase()}`;
+  // Si no hay teléfono, usamos nombre normalizado como discriminante para
+  // que dos pacientes distintos sin teléfono el mismo día/profesional no
+  // colapsen en el mismo doc.
+  const id = pacienteTelefono ||
+    `notel_${normalizeName(fallbackNombre).replace(/\s+/g, "_")}`;
+  return `${id}_${fechaCita.toISOString()}_${profesional.trim().toLowerCase()}`;
 }
 
 function parseWorkbook(buffer: Buffer): {rows: ParsedRow[]; errors: string[]} {
@@ -363,130 +383,184 @@ export const importClinniAppointments = onRequest(
           });
         }
 
-        // 2) Filtrar filas: enriquecer teléfono + descartar pasadas + descartar
-        //    estados no relevantes (Atendida/Facturada/Cancelada/Ausente).
+        // 2) Procesar filas. Política tras feedback usuario:
+        //    - Citas pasadas: descartar (el bot solo gestiona futuras).
+        //    - Estados finalizados (atendida/facturada/cancelada/ausente):
+        //      NO descartar — vamos a ACTUALIZAR la cita existente en
+        //      Firestore si está como pendiente. Si no existe, no la
+        //      creamos (sin sentido).
+        //    - Sin teléfono: importar igualmente con flag requiereRevision
+        //      para que aparezca en pestaña "Citas con problema". El admin
+        //      las edita manual.
+        //    - Nombre ambiguo: idem, requiereRevision con motivo claro.
         const now = new Date();
-        let skippedNoPhone = 0;
-        let skippedAmbiguous = 0;
         let skippedPast = 0;
-        let skippedDoneState = 0;
+        let skippedNoMatchDoneState = 0;
+        const noEncontrados: string[] = []; // para reporte CSV (#17)
         const rows: ParsedRow[] = [];
         const DONE_STATES = ["atendida", "facturada", "ausente",
           "cancelada", "cancelado", "anulada", "anulado"];
+
         for (const r of rawRows) {
-          // Enriquecer teléfono si falta
-          if (!r.pacienteTelefono) {
-            const norm = normalizeName(r.pacienteNombre);
-            if (ambiguousNames.has(norm)) {
-              skippedAmbiguous++;
-              continue;
-            }
-            const tel = nameToPhone.get(norm);
-            if (!tel) {
-              skippedNoPhone++;
-              continue;
-            }
-            r.pacienteTelefono = tel;
-          }
-          // Filtrar pasadas
+          // Filtrar pasadas (no útiles para recordatorios futuros)
           if (r.fechaCita.getTime() < now.getTime()) {
             skippedPast++;
             continue;
           }
-          // Filtrar estados ya finalizados
+
+          // Marcar motivo de requiereRevision (#10)
+          let motivoRevision: string | null = null;
+          if (!r.pacienteTelefono) {
+            const norm = normalizeName(r.pacienteNombre);
+            if (ambiguousNames.has(norm)) {
+              motivoRevision = "nombre_ambiguo";
+              noEncontrados.push(`${r.pacienteNombre} (ambiguo)`);
+            } else {
+              const tel = nameToPhone.get(norm);
+              if (!tel) {
+                motivoRevision = "sin_telefono";
+                noEncontrados.push(r.pacienteNombre);
+              } else {
+                r.pacienteTelefono = tel;
+              }
+            }
+          }
+
+          // Estado finalizado: solo nos sirve para ACTUALIZAR. Si no existe
+          // en Firestore Y no se puede asociar a un dedup key claro, descartar.
           const estadoNorm = r.estadoOriginal.toLowerCase().trim();
-          if (DONE_STATES.includes(estadoNorm)) {
-            skippedDoneState++;
+          const isDoneState = DONE_STATES.includes(estadoNorm);
+          if (isDoneState && motivoRevision) {
+            // Sin tel, no puedo construir dedupKey estable → descarto.
+            skippedNoMatchDoneState++;
             continue;
           }
+
+          // Cast sutil: añadimos runtime fields a la fila parsed.
+          (r as ParsedRow & {
+            requiereRevision: boolean;
+            motivoRevision: string | null;
+            isDoneState: boolean;
+            estadoFinalNormalizado: string | null;
+          }).requiereRevision = motivoRevision !== null;
+          (r as unknown as {motivoRevision: string | null}).motivoRevision = motivoRevision;
+          (r as unknown as {isDoneState: boolean}).isDoneState = isDoneState;
+          (r as unknown as {estadoFinalNormalizado: string | null})
+              .estadoFinalNormalizado = isDoneState ? mapEstadoExcel(estadoNorm) : null;
           rows.push(r);
-        }
-        if (skippedNoPhone > 0) {
-          errors.push(`${skippedNoPhone} cita(s) descartadas: paciente sin teléfono en clinni_patients`);
-        }
-        if (skippedAmbiguous > 0) {
-          errors.push(`${skippedAmbiguous} cita(s) descartadas: nombre ambiguo (más de un paciente con ese nombre)`);
         }
         if (skippedPast > 0) {
           errors.push(`${skippedPast} cita(s) descartadas: fecha pasada (el bot solo procesa citas futuras)`);
         }
-        if (skippedDoneState > 0) {
-          errors.push(`${skippedDoneState} cita(s) descartadas: estado finalizado (Atendida/Facturada/Cancelada/Ausente)`);
+        if (skippedNoMatchDoneState > 0) {
+          errors.push(`${skippedNoMatchDoneState} cita(s) descartadas: estado finalizado y paciente sin teléfono (no se pudo asociar)`);
+        }
+        const requierenRevision = rows.filter((r) => (r as unknown as {requiereRevision: boolean}).requiereRevision).length;
+        if (requierenRevision > 0) {
+          errors.push(`${requierenRevision} cita(s) importadas SIN teléfono — revisa la pestaña "Citas con problema" del panel`);
         }
 
         functions.logger.info("Clinni Excel parseado", {
           fileName: safeName,
           rawRows: rawRows.length,
           rows: rows.length,
-          skippedNoPhone,
-          skippedAmbiguous,
+          requierenRevision,
           skippedPast,
-          skippedDoneState,
+          skippedNoMatchDoneState,
           errors: errors.length,
         });
 
         let imported = 0;
-        let duplicates = 0;
+        let updated = 0;
+        let updatedSkipped = 0;
+        let skippedDoneNotFound = 0;
         const importedAt = admin.firestore.FieldValue.serverTimestamp();
-
-        // Liberar memoria del lookup map antes del bucle de inserción.
         nameToPhone = new Map();
 
-        // Insertar en lotes de 400 (límite Firestore 500/batch)
+        // Cargamos TODAS las citas existentes en memoria una sola vez para
+        // hacer upsert eficiente. Tamaño manejable (cientos a miles de docs).
+        const allExistingByKey = new Map<string, FirebaseFirestore.QueryDocumentSnapshot>();
+        try {
+          const existingSnap = await db.collection("clinni_appointments").get();
+          for (const d of existingSnap.docs) {
+            const k = d.data().deduplicationKey as string | undefined;
+            if (k) allExistingByKey.set(k, d);
+          }
+          functions.logger.info("Cache citas existentes", {total: existingSnap.size});
+        } catch (e) {
+          functions.logger.warn("No se pudo cachear citas existentes; modo solo-insertar", e);
+        }
+
         for (let i = 0; i < rows.length; i += 400) {
           const slice = rows.slice(i, i + 400);
-          const dedupKeys = slice.map((r) =>
-            buildDeduplicationKey(r.pacienteTelefono, r.fechaCita, r.profesional),
-          );
-          // Comprobar duplicados existentes
-          const existing = await db
-              .collection("clinni_appointments")
-              .where("deduplicationKey", "in", dedupKeys.slice(0, 30))
-              .get();
-          const existingKeys = new Set(
-              existing.docs.map((d) => d.data().deduplicationKey as string),
-          );
-          // Para más de 30 hay que iterar; lo hacemos por simplicidad si hay
-          if (dedupKeys.length > 30) {
-            // Comprobar el resto en chunks de 30
-            for (let j = 30; j < dedupKeys.length; j += 30) {
-              const subKeys = dedupKeys.slice(j, j + 30);
-              const sub = await db
-                  .collection("clinni_appointments")
-                  .where("deduplicationKey", "in", subKeys)
-                  .get();
-              for (const d of sub.docs) {
-                existingKeys.add(d.data().deduplicationKey as string);
-              }
-            }
-          }
-
           const batch = db.batch();
           for (const row of slice) {
-            const key = buildDeduplicationKey(row.pacienteTelefono, row.fechaCita, row.profesional);
-            if (existingKeys.has(key)) {
-              duplicates++;
+            const r = row as ParsedRow & {
+              requiereRevision: boolean;
+              motivoRevision: string | null;
+              isDoneState: boolean;
+              estadoFinalNormalizado: string | null;
+            };
+            const key = buildDeduplicationKey(
+                r.pacienteTelefono, r.fechaCita, r.profesional, r.pacienteNombre,
+            );
+            const existingDoc = allExistingByKey.get(key);
+
+            if (existingDoc) {
+              // UPSERT: cita ya existe en Firestore.
+              const existingData = existingDoc.data();
+              const estadoActual = String(existingData.estado ?? "pendiente");
+              if (r.isDoneState && r.estadoFinalNormalizado &&
+                  estadoActual !== r.estadoFinalNormalizado) {
+                // Excel dice "cancelada/atendida/ausente" pero Firestore aún
+                // la tiene como pendiente → actualizar (resuelve cita fantasma).
+                batch.update(existingDoc.ref, {
+                  estado: r.estadoFinalNormalizado,
+                  estadoActualizadoEn: importedAt,
+                  estadoActualizadoOrigen: safeName,
+                });
+                updated++;
+              } else {
+                updatedSkipped++;
+              }
               continue;
             }
+
+            // INSERT nuevo. Si Excel ya la trae como done, no la creamos.
+            if (r.isDoneState) {
+              skippedDoneNotFound++;
+              continue;
+            }
+
             const ref = db.collection("clinni_appointments").doc();
             batch.set(ref, {
-              pacienteNombre: row.pacienteNombre,
-              pacienteTelefono: row.pacienteTelefono,
-              fechaCita: admin.firestore.Timestamp.fromDate(row.fechaCita),
-              profesional: row.profesional,
-              servicio: row.servicio,
+              pacienteNombre: r.pacienteNombre,
+              pacienteTelefono: r.pacienteTelefono || "",
+              fechaCita: admin.firestore.Timestamp.fromDate(r.fechaCita),
+              profesional: r.profesional,
+              servicio: r.servicio,
               estado: "pendiente",
               recordatorioEnviado: false,
               fechaRecordatorio: null,
               deduplicationKey: key,
               importadoEn: importedAt,
               origenExcel: safeName,
-              notas: row.notas,
+              notas: r.notas,
+              // #10: flags de revisión manual
+              requiereRevision: r.requiereRevision,
+              motivoRevision: r.motivoRevision,
             });
             imported++;
           }
           await batch.commit();
         }
+        allExistingByKey.clear();
+        functions.logger.info("Importación citas resumen", {
+          imported, updated, updatedSkipped, skippedDoneNotFound,
+        });
+        // Mantener compatibilidad de respuesta hacia atrás
+        const duplicates = updatedSkipped;
+        void updated; void skippedDoneNotFound;
 
         // Audit log
         try {
@@ -510,8 +584,14 @@ export const importClinniAppointments = onRequest(
         res.status(200).json({
           imported,
           duplicates,
+          updated,
+          skippedDoneNotFound,
+          requierenRevision,
           errors: errors.length,
           errorMessages: errors.slice(0, 20),
+          // #17: lista de nombres que no se encontraron en clinni_patients
+          // (limitado a 200 para no saturar la respuesta).
+          noEncontrados: noEncontrados.slice(0, 200),
         });
       } catch (e) {
         // Captura cualquier error inesperado (Firestore, memoria, timeout)

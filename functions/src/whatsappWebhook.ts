@@ -44,7 +44,23 @@ const ANTHROPIC_API_KEY = defineSecret("ANTHROPIC_API_KEY");
 
 interface BotConfig {
   whatsappPhoneId: string;
+  /** @deprecated usar gruposRecepcion[]. Se mantiene como fallback. */
   grupoRecepcionId: string;
+  /**
+   * Lista de teléfonos a los que mandamos avisos. WhatsApp Business
+   * Cloud API NO permite enviar a grupos reales — emulamos un grupo
+   * mandando el mismo DM a cada teléfono. Cualquier flujo que avise
+   * a "recepción" envía multi-DM aquí. Si el array está vacío, cae
+   * al `grupoRecepcionId` (compatibilidad).
+   */
+  gruposRecepcion: Array<{
+    telefono: string;
+    nombre: string;
+    /** Si true, recibe TODOS los avisos. Si false, solo críticos. */
+    avisosNoCriticos: boolean;
+  }>;
+  /** Email fallback cuando todos los DMs a recepción fallan. */
+  emailFallback: string;
   nombreRecepcion: string;
   horarioAtencionInicio: string; // "HH:mm"
   horarioAtencionFin: string;
@@ -55,6 +71,8 @@ interface BotConfig {
 const DEFAULT_CONFIG: BotConfig = {
   whatsappPhoneId: "723362620868862",
   grupoRecepcionId: "",
+  gruposRecepcion: [],
+  emailFallback: "directoriosalufit@gmail.com",
   nombreRecepcion: "Recepción Salufit",
   horarioAtencionInicio: "09:00",
   horarioAtencionFin: "20:00",
@@ -70,6 +88,11 @@ async function loadConfig(): Promise<BotConfig> {
     return {
       whatsappPhoneId: (data.whatsappPhoneId as string) || DEFAULT_CONFIG.whatsappPhoneId,
       grupoRecepcionId: (data.grupoRecepcionId as string) || DEFAULT_CONFIG.grupoRecepcionId,
+      gruposRecepcion: Array.isArray(data.gruposRecepcion) ?
+        (data.gruposRecepcion as BotConfig["gruposRecepcion"]) :
+        DEFAULT_CONFIG.gruposRecepcion,
+      emailFallback:
+        (data.emailFallback as string) || DEFAULT_CONFIG.emailFallback,
       nombreRecepcion: (data.nombreRecepcion as string) || DEFAULT_CONFIG.nombreRecepcion,
       horarioAtencionInicio:
         (data.horarioAtencionInicio as string) || DEFAULT_CONFIG.horarioAtencionInicio,
@@ -83,6 +106,28 @@ async function loadConfig(): Promise<BotConfig> {
     functions.logger.warn("loadConfig failed, using defaults", e);
     return DEFAULT_CONFIG;
   }
+}
+
+/**
+ * Devuelve la lista efectiva de destinatarios para avisos.
+ * Si `critico` es true, incluye a todos. Si false, solo los que tienen
+ * `avisosNoCriticos: true`.
+ *
+ * Si no hay `gruposRecepcion` configurado, cae a `grupoRecepcionId`
+ * (legacy, un solo teléfono).
+ */
+function destinatariosAvisos(
+    config: BotConfig, critico: boolean,
+): Array<{telefono: string; nombre: string}> {
+  if (config.gruposRecepcion && config.gruposRecepcion.length > 0) {
+    return config.gruposRecepcion
+        .filter((g) => critico || g.avisosNoCriticos)
+        .map((g) => ({telefono: g.telefono, nombre: g.nombre}));
+  }
+  if (config.grupoRecepcionId) {
+    return [{telefono: config.grupoRecepcionId, nombre: "Recepción"}];
+  }
+  return [];
 }
 
 function isWithinBusinessHours(now: Date, config: BotConfig): boolean {
@@ -400,30 +445,74 @@ function buildRecepcionMsg(opts: {
   return lines.join("\n");
 }
 
+/**
+ * Envía un aviso al grupo de recepción. Multi-DM: manda el mismo mensaje
+ * a cada teléfono configurado. Si TODOS fallan, intenta email fallback
+ * para que el aviso no se pierda (token caducado, paciente bloqueó al
+ * bot, ventana 24h cerrada para texto libre, etc.).
+ *
+ * `critico=true` (default) → notifica a todos los destinatarios.
+ * `critico=false` → solo a los que aceptan avisos no críticos.
+ *
+ * Para distinguir, usar `notifyRecepcion(config, token, msg, {critico: false})`.
+ */
 async function notifyRecepcion(
     config: BotConfig,
     token: string,
     mensaje: string,
+    opts: {critico?: boolean} = {},
 ): Promise<void> {
-  if (!config.grupoRecepcionId) {
+  const critico = opts.critico !== false; // default true
+  const dests = destinatariosAvisos(config, critico);
+  if (dests.length === 0) {
     functions.logger.warn(
-        "grupoRecepcionId no configurado, notificación recepción descartada",
+        "Sin destinatarios configurados (gruposRecepcion vacío y sin grupoRecepcionId)",
     );
     return;
   }
-  functions.logger.info("notifyRecepcion → enviando DM a recepción", {
-    to: config.grupoRecepcionId,
-    mensajePreview: mensaje.slice(0, 80),
-  });
-  const r = await sendTextMessage(
-      {phoneId: config.whatsappPhoneId, token, to: config.grupoRecepcionId},
-      mensaje,
-  );
-  functions.logger.info("notifyRecepcion sendTextMessage resultado", {
-    success: r.success,
-    error: r.error,
-    messageId: r.messageId,
-  });
+
+  const results: Array<{telefono: string; success: boolean; error?: string}> = [];
+  for (const d of dests) {
+    functions.logger.info("notifyRecepcion → DM", {
+      to: d.telefono,
+      nombre: d.nombre,
+      critico,
+      mensajePreview: mensaje.slice(0, 80),
+    });
+    const r = await sendTextMessage(
+        {phoneId: config.whatsappPhoneId, token, to: d.telefono},
+        mensaje,
+    );
+    results.push({telefono: d.telefono, success: r.success, error: r.error});
+    if (!r.success) {
+      functions.logger.warn("notifyRecepcion DM falló", {
+        telefono: d.telefono, error: r.error,
+      });
+    }
+  }
+
+  // Si TODOS los DMs fallaron, intentar email fallback.
+  const allFailed = results.length > 0 && results.every((r) => !r.success);
+  if (allFailed && config.emailFallback) {
+    functions.logger.warn("Todos los DMs fallaron, intentando email fallback", {
+      emailFallback: config.emailFallback,
+      attempts: results.length,
+    });
+    try {
+      // Encolamos en una colección — un trigger separado consume y manda email.
+      await db.collection("email_queue").add({
+        to: config.emailFallback,
+        subject: "[Salufit Bot] Aviso recepción — DM falló",
+        body: `Mensaje no entregado por WhatsApp:\n\n${mensaje}\n\n` +
+          `Intentos: ${results.map((r) => `${r.telefono}: ${r.error}`).join("; ")}`,
+        creadoEn: admin.firestore.FieldValue.serverTimestamp(),
+        intentadoComoDM: true,
+        origen: "notifyRecepcion_fallback",
+      });
+    } catch (e) {
+      functions.logger.error("Encolar email fallback también falló", e);
+    }
+  }
 }
 
 /**
@@ -688,7 +777,7 @@ async function processIncomingText(
       telefono,
       mensajeOriginal: texto.slice(0, 200),
       cta: "Bot redirigió al teléfono de recepción. Valorar si es un lead nuevo y crear ficha en CRM.",
-    }));
+    }), {critico: false});
     return;
   }
 
@@ -1095,7 +1184,7 @@ async function executeAction(
           telefono,
           citaActual: `${formatFechaES(cita.fechaCita, "es")} con ${cita.profesional}`,
           cta: "Bot marcó la cita como confirmada. No requiere acción.",
-        }));
+        }), {critico: false});
       } else {
         await appendMessageToConversation(convId, "bot", "(sin cita asociada)", {
           estado: "escalada",
@@ -1315,7 +1404,7 @@ async function executeAction(
           telefono,
           citaActual: `${formatFechaES(cita.fechaCita, "es")} con ${cita.profesional}`,
           cta: "Bot ya marcó la cita como cancelada en clinni_appointments. Sincronizar con Clinni manualmente si procede.",
-        }));
+        }), {critico: false});
       } else {
         await notifyRecepcion(config, waToken, buildRecepcionMsg({
           icono: "❓",
@@ -1544,7 +1633,7 @@ async function executeAction(
               .slice(0, 200)}`,
         ],
         cta: "El bot ha contestado. Si la respuesta fue incompleta o el paciente necesita más info, retoma tú la conversación.",
-      }));
+      }), {critico: false});
       return;
 
     case "escalate":

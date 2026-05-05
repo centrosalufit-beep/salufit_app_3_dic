@@ -366,6 +366,19 @@ async function runReminders(opts?: {
     sent, failed, total: docsSnap.size,
     duplicadosAgrupados: skippedDuplicates.length,
   });
+
+  // Healthcheck: marcar última ejecución exitosa para que cronHealthCheck
+  // pueda alertar si pasan >90 min sin actualización.
+  try {
+    await db.collection("bot_health").doc("last_reminder_run").set({
+      timestamp: admin.firestore.FieldValue.serverTimestamp(),
+      sent, failed,
+      alertaEnviada: false, // reset alerta al volver a correr
+    });
+  } catch (e) {
+    functions.logger.warn("No se pudo escribir bot_health/last_reminder_run", e);
+  }
+
   return {sent, failed, scanned: docsSnap.size};
 }
 
@@ -447,6 +460,70 @@ export const expirePastAppointments = onSchedule(
     },
     async () => {
       await runExpireAppointments();
+    },
+);
+
+/**
+ * HTTP onRequest equivalente a triggerRemindersNow — usado desde el
+ * panel Windows que no soporta cloud_functions plugin. Auth Bearer
+ * con ID Token de Firebase Auth.
+ *
+ * Body: {appointmentId: string} — fuerza el envío para esa cita
+ *  (ignora la ventana T-24h y reenvía aunque ya esté marcado enviado).
+ */
+import {onRequest} from "firebase-functions/v2/https";
+export const triggerReminderHttp = onRequest(
+    {
+      region: "europe-southwest1",
+      secrets: [WHATSAPP_TOKEN],
+      memory: "256MiB",
+      timeoutSeconds: 60,
+      cors: true,
+    },
+    async (req, res) => {
+      try {
+        if (req.method !== "POST") {
+          res.status(405).json({error: "Solo POST"});
+          return;
+        }
+        const authHeader = req.headers.authorization ?? "";
+        if (!authHeader.startsWith("Bearer ")) {
+          res.status(401).json({error: "Falta Authorization Bearer"});
+          return;
+        }
+        const idToken = authHeader.substring("Bearer ".length).trim();
+        const decoded = await admin.auth().verifyIdToken(idToken);
+        const userDoc = await db.collection("users_app").doc(decoded.uid).get();
+        const rol = ((userDoc.data()?.rol as string) ?? "").toLowerCase();
+        if (!["admin", "administrador"].includes(rol)) {
+          res.status(403).json({error: "Solo admin"});
+          return;
+        }
+        const {appointmentId} = (req.body ?? {}) as {appointmentId?: string};
+        if (!appointmentId) {
+          res.status(400).json({error: "Falta appointmentId"});
+          return;
+        }
+        // Reset recordatorioEnviado para que runReminders lo procese.
+        await db.collection("clinni_appointments").doc(appointmentId)
+            .update({
+              recordatorioEnviado: false,
+              fechaRecordatorio: null,
+              forzadoPor: decoded.uid,
+              forzadoEn: admin.firestore.FieldValue.serverTimestamp(),
+            });
+        // Disparar cita única.
+        const result = await runReminders({
+          forceAppointmentId: appointmentId,
+        });
+        res.status(200).json({
+          success: true,
+          ...result,
+        });
+      } catch (e) {
+        functions.logger.error("triggerReminderHttp exception", e);
+        res.status(500).json({error: String(e)});
+      }
     },
 );
 

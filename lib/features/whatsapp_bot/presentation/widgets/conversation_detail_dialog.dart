@@ -30,6 +30,35 @@ class _ConversationDetailDialogState
     extends ConsumerState<ConversationDetailDialog> {
   bool _closing = false;
   bool _confirming = false;
+  bool _resending = false;
+
+  Future<void> _resendReminder() async {
+    final apptId = widget.conversation.appointmentId;
+    if (apptId == null || apptId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Esta conversación no tiene cita asociada.')),
+      );
+      return;
+    }
+    setState(() => _resending = true);
+    try {
+      await wa_providers.triggerReminderHttp(apptId);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Recordatorio reenviado al paciente.'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error al reenviar: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _resending = false);
+    }
+  }
 
   Future<void> _markResolved() async {
     final user = FirebaseAuth.instance.currentUser;
@@ -92,6 +121,10 @@ class _ConversationDetailDialogState
     final canClose = !_closedStates.contains(c.estado);
     final canConfirmReagendar =
         c.estado == 'reagendar_confirmacion_pendiente';
+    // #13: forzar reenvío solo tiene sentido si la conv tiene cita asociada
+    // y es de tipo recordatorio (cita real con appointmentId).
+    final canResend = c.tipo == 'recordatorio' &&
+        (c.appointmentId?.isNotEmpty ?? false);
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: ConstrainedBox(
@@ -274,6 +307,23 @@ class _ConversationDetailDialogState
                         backgroundColor: AppColors.primary,
                         foregroundColor: Colors.white,
                       ),
+                    ),
+                    const SizedBox(width: 8),
+                  ],
+                  if (canResend) ...[
+                    OutlinedButton.icon(
+                      onPressed:
+                          (_resending || _closing || _confirming)
+                              ? null
+                              : _resendReminder,
+                      icon: _resending
+                          ? const SizedBox(
+                              width: 14,
+                              height: 14,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.replay, size: 18),
+                      label: const Text('Forzar reenvío'),
                     ),
                     const SizedBox(width: 8),
                   ],

@@ -10,7 +10,7 @@
 ; ═══════════════════════════════════════════════════════════════
 
 #define MyAppName       "Salufit"
-#define MyAppVersion    "2.0.9"
+#define MyAppVersion    "2.0.10"
 #define MyAppPublisher  "Centro Salufit"
 #define MyAppExeName    "salufit_app.exe"
 
