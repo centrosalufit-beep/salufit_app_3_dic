@@ -416,7 +416,7 @@ export const sendAppointmentReminders = onSchedule(
  * la cita en Clinni, no la cerramos en caliente. El cron corre cada
  * madrugada a las 03:00 ES.
  */
-async function runExpireAppointments(): Promise<{updated: number}> {
+async function runExpireAppointments(): Promise<{updated: number; deleted: number}> {
   const cutoff = new Date(Date.now() - 6 * 60 * 60 * 1000);
   const snap = await db
       .collection("clinni_appointments")
@@ -425,29 +425,50 @@ async function runExpireAppointments(): Promise<{updated: number}> {
       .limit(500)
       .get();
 
-  if (snap.empty) {
-    functions.logger.info("Sin citas pendientes vencidas");
-    return {updated: 0};
-  }
-
-  // Procesar en chunks de 400 (límite Firestore 500/batch).
   let updated = 0;
-  for (let i = 0; i < snap.docs.length; i += 400) {
-    const chunk = snap.docs.slice(i, i + 400);
-    const batch = db.batch();
-    for (const doc of chunk) {
-      batch.update(doc.ref, {
-        estado: "vencida",
-        vencidaEn: admin.firestore.FieldValue.serverTimestamp(),
-        motivoVencida: "auto_expirada_cron",
-      });
-      updated++;
+  if (!snap.empty) {
+    for (let i = 0; i < snap.docs.length; i += 400) {
+      const chunk = snap.docs.slice(i, i + 400);
+      const batch = db.batch();
+      for (const doc of chunk) {
+        batch.update(doc.ref, {
+          estado: "vencida",
+          vencidaEn: admin.firestore.FieldValue.serverTimestamp(),
+          motivoVencida: "auto_expirada_cron",
+        });
+        updated++;
+      }
+      await batch.commit();
     }
-    await batch.commit();
+    functions.logger.info("Citas auto-vencidas", {updated, scanned: snap.size});
   }
 
-  functions.logger.info("Citas auto-vencidas", {updated, scanned: snap.size});
-  return {updated};
+  // #19 (decisión usuario): borrar citas en estado "vencida" cuyo
+  // vencidaEn tenga >24h. Clinni tiene el registro fuente, no
+  // necesitamos guardarlas en Firestore.
+  const cutoffDelete = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  const oldVencidas = await db
+      .collection("clinni_appointments")
+      .where("estado", "==", "vencida")
+      .where("vencidaEn", "<", admin.firestore.Timestamp.fromDate(cutoffDelete))
+      .limit(500)
+      .get();
+
+  let deleted = 0;
+  if (!oldVencidas.empty) {
+    for (let i = 0; i < oldVencidas.docs.length; i += 400) {
+      const chunk = oldVencidas.docs.slice(i, i + 400);
+      const batch = db.batch();
+      for (const doc of chunk) {
+        batch.delete(doc.ref);
+        deleted++;
+      }
+      await batch.commit();
+    }
+    functions.logger.info("Vencidas >24h borradas", {deleted, scanned: oldVencidas.size});
+  }
+
+  return {updated, deleted};
 }
 
 export const expirePastAppointments = onSchedule(

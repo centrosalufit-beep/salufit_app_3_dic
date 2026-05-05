@@ -2,6 +2,8 @@ import 'dart:convert';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+// ignore: depend_on_referenced_packages
+import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:salufit_app/core/theme/app_colors.dart';
 import 'package:salufit_app/features/whatsapp_bot/application/whatsapp_bot_providers.dart';
@@ -64,7 +66,17 @@ class _ImportExcelButtonState extends ConsumerState<ImportExcelButton> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text('Importadas: ${import.imported}'),
+              if (import.updated > 0)
+                Text('Actualizadas (estado): ${import.updated}',
+                    style: const TextStyle(color: Colors.blue)),
               Text('Duplicadas (ignoradas): ${import.duplicates}'),
+              if (import.requierenRevision > 0)
+                Text(
+                  'Requieren revisión manual: ${import.requierenRevision}',
+                  style: TextStyle(
+                      color: Colors.orange.shade800,
+                      fontWeight: FontWeight.bold),
+                ),
               Text('Errores: ${import.errors}'),
               if (import.errorMessages.isNotEmpty) ...[
                 const SizedBox(height: 12),
@@ -74,7 +86,7 @@ class _ImportExcelButtonState extends ConsumerState<ImportExcelButton> {
                 ),
                 const SizedBox(height: 4),
                 Container(
-                  constraints: const BoxConstraints(maxHeight: 200),
+                  constraints: const BoxConstraints(maxHeight: 150),
                   decoration: BoxDecoration(
                     color: Colors.grey.shade100,
                     borderRadius: BorderRadius.circular(8),
@@ -89,6 +101,60 @@ class _ImportExcelButtonState extends ConsumerState<ImportExcelButton> {
                       ),
                     ),
                   ),
+                ),
+              ],
+              // #17: lista de pacientes no encontrados (sin teléfono).
+              if (import.noEncontrados.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    const Expanded(
+                      child: Text(
+                        'Pacientes sin teléfono en clinni_patients:',
+                        style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.orange),
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.copy, size: 16),
+                      tooltip: 'Copiar al portapapeles',
+                      onPressed: () async {
+                        await Clipboard.setData(
+                          ClipboardData(
+                              text: import.noEncontrados.join('\n')),
+                        );
+                        if (!ctx.mounted) return;
+                        ScaffoldMessenger.of(ctx).showSnackBar(
+                          const SnackBar(
+                              content: Text('Lista copiada al portapapeles'),
+                              duration: Duration(seconds: 2)),
+                        );
+                      },
+                    ),
+                  ],
+                ),
+                Container(
+                  constraints: const BoxConstraints(maxHeight: 150),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.shade50,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.orange.shade200),
+                  ),
+                  padding: const EdgeInsets.all(8),
+                  child: SingleChildScrollView(
+                    child: Text(
+                      import.noEncontrados.join('\n'),
+                      style: const TextStyle(
+                          fontSize: 11, fontFamily: 'monospace'),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'Estas citas se importaron sin teléfono. Asígnalo desde la pestaña "Problemas".',
+                  style: TextStyle(
+                      fontSize: 11, color: Colors.grey.shade700),
                 ),
               ],
             ],

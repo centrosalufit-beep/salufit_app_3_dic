@@ -4,14 +4,17 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:salufit_app/features/auth/application/professional_consent_provider.dart';
 import 'package:salufit_app/features/auth/presentation/migration_gate.dart';
 import 'package:salufit_app/features/auth/presentation/pending_signature_gate.dart';
+import 'package:salufit_app/features/auth/presentation/professional_consent_screen.dart';
 import 'package:salufit_app/features/auth/presentation/terms_acceptance_screen.dart';
 import 'package:salufit_app/features/home/presentation/screens/main_client_dashboard_screen.dart';
 import 'package:salufit_app/features/professional/presentation/professional_dashboard_screen.dart';
 import 'package:salufit_app/layouts/desktop_scaffold.dart';
 
-class RoleGate extends StatelessWidget {
+class RoleGate extends ConsumerWidget {
   const RoleGate({required this.user, super.key});
   final User user;
 
@@ -19,7 +22,7 @@ class RoleGate extends StatelessWidget {
       !kIsWeb && (Platform.isAndroid || Platform.isIOS);
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return FutureBuilder<DocumentSnapshot>(
       future: FirebaseFirestore.instance
           .collection('users_app')
@@ -88,6 +91,27 @@ class RoleGate extends StatelessWidget {
         }
 
         if (isStaff) {
+          // Gate bloqueante: profesionales/admin deben tener firmado el
+          // Acuerdo de Confidencialidad Profesional vigente. Si no, se les
+          // muestra la pantalla de firma sin posibilidad de saltar.
+          // Cuentas demo se eximen para no entorpecer pruebas.
+          if (!isDemo) {
+            final consentAsync =
+                ref.watch(professionalConsentSignedProvider);
+            final consentSigned = consentAsync.maybeWhen(
+              data: (v) => v,
+              orElse: () => null,
+            );
+            if (consentSigned == null) {
+              return const Scaffold(
+                body: Center(child: CircularProgressIndicator()),
+              );
+            }
+            if (!consentSigned) {
+              return const ProfessionalConsentScreen();
+            }
+          }
+
           // Mobile: tanto admin como profesional usan el mismo dashboard
           // mobile (Escanear QR + 6 features). En desktop, admin/profesional
           // van al Hub de Windows.

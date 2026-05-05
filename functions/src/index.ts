@@ -29,6 +29,10 @@ export {
   excelImportReminder,
   cronHealthCheck,
 } from "./emailNotifier";
+export {
+  archiveOldConversations,
+  cleanupProcessedMessages,
+} from "./dataMaintenance";
 
 // Dominios autorizados a llamar nuestras funciones HTTP
 const ALLOWED_ORIGINS = [

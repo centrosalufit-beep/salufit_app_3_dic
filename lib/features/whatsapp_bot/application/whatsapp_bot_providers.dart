@@ -95,14 +95,22 @@ class ImportResult {
     required this.duplicates,
     required this.errors,
     required this.errorMessages,
+    this.updated = 0,
+    this.requierenRevision = 0,
+    this.noEncontrados = const [],
   });
 
   factory ImportResult.fromMap(Map<String, dynamic> map) {
     return ImportResult(
       imported: (map['imported'] as num?)?.toInt() ?? 0,
       duplicates: (map['duplicates'] as num?)?.toInt() ?? 0,
+      updated: (map['updated'] as num?)?.toInt() ?? 0,
+      requierenRevision: (map['requierenRevision'] as num?)?.toInt() ?? 0,
       errors: (map['errors'] as num?)?.toInt() ?? 0,
       errorMessages: ((map['errorMessages'] as List?) ?? const [])
+          .map((e) => e.toString())
+          .toList(),
+      noEncontrados: ((map['noEncontrados'] as List?) ?? const [])
           .map((e) => e.toString())
           .toList(),
     );
@@ -110,8 +118,11 @@ class ImportResult {
 
   final int imported;
   final int duplicates;
+  final int updated;
+  final int requierenRevision;
   final int errors;
   final List<String> errorMessages;
+  final List<String> noEncontrados;
 }
 
 /// Llama a la Cloud Function `importClinniAppointments` (onRequest) con el

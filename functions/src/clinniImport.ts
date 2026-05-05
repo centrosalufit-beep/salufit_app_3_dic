@@ -407,6 +407,15 @@ export const importClinniAppointments = onRequest(
             skippedPast++;
             continue;
           }
+          // #18: avisar (no rechazar) si la fecha es >12 meses futuro.
+          // Probable error de digitación en Clinni (ej. 2027 en lugar de 2026).
+          const yearsFuture = (r.fechaCita.getTime() - now.getTime()) /
+              (365 * 24 * 60 * 60 * 1000);
+          if (yearsFuture > 1) {
+            errors.push(
+                `⚠️ Fecha sospechosa: ${r.pacienteNombre} → ${r.fechaCita.toISOString().slice(0, 10)} (>12 meses). Verifica el Excel.`,
+            );
+          }
 
           // Marcar motivo de requiereRevision (#10)
           let motivoRevision: string | null = null;

@@ -2,11 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:salufit_app/core/theme/app_colors.dart';
 import 'package:salufit_app/features/whatsapp_bot/application/whatsapp_bot_providers.dart';
+import 'package:salufit_app/features/whatsapp_bot/presentation/widgets/bot_status_banner.dart';
 import 'package:salufit_app/features/whatsapp_bot/presentation/widgets/clinic_holidays_tab.dart';
 import 'package:salufit_app/features/whatsapp_bot/presentation/widgets/clinic_info_tab.dart';
 import 'package:salufit_app/features/whatsapp_bot/presentation/widgets/conversation_table_widget.dart';
+import 'package:salufit_app/features/whatsapp_bot/presentation/widgets/duplicates_tab.dart';
 import 'package:salufit_app/features/whatsapp_bot/presentation/widgets/import_excel_widget.dart';
 import 'package:salufit_app/features/whatsapp_bot/presentation/widgets/leads_pending_tab.dart';
+import 'package:salufit_app/features/whatsapp_bot/presentation/widgets/opt_outs_tab.dart';
 import 'package:salufit_app/features/whatsapp_bot/presentation/widgets/pending_appointments_tab.dart';
 import 'package:salufit_app/features/whatsapp_bot/presentation/widgets/problem_appointments_tab.dart';
 import 'package:salufit_app/features/whatsapp_bot/presentation/widgets/professional_absences_tab.dart';
@@ -25,7 +28,7 @@ class _WhatsAppBotScreenState extends ConsumerState<WhatsAppBotScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 7, vsync: this);
+    _tabController = TabController(length: 9, vsync: this);
   }
 
   @override
@@ -50,6 +53,8 @@ class _WhatsAppBotScreenState extends ConsumerState<WhatsAppBotScreen>
           tabs: const [
             Tab(icon: Icon(Icons.chat), text: 'Conversaciones'),
             Tab(icon: Icon(Icons.warning_amber_rounded), text: 'Problemas'),
+            Tab(icon: Icon(Icons.copy_all), text: 'Duplicados'),
+            Tab(icon: Icon(Icons.do_not_disturb_on), text: 'Opt-outs'),
             Tab(icon: Icon(Icons.person_add), text: 'Leads'),
             Tab(icon: Icon(Icons.event_note), text: 'Citas pendientes'),
             Tab(icon: Icon(Icons.business), text: 'Centro'),
@@ -60,6 +65,8 @@ class _WhatsAppBotScreenState extends ConsumerState<WhatsAppBotScreen>
       ),
       body: Column(
         children: [
+          // #6 + #8: banner siempre visible con última importación + KPIs hoy.
+          const BotStatusBanner(),
           // Top bar: import + status (visible solo en pestaña Conversaciones)
           AnimatedBuilder(
             animation: _tabController,
@@ -125,6 +132,8 @@ class _WhatsAppBotScreenState extends ConsumerState<WhatsAppBotScreen>
                   data: (list) => ConversationTableWidget(conversations: list),
                 ),
                 const ProblemAppointmentsTab(),
+                const DuplicatesTab(),
+                const OptOutsTab(),
                 const LeadsPendingTab(),
                 const PendingAppointmentsTab(),
                 const ClinicInfoTab(),
