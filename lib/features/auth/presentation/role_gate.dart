@@ -95,21 +95,20 @@ class RoleGate extends ConsumerWidget {
           // Acuerdo de Confidencialidad Profesional vigente. Si no, se les
           // muestra la pantalla de firma sin posibilidad de saltar.
           // Cuentas demo se eximen para no entorpecer pruebas.
+          //
+          // IMPORTANTE: usamos .when() con manejo explícito de error y un
+          // botón "Cerrar sesión" siempre visible en estados loading/error,
+          // para evitar quedar atrapado en spinner permanente si las reglas
+          // de Firestore o la red fallan.
           if (!isDemo) {
             final consentAsync =
                 ref.watch(professionalConsentSignedProvider);
-            final consentSigned = consentAsync.maybeWhen(
-              data: (v) => v,
-              orElse: () => null,
+            final consentBlocker = consentAsync.when(
+              data: (signed) => signed ? null : const ProfessionalConsentScreen(),
+              loading: () => const _ConsentLoadingScreen(),
+              error: (e, _) => _ConsentErrorScreen(error: e.toString()),
             );
-            if (consentSigned == null) {
-              return const Scaffold(
-                body: Center(child: CircularProgressIndicator()),
-              );
-            }
-            if (!consentSigned) {
-              return const ProfessionalConsentScreen();
-            }
+            if (consentBlocker != null) return consentBlocker;
           }
 
           // Mobile: tanto admin como profesional usan el mismo dashboard
@@ -213,6 +212,92 @@ class _RoleGateErrorScreen extends StatelessWidget {
                       foregroundColor: Colors.white,
                       minimumSize: const Size.fromHeight(48),
                     ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Pantalla de carga del gate de consentimiento profesional. Tiene un
+/// botón "Cerrar sesión" siempre visible para que el usuario nunca quede
+/// atrapado si Firebase o las rules tardan/fallan.
+class _ConsentLoadingScreen extends StatelessWidget {
+  const _ConsentLoadingScreen();
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF8FAFC),
+      body: SafeArea(
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const CircularProgressIndicator(),
+              const SizedBox(height: 24),
+              const Text(
+                'Cargando acuerdo de confidencialidad…',
+                style: TextStyle(color: Colors.black54),
+              ),
+              const SizedBox(height: 32),
+              TextButton.icon(
+                onPressed: () => FirebaseAuth.instance.signOut(),
+                icon: const Icon(Icons.logout, size: 16),
+                label: const Text('Cancelar y cerrar sesión'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Pantalla de error del gate de consentimiento profesional. Se muestra
+/// si el StreamProvider devuelve error (regla denegada, red caída, etc.).
+/// Permite al usuario cerrar sesión y reintentar.
+class _ConsentErrorScreen extends StatelessWidget {
+  const _ConsentErrorScreen({required this.error});
+  final String error;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF8FAFC),
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(32),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.error_outline,
+                    size: 56, color: Colors.orange.shade700),
+                const SizedBox(height: 16),
+                const Text(
+                  'No se pudo cargar el acuerdo de confidencialidad',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  error,
+                  style: const TextStyle(fontSize: 12, color: Colors.black54),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 24),
+                ElevatedButton.icon(
+                  onPressed: () => FirebaseAuth.instance.signOut(),
+                  icon: const Icon(Icons.logout),
+                  label: const Text('Cerrar sesión'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF009688),
+                    foregroundColor: Colors.white,
                   ),
                 ),
               ],
