@@ -291,6 +291,18 @@ service cloud.firestore {
     }
 
     // ═══════════════════════════════════════════════════════════════
+    // CONSENTIMIENTO PROFESIONAL — cada profesional solo accede al suyo.
+    // Staff puede leer todos para auditoría desde el panel admin.
+    // Una vez firmado, el documento es inmutable (legal).
+    // ═══════════════════════════════════════════════════════════════
+    match /professional_consents/{uid} {
+      allow read: if isAuthenticated() &&
+                     (request.auth.uid == uid || isStaff());
+      allow create: if isAuthenticated() && request.auth.uid == uid;
+      allow update, delete: if false; // inmutable tras firma
+    }
+
+    // ═══════════════════════════════════════════════════════════════
     // SOLICITUDES DE OTP (para 2FA en acciones sensibles)
     // ═══════════════════════════════════════════════════════════════
     match /otp_requests/{id} {
